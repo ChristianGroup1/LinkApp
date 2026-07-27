@@ -1,0 +1,700 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import 'package:link/core/invitations/invitation_preview.dart';
+import 'package:link/data/offline/invitation_create_result.dart';
+import 'package:link/data/offline/offline_save_result.dart';
+import 'package:link/data/models/models.dart';
+import 'package:link/data/repositories/database_repository.dart';
+import 'package:link/logic/auth/auth_bloc.dart';
+import 'package:link/main.dart';
+
+Future<void> _settle(WidgetTester tester) async {
+  for (int i = 0; i < 15; i++) {
+    await tester.pump(const Duration(milliseconds: 100));
+  }
+}
+
+void main() {
+  testWidgets('renders login and navigates to dashboard', (tester) async {
+    tester.view.physicalSize = const Size(1200, 1920);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final repository = TestRepository();
+    await repository.signOut();
+
+    await tester.pumpWidget(
+      RepositoryProvider<DatabaseRepository>.value(
+        value: repository,
+        child: BlocProvider<AuthBloc>(
+          create: (_) =>
+              AuthBloc(repository: repository)..add(AuthCheckRequested()),
+          child: const MyApp(),
+        ),
+      ),
+    );
+
+    await _settle(tester);
+
+    expect(find.text('أهلاً بك'), findsOneWidget);
+    expect(find.text('تسجيل الدخول'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField).at(0), 'admin@example.com');
+    await tester.enterText(find.byType(TextField).at(1), 'password123');
+    FocusManager.instance.primaryFocus?.unfocus();
+    await tester.tap(find.text('تسجيل الدخول'));
+    await _settle(tester);
+
+    // Verify dashboard displays
+    expect(find.text('أهلاً بك، مينا سمير'), findsOneWidget);
+    expect(find.text('إجمالي الأعضاء'), findsOneWidget);
+
+    // Open meetings from dashboard entry
+    await tester.tap(find.text('الاجتماعات'));
+    await _settle(tester);
+    expect(find.text('الاجتماعات'), findsOneWidget);
+    await tester.binding.handlePopRoute();
+    await _settle(tester);
+
+    // Tap Attendance tab (inactive tabs show icon only in bubble nav)
+    await tester.tap(find.byIcon(Icons.checklist_rtl_outlined));
+    await _settle(tester);
+    expect(find.text('تسجيل الحضور الأسبوعي'), findsOneWidget);
+
+    // Open records from dashboard entry
+    await tester.tap(find.byIcon(Icons.home_outlined));
+    await _settle(tester);
+    expect(find.text('السجلات'), findsNothing);
+    await tester.tap(find.text('سجلات الحضور'));
+    await _settle(tester);
+    expect(find.text('السجلات'), findsOneWidget);
+    await tester.binding.handlePopRoute();
+    await _settle(tester);
+
+    // Tap Members tab
+    await tester.tap(find.byIcon(Icons.groups_outlined));
+    await _settle(tester);
+    expect(find.text('سجل الأعضاء والخدمة'), findsOneWidget);
+
+    // Tap Settings tab
+    await tester.tap(find.byIcon(Icons.person_outline_rounded));
+    await _settle(tester);
+    expect(find.text('إعدادات الحساب والخدمة'), findsOneWidget);
+  });
+}
+
+class TestRepository implements DatabaseRepository {
+  AppProfile? _profile = const AppProfile(
+    id: 'prof-1',
+    churchId: 'ch-1',
+    fullName: 'مينا سمير',
+    role: AppRole.superAdmin,
+    email: 'admin@example.com',
+    phone: '+201234567890',
+  );
+
+  @override
+  bool hasActiveSession() => _profile != null;
+
+  final List<MeetingEntity> _meetings = [
+    const MeetingEntity(
+      id: 'mtg-1',
+      churchId: 'ch-1',
+      name: 'Kids Meeting',
+      nameAr: 'اجتماع الأطفال',
+      kind: MeetingKind.sundaySchool,
+      weekday: 7,
+      isActive: true,
+    ),
+  ];
+
+  final List<SundaySchoolClassEntity> _classes = [
+    const SundaySchoolClassEntity(
+      id: 'cls-1',
+      churchId: 'ch-1',
+      meetingId: 'mtg-1',
+      name: 'Primary 1',
+      nameAr: 'أولى ابتدائي',
+      displayOrder: 1,
+      isActive: true,
+    ),
+  ];
+
+  final List<MemberEntity> _members = [
+    const MemberEntity(
+      id: 'mem-1',
+      churchId: 'ch-1',
+      fullName: 'مريم جرجس',
+      scope: MemberScope.sundaySchoolClass,
+      sundaySchoolClassId: 'cls-1',
+      code: 'LN-0047',
+      phone: '+201224567890',
+      isActive: true,
+    ),
+  ];
+
+  final List<AttendanceSessionEntity> _sessions = [];
+  final List<AttendanceRecordEntity> _records = [];
+  final List<FollowUpEntity> _followUps = [];
+
+  @override
+  Future<AppProfile?> signInWithEmailAndPassword(
+    String email,
+    String password,
+  ) async {
+    _profile = AppProfile(
+      id: 'prof-1',
+      churchId: 'ch-1',
+      fullName: 'مينا سمير',
+      role: AppRole.superAdmin,
+      email: email,
+      phone: '+201234567890',
+    );
+    return _profile;
+  }
+
+  @override
+  Future<AppProfile?> signUpWithEmailAndPassword({
+    required String name,
+    required String churchName,
+    required String email,
+    required String password,
+    String? phone,
+  }) async {
+    _profile = AppProfile(
+      id: 'prof-1',
+      churchId: 'ch-1',
+      fullName: name,
+      role: AppRole.classLeader,
+      email: email,
+      phone: phone,
+    );
+    return _profile;
+  }
+
+  @override
+  Future<void> signOut() async {
+    _profile = null;
+  }
+
+  @override
+  Future<void> sendPasswordResetEmail(String email) async {}
+
+  @override
+  Future<void> updatePassword(String password) async {}
+
+  @override
+  Future<AppProfile> updateCurrentProfile({
+    required String fullName,
+    String? phone,
+  }) async {
+    final current = _profile!;
+    _profile = AppProfile(
+      id: current.id,
+      churchId: current.churchId,
+      fullName: fullName,
+      role: current.role,
+      email: current.email,
+      phone: phone,
+    );
+    return _profile!;
+  }
+
+  @override
+  Future<AppProfile?> getCurrentProfile() async => _profile;
+
+  @override
+  Future<List<AppProfile>> getProfiles() async =>
+      _profile != null ? [_profile!] : [];
+
+  @override
+  Future<void> updateProfileRole(String userId, AppRole role) async {}
+
+  @override
+  Future<void> updateProfileStatus(String userId, bool isActive) async {}
+
+  @override
+  Future<Church?> getChurch(String id) async => const Church(
+    id: 'ch-1',
+    name: 'St. Mary Church',
+    nameAr: 'كنيسة العذراء مريم',
+    slug: 'st-mary',
+  );
+
+  @override
+  Future<List<Church>> getAllChurches() async => [
+    const Church(
+      id: 'ch-1',
+      name: 'St. Mary Church',
+      nameAr: 'كنيسة العذراء مريم',
+      slug: 'st-mary',
+    ),
+  ];
+
+  @override
+  Future<bool> updateChurch(
+    String id,
+    String nameAr,
+    String? phone,
+    String? address,
+  ) async => true;
+
+  @override
+  Future<List<MeetingEntity>> getMeetings() async => _meetings;
+
+  @override
+  Future<OfflineSaveResult<MeetingEntity>> createMeeting({
+    required String name,
+    required String nameAr,
+    required MeetingKind kind,
+    required int weekday,
+    String? description,
+  }) async {
+    final m = MeetingEntity(
+      id: 'mtg-${_meetings.length + 1}',
+      churchId: 'ch-1',
+      name: name,
+      nameAr: nameAr,
+      kind: kind,
+      weekday: weekday,
+      isActive: true,
+      description: description,
+    );
+    _meetings.add(m);
+    return OfflineSaveResult(data: m, syncedToServer: true);
+  }
+
+  @override
+  Future<OfflineSaveResult<MeetingEntity>> updateMeeting({
+    required String id,
+    required String name,
+    required String nameAr,
+    required int weekday,
+    required bool isActive,
+    String? description,
+  }) async {
+    final m = MeetingEntity(
+      id: id,
+      churchId: 'ch-1',
+      name: name,
+      nameAr: nameAr,
+      kind: MeetingKind.normal,
+      weekday: weekday,
+      isActive: isActive,
+      description: description,
+    );
+    return OfflineSaveResult(data: m, syncedToServer: true);
+  }
+
+  @override
+  Future<bool> deleteMeeting(String id) async {
+    _meetings.removeWhere((m) => m.id == id);
+    return true;
+  }
+
+  @override
+  Future<List<SundaySchoolClassEntity>> getSundaySchoolClasses(
+    String meetingId,
+  ) async => _classes.where((c) => c.meetingId == meetingId).toList();
+
+  @override
+  Future<List<SundaySchoolClassEntity>> getAllSundaySchoolClasses() async =>
+      _classes;
+
+  @override
+  Future<OfflineSaveResult<SundaySchoolClassEntity>> createSundaySchoolClass({
+    required String meetingId,
+    required String name,
+    required String nameAr,
+    required int displayOrder,
+  }) async {
+    final c = SundaySchoolClassEntity(
+      id: 'cls-${_classes.length + 1}',
+      churchId: 'ch-1',
+      meetingId: meetingId,
+      name: name,
+      nameAr: nameAr,
+      displayOrder: displayOrder,
+      isActive: true,
+    );
+    _classes.add(c);
+    return OfflineSaveResult(data: c, syncedToServer: true);
+  }
+
+  @override
+  Future<OfflineSaveResult<SundaySchoolClassEntity>> updateSundaySchoolClass({
+    required String id,
+    required String name,
+    required String nameAr,
+    required int displayOrder,
+    required bool isActive,
+  }) async {
+    final c = SundaySchoolClassEntity(
+      id: id,
+      churchId: 'ch-1',
+      meetingId: 'mtg-1',
+      name: name,
+      nameAr: nameAr,
+      displayOrder: displayOrder,
+      isActive: isActive,
+    );
+    return OfflineSaveResult(data: c, syncedToServer: true);
+  }
+
+  @override
+  Future<bool> deleteSundaySchoolClass(String id) async {
+    _classes.removeWhere((c) => c.id == id);
+    return true;
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> getClassAssignments(
+    String classId,
+  ) async => [];
+
+  @override
+  Future<void> assignClassLeader(
+    String classId,
+    String userId, {
+    bool canTakeAttendance = true,
+    bool canViewReports = true,
+  }) async {}
+
+  @override
+  Future<void> assignAllMeetingClasses(
+    String meetingId,
+    String userId, {
+    bool canTakeAttendance = true,
+    bool canViewReports = true,
+  }) async {}
+
+  @override
+  Future<void> removeClassAssignment(String assignmentId) async {}
+
+  @override
+  Future<List<Map<String, dynamic>>> getMeetingAssignments(
+    String meetingId,
+  ) async => [];
+
+  @override
+  Future<void> assignMeetingOfficer(
+    String meetingId,
+    String userId, {
+    bool canTakeAttendance = true,
+    bool canViewReports = true,
+  }) async {}
+
+  @override
+  Future<void> removeMeetingAssignment(String assignmentId) async {}
+
+  @override
+  Future<List<MemberEntity>> getAllMembers() async => _members;
+
+  @override
+  Future<List<MemberEntity>> getClassMembers(String classId) async =>
+      _members.where((m) => m.sundaySchoolClassId == classId).toList();
+
+  @override
+  Future<List<MemberEntity>> getMeetingMembers(String meetingId) async =>
+      _members.where((m) => m.meetingId == meetingId).toList();
+
+  @override
+  Future<MemberEntity?> getMemberDetails(String memberId) async {
+    final list = _members.where((m) => m.id == memberId).toList();
+    return list.isNotEmpty ? list.first : null;
+  }
+
+  @override
+  Future<OfflineSaveResult<MemberEntity>> createMember({
+    String? code,
+    required String fullName,
+    String? meetingId,
+    String? parentName,
+    String? parentPhone,
+    String? phone,
+    required MemberScope scope,
+    String? sundaySchoolClassId,
+  }) async {
+    final m = MemberEntity(
+      id: 'mem-${_members.length + 1}',
+      churchId: 'ch-1',
+      fullName: fullName,
+      scope: scope,
+      sundaySchoolClassId: sundaySchoolClassId,
+      meetingId: meetingId,
+      code: code,
+      phone: phone,
+      parentName: parentName,
+      parentPhone: parentPhone,
+      isActive: true,
+    );
+    _members.add(m);
+    return OfflineSaveResult(data: m, syncedToServer: true);
+  }
+
+  @override
+  Future<OfflineSaveResult<MemberEntity>> updateMember({
+    required String id,
+    String? code,
+    required String fullName,
+    String? meetingId,
+    String? parentName,
+    String? parentPhone,
+    String? phone,
+    required MemberScope scope,
+    String? sundaySchoolClassId,
+    required bool isActive,
+  }) async {
+    final m = MemberEntity(
+      id: id,
+      churchId: 'ch-1',
+      fullName: fullName,
+      scope: scope,
+      sundaySchoolClassId: sundaySchoolClassId,
+      meetingId: meetingId,
+      code: code,
+      phone: phone,
+      parentName: parentName,
+      parentPhone: parentPhone,
+      isActive: isActive,
+    );
+    return OfflineSaveResult(data: m, syncedToServer: true);
+  }
+
+  @override
+  Future<bool> deleteMember(String id) async {
+    _members.removeWhere((m) => m.id == id);
+    return true;
+  }
+
+  @override
+  Future<List<AttendanceSessionEntity>> getSessions(
+    String meetingId, {
+    String? classId,
+  }) async => _sessions;
+
+  @override
+  Future<OfflineSaveResult<AttendanceSessionEntity>> createWeeklySession({
+    required String meetingId,
+    String? classId,
+    required DateTime sessionDate,
+    required int weekNumber,
+    String? title,
+  }) async {
+    final s = AttendanceSessionEntity(
+      id: 'sess-${_sessions.length + 1}',
+      churchId: 'ch-1',
+      meetingId: meetingId,
+      classId: classId,
+      sessionDate: sessionDate,
+      weekNumber: weekNumber,
+      title: title,
+    );
+    _sessions.add(s);
+    return OfflineSaveResult(data: s, syncedToServer: true);
+  }
+
+  @override
+  Future<bool> deleteWeeklySession(
+    String sessionId, {
+    String? meetingId,
+    String? classId,
+  }) async {
+    _sessions.removeWhere((s) => s.id == sessionId);
+    return true;
+  }
+
+  @override
+  Future<List<AttendanceRecordEntity>> getAttendanceRecords(
+    String sessionId,
+  ) async => _records;
+
+  @override
+  Future<bool> validateInvitationCode(String code) async => code.isNotEmpty;
+
+  @override
+  Future<InvitationPreview> getInvitationPreview(String inviteToken) async {
+    return const InvitationPreview(valid: true, churchName: 'كنيسة الاختبار');
+  }
+
+  @override
+  Future<void> declineInvitationByToken(String inviteToken) async {}
+
+  @override
+  Future<void> acceptInvitationLink(String inviteToken) async {}
+
+  @override
+  Future<AppProfile?> signUpWithInvitationToken({
+    required String name,
+    required String email,
+    required String password,
+    String? phone,
+    required String inviteToken,
+  }) async => signUpWithActivationCode(
+    name: name,
+    email: email,
+    password: password,
+    phone: phone,
+    code: inviteToken,
+  );
+
+  @override
+  Future<bool> saveAttendanceRecords({
+    required String sessionId,
+    required Map<String, AttendanceStatus> statusesByMemberId,
+  }) async {
+    statusesByMemberId.forEach((memberId, status) {
+      _records.removeWhere(
+        (r) => r.sessionId == sessionId && r.memberId == memberId,
+      );
+      _records.add(
+        AttendanceRecordEntity(
+          id: 'rec-${_records.length + 1}',
+          sessionId: sessionId,
+          memberId: memberId,
+          status: status,
+        ),
+      );
+    });
+    return true;
+  }
+
+  @override
+  Future<List<FollowUpEntity>> getMemberFollowUps(String memberId) async =>
+      _followUps.where((f) => f.memberId == memberId).toList();
+
+  @override
+  Future<List<FollowUpEntity>> getAllFollowUps() async => _followUps;
+
+  @override
+  Future<bool> addFollowUp({
+    required String memberId,
+    String? sessionId,
+    String? reason,
+    required String contactStatus,
+    String? result,
+    String? responsibleUserId,
+    required DateTime followUpDate,
+  }) async {
+    final f = FollowUpEntity(
+      id: 'f-${_followUps.length + 1}',
+      churchId: 'ch-1',
+      memberId: memberId,
+      sessionId: sessionId,
+      reason: reason,
+      contactStatus: contactStatus,
+      result: result,
+      responsibleUserId: responsibleUserId,
+      followUpDate: followUpDate,
+    );
+    _followUps.add(f);
+    return true;
+  }
+
+  @override
+  Future<bool> deleteFollowUp(String id) async {
+    _followUps.removeWhere((f) => f.id == id);
+    return true;
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> getAttendanceReportStats() async {
+    return _members
+        .map(
+          (m) => {
+            'member_id': m.id,
+            'recorded_weeks': 10,
+            'present_weeks': 8,
+            'absent_weeks': 2,
+            'excused_weeks': 0,
+            'attendance_percentage': 80.0,
+          },
+        )
+        .toList();
+  }
+
+  @override
+  Future<AppProfile?> signUpWithActivationCode({
+    required String name,
+    required String email,
+    required String password,
+    String? phone,
+    required String code,
+  }) async {
+    _profile = AppProfile(
+      id: 'prof-invited-1',
+      churchId: 'ch-1',
+      fullName: name,
+      role: AppRole.classLeader,
+      email: email,
+      phone: phone,
+    );
+    return _profile;
+  }
+
+  @override
+  Future<OfflineSaveResult<InvitationCreateResult>> createInvitation({
+    required String fullName,
+    String? email,
+    String? phone,
+    required AppRole role,
+    String? targetId,
+    String? assignmentScope,
+    bool canTakeAttendance = true,
+    bool canViewReports = true,
+  }) async {
+    return OfflineSaveResult(
+      data: const InvitationCreateResult(
+        code: 'ACT-TEST1',
+        invitationId: 'inv-test-1',
+        inviteToken: 'token-test-1',
+        inviteLink: 'https://example.com/invite/token-test-1',
+      ),
+      syncedToServer: true,
+    );
+  }
+
+  @override
+  Future<void> sendInvitationEmail(String invitationId) async {}
+
+  @override
+  Future<List<HelperInvitation>> getInvitations() async {
+    return [];
+  }
+
+  @override
+  Future<bool> deleteInvitation(String id) async => true;
+
+  @override
+  Future<List<Map<String, dynamic>>> getUserClassAssignments(
+    String userId,
+  ) async {
+    return [];
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> getUserMeetingAssignments(
+    String userId,
+  ) async {
+    return [];
+  }
+
+  @override
+  Stream<List<AttendanceRecordEntity>> subscribeToAttendanceRecords(
+    String sessionId,
+  ) {
+    return Stream.value([]);
+  }
+
+  @override
+  Future<void> syncPendingOfflineData() async {}
+
+  @override
+  Future<bool> hasPendingOfflineData() async => false;
+
+  @override
+  Future<void> warmOfflineCache() async {}
+}

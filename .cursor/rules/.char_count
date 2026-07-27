@@ -1,0 +1,36 @@
+# Rules Character Count
+
+This document contains line and character counts for all rule files.
+
+| Rules Under 200 Lines | Line Count |
+|-----------------------|------------|
+| code_review.md | 30 |
+| dart_3_updates.md | 91 |
+| effective_dart.md | 114 |
+| flutter_app_architecture.md | 58 |
+| flutter_errors.md | 9 |
+| testing.md | 5 |
+
+**Total lines across all rules:** 307
+
+| Rules Under 6K | Character Count |
+|----------------|-----------------|
+| code_review.md |     2978 |
+| flutter_app_architecture.md |     5774 |
+| flutter_errors.md |     1391 |
+| testing.md |      638 |
+
+| Rules 6K+ | Character Count |
+|-----------|-----------------|
+| dart_3_updates.md |     9612 |
+| effective_dart.md |     6311 |
+
+**Total character count across all rules:** 26704
+
+---
+
+**Windsurf limits:** `global_rules.md` and `.windsurfrules` are limited to 6000 characters each. Any content above 6000 characters will be truncated and Cascade will not be aware of them.
+Source: [Windsurf Documentation - Memories](https://docs.windsurf.com/windsurf/memories), accessed Apr 15 2025.
+
+**Cursor limits:** Keep rules concise. Under 500 lines is a good target.
+Source: [Cursor Documentation - Rules](https://docs.cursor.com/context/rules#best-practices), accessed May 7 2025.

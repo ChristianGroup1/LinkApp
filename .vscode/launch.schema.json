@@ -1,0 +1,25 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["version", "configurations"],
+  "properties": {
+    "version": { "type": "string" },
+    "configurations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "request", "type"],
+        "properties": {
+          "name": { "type": "string" },
+          "request": { "enum": ["launch", "attach"] },
+          "type": { "type": "string" },
+          "toolArgs": { "type": "array", "items": { "type": "string" } },
+          "flutterMode": { "type": "string" },
+          "program": { "type": "string" },
+          "args": { "type": "array", "items": { "type": "string" } }
+        },
+        "additionalProperties": true
+      }
+    }
+  }
+}

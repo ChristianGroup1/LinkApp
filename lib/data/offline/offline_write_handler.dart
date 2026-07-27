@@ -1,0 +1,1487 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+import 'dart:math';
+
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+
+import '../../core/invitations/invitation_link.dart';
+import '../../shared/data/app_models.dart';
+import 'offline_cache.dart';
+import 'offline_entity_json.dart';
+import 'invitation_create_result.dart';
+import 'offline_network_policy.dart';
+import 'offline_save_result.dart';
+import 'offline_write_queue.dart';
+
+typedef ProfileLoader = Future<AppProfile?> Function();
+typedef AttendanceSaver =
+    Future<bool> Function({
+      required String sessionId,
+      required Map<String, AttendanceStatus> statusesByMemberId,
+    });
+
+class OfflineWriteHandler {
+  final SupabaseClient client;
+  final OfflineCache cache;
+  final OfflineWriteQueue queue;
+  final ProfileLoader loadProfile;
+  final AttendanceSaver saveAttendanceOnline;
+  final String? Function(String?) emptyToNull;
+  Future<void>? _syncInFlight;
+
+  OfflineWriteHandler({
+    required this.client,
+    required this.cache,
+    required this.queue,
+    required this.loadProfile,
+    required this.saveAttendanceOnline,
+    required this.emptyToNull,
+  });
+
+  bool isRecoverableOfflineError(Object error) {
+    if (error is SocketException || error is TimeoutException) return true;
+    final message = error.toString().toLowerCase();
+    return message.contains('socket') ||
+        message.contains('clientexception') ||
+        message.contains('network') ||
+        message.contains('connection') ||
+        message.contains('host lookup') ||
+        message.contains('failed host') ||
+        message.contains('timed out') ||
+        message.contains('timeout') ||
+        message.contains('offline') ||
+        message.contains('internet');
+  }
+
+  Future<bool> _shouldQueueDeleteInsteadOfServerCall() async {
+    await OfflineNetworkPolicy.ensureReady();
+    return OfflineNetworkPolicy.isConnectivityOffline;
+  }
+
+  Future<void> _queueEntityDelete({
+    required String type,
+    required String id,
+    required Future<void> Function() removeFromCache,
+  }) async {
+    await removeFromCache();
+    await queue.enqueue(
+      QueuedOperation(
+        id: await queue.generateId('op'),
+        type: type,
+        payload: {'id': id},
+        queuedAt: DateTime.now(),
+      ),
+    );
+  }
+
+  Future<bool> hasPendingData() async {
+    final prefs = await SharedPreferences.getInstance();
+    final unsynced = prefs.getStringList('offline_unsynced_sessions') ?? [];
+    return unsynced.isNotEmpty || !(await queue.isEmpty());
+  }
+
+  Future<void> clear() => queue.clear();
+
+  Future<void> syncAll() {
+    final active = _syncInFlight;
+    if (active != null) return active;
+
+    final sync = _performSync();
+    _syncInFlight = sync;
+    return sync.whenComplete(() {
+      if (identical(_syncInFlight, sync)) _syncInFlight = null;
+    });
+  }
+
+  Future<void> _performSync() async {
+    await _syncWriteQueue();
+    await _syncAttendanceWithRemapping();
+  }
+
+  Future<OfflineSaveResult<MemberEntity>> createMember({
+    required String fullName,
+    required MemberScope scope,
+    String? sundaySchoolClassId,
+    String? meetingId,
+    String? phone,
+    String? parentName,
+    String? parentPhone,
+    String? code,
+  }) async {
+    final profile = await _requireProfile();
+    final churchId = profile.churchId!;
+
+    try {
+      final row = await client
+          .from('members')
+          .insert({
+            'church_id': churchId,
+            'full_name': fullName.trim(),
+            'scope': scope.value,
+            'sunday_school_class_id': scope == MemberScope.sundaySchoolClass
+                ? (sundaySchoolClassId == null
+                      ? null
+                      : await queue.resolveId(sundaySchoolClassId))
+                : null,
+            'meeting_id': scope == MemberScope.meeting
+                ? (meetingId == null ? null : await queue.resolveId(meetingId))
+                : null,
+            'phone': emptyToNull(phone),
+            'parent_name': emptyToNull(parentName),
+            'parent_phone': emptyToNull(parentPhone),
+            'code': emptyToNull(code),
+            'joined_on': DateTime.now().toIso8601String().split('T').first,
+          })
+          .select()
+          .single();
+      final member = MemberEntity.fromJson(row);
+      await cache.upsertMember(churchId, member);
+      return OfflineSaveResult(data: member, syncedToServer: true);
+    } catch (error) {
+      if (!isRecoverableOfflineError(error)) rethrow;
+
+      final localId = await queue.generateId('member');
+      final member = MemberEntity(
+        id: localId,
+        churchId: churchId,
+        fullName: fullName.trim(),
+        scope: scope,
+        sundaySchoolClassId: sundaySchoolClassId,
+        meetingId: meetingId,
+        phone: emptyToNull(phone),
+        parentName: emptyToNull(parentName),
+        parentPhone: emptyToNull(parentPhone),
+        code: emptyToNull(code),
+        isActive: true,
+      );
+      await cache.upsertMember(churchId, member);
+      await queue.enqueue(
+        QueuedOperation(
+          id: await queue.generateId('op'),
+          type: OfflineOpType.memberCreate,
+          payload: {
+            'local_id': localId,
+            'church_id': churchId,
+            'full_name': fullName.trim(),
+            'scope': scope.value,
+            'sunday_school_class_id': sundaySchoolClassId,
+            'meeting_id': meetingId,
+            'phone': emptyToNull(phone),
+            'parent_name': emptyToNull(parentName),
+            'parent_phone': emptyToNull(parentPhone),
+            'code': emptyToNull(code),
+          },
+          queuedAt: DateTime.now(),
+        ),
+      );
+      return OfflineSaveResult(data: member, syncedToServer: false);
+    }
+  }
+
+  Future<OfflineSaveResult<MemberEntity>> updateMember({
+    required String id,
+    required String fullName,
+    required MemberScope scope,
+    String? sundaySchoolClassId,
+    String? meetingId,
+    String? phone,
+    String? parentName,
+    String? parentPhone,
+    String? code,
+    required bool isActive,
+  }) async {
+    final profile = await _requireProfile();
+    final churchId = profile.churchId!;
+
+    if (isOfflineId(id)) {
+      final member = MemberEntity(
+        id: id,
+        churchId: churchId,
+        fullName: fullName.trim(),
+        scope: scope,
+        sundaySchoolClassId: sundaySchoolClassId,
+        meetingId: meetingId,
+        phone: emptyToNull(phone),
+        parentName: emptyToNull(parentName),
+        parentPhone: emptyToNull(parentPhone),
+        code: emptyToNull(code),
+        isActive: isActive,
+      );
+      await cache.upsertMember(churchId, member);
+      await queue.removeByEntityId(id);
+      await queue.enqueue(
+        QueuedOperation(
+          id: await queue.generateId('op'),
+          type: OfflineOpType.memberCreate,
+          payload: {
+            'local_id': id,
+            'church_id': churchId,
+            'full_name': fullName.trim(),
+            'scope': scope.value,
+            'sunday_school_class_id': sundaySchoolClassId,
+            'meeting_id': meetingId,
+            'phone': emptyToNull(phone),
+            'parent_name': emptyToNull(parentName),
+            'parent_phone': emptyToNull(parentPhone),
+            'code': emptyToNull(code),
+          },
+          queuedAt: DateTime.now(),
+        ),
+      );
+      return OfflineSaveResult(data: member, syncedToServer: false);
+    }
+
+    try {
+      final row = await client
+          .from('members')
+          .update({
+            'full_name': fullName.trim(),
+            'scope': scope.value,
+            'sunday_school_class_id': scope == MemberScope.sundaySchoolClass
+                ? sundaySchoolClassId
+                : null,
+            'meeting_id': scope == MemberScope.meeting ? meetingId : null,
+            'phone': emptyToNull(phone),
+            'parent_name': emptyToNull(parentName),
+            'parent_phone': emptyToNull(parentPhone),
+            'code': emptyToNull(code),
+            'is_active': isActive,
+          })
+          .eq('id', id)
+          .select()
+          .single();
+      final member = MemberEntity.fromJson(row);
+      await cache.upsertMember(churchId, member);
+      return OfflineSaveResult(data: member, syncedToServer: true);
+    } catch (error) {
+      if (!isRecoverableOfflineError(error)) rethrow;
+
+      final member = MemberEntity(
+        id: id,
+        churchId: churchId,
+        fullName: fullName.trim(),
+        scope: scope,
+        sundaySchoolClassId: sundaySchoolClassId,
+        meetingId: meetingId,
+        phone: emptyToNull(phone),
+        parentName: emptyToNull(parentName),
+        parentPhone: emptyToNull(parentPhone),
+        code: emptyToNull(code),
+        isActive: isActive,
+      );
+      await cache.upsertMember(churchId, member);
+      await queue.enqueue(
+        QueuedOperation(
+          id: await queue.generateId('op'),
+          type: OfflineOpType.memberUpdate,
+          payload: {
+            'id': id,
+            'full_name': fullName.trim(),
+            'scope': scope.value,
+            'sunday_school_class_id': sundaySchoolClassId,
+            'meeting_id': meetingId,
+            'phone': emptyToNull(phone),
+            'parent_name': emptyToNull(parentName),
+            'parent_phone': emptyToNull(parentPhone),
+            'code': emptyToNull(code),
+            'is_active': isActive,
+          },
+          queuedAt: DateTime.now(),
+        ),
+      );
+      return OfflineSaveResult(data: member, syncedToServer: false);
+    }
+  }
+
+  Future<bool> deleteMember(String id) async {
+    final profile = await _requireProfile();
+    final churchId = profile.churchId!;
+
+    if (isOfflineId(id)) {
+      await cache.removeMember(churchId, id);
+      await queue.removeByEntityId(id);
+      return false;
+    }
+
+    if (await _shouldQueueDeleteInsteadOfServerCall()) {
+      await _queueEntityDelete(
+        type: OfflineOpType.memberDelete,
+        id: id,
+        removeFromCache: () => cache.removeMember(churchId, id),
+      );
+      return false;
+    }
+
+    try {
+      await client.from('members').delete().eq('id', id);
+      await cache.removeMember(churchId, id);
+      return true;
+    } catch (error) {
+      if (!isRecoverableOfflineError(error)) rethrow;
+      await cache.removeMember(churchId, id);
+      await queue.enqueue(
+        QueuedOperation(
+          id: await queue.generateId('op'),
+          type: OfflineOpType.memberDelete,
+          payload: {'id': id},
+          queuedAt: DateTime.now(),
+        ),
+      );
+      return false;
+    }
+  }
+
+  Future<bool> updateChurch(
+    String churchId,
+    String nameAr,
+    String? phone,
+    String? address,
+  ) async {
+    try {
+      await client
+          .from('churches')
+          .update({'name_ar': nameAr, 'phone': phone, 'address': address})
+          .eq('id', churchId);
+      final existing = await cache.readChurch(churchId);
+      if (existing != null) {
+        await cache.saveChurch(
+          churchId,
+          churchToJson(
+            Church(
+              id: existing.id,
+              name: existing.name,
+              nameAr: nameAr,
+              slug: existing.slug,
+              phone: phone,
+              address: address,
+            ),
+          ),
+        );
+      }
+      return true;
+    } catch (error) {
+      if (!isRecoverableOfflineError(error)) rethrow;
+      final existing = await cache.readChurch(churchId);
+      if (existing != null) {
+        await cache.saveChurch(
+          churchId,
+          churchToJson(
+            Church(
+              id: existing.id,
+              name: existing.name,
+              nameAr: nameAr,
+              slug: existing.slug,
+              phone: phone,
+              address: address,
+            ),
+          ),
+        );
+      }
+      await queue.enqueue(
+        QueuedOperation(
+          id: await queue.generateId('op'),
+          type: OfflineOpType.churchUpdate,
+          payload: {
+            'church_id': churchId,
+            'name_ar': nameAr,
+            'phone': phone,
+            'address': address,
+          },
+          queuedAt: DateTime.now(),
+        ),
+      );
+      return false;
+    }
+  }
+
+  Future<OfflineSaveResult<MeetingEntity>> createMeeting({
+    required String churchId,
+    required String createdBy,
+    required String name,
+    required String nameAr,
+    required MeetingKind kind,
+    required int weekday,
+    String? description,
+  }) async {
+    try {
+      final row = await client
+          .from('meetings')
+          .insert({
+            'church_id': churchId,
+            'name': name,
+            'name_ar': nameAr,
+            'kind': kind.value,
+            'weekday': weekday,
+            'description': description,
+            'created_by': createdBy,
+          })
+          .select()
+          .single();
+      final meeting = MeetingEntity.fromJson(row);
+      await cache.upsertMeeting(churchId, meeting);
+      return OfflineSaveResult(data: meeting, syncedToServer: true);
+    } catch (error) {
+      if (!isRecoverableOfflineError(error)) rethrow;
+      final localId = await queue.generateId('meeting');
+      final meeting = MeetingEntity(
+        id: localId,
+        churchId: churchId,
+        name: name,
+        nameAr: nameAr,
+        kind: kind,
+        weekday: weekday,
+        isActive: true,
+        description: description,
+      );
+      await cache.upsertMeeting(churchId, meeting);
+      await queue.enqueue(
+        QueuedOperation(
+          id: await queue.generateId('op'),
+          type: OfflineOpType.meetingCreate,
+          payload: {
+            'local_id': localId,
+            'church_id': churchId,
+            'created_by': createdBy,
+            'name': name,
+            'name_ar': nameAr,
+            'kind': kind.value,
+            'weekday': weekday,
+            'description': description,
+          },
+          queuedAt: DateTime.now(),
+        ),
+      );
+      return OfflineSaveResult(data: meeting, syncedToServer: false);
+    }
+  }
+
+  Future<OfflineSaveResult<MeetingEntity>> updateMeeting({
+    required String churchId,
+    required String id,
+    required String name,
+    required String nameAr,
+    required int weekday,
+    required bool isActive,
+    String? description,
+  }) async {
+    if (isOfflineId(id)) {
+      final meeting = MeetingEntity(
+        id: id,
+        churchId: churchId,
+        name: name,
+        nameAr: nameAr,
+        kind: MeetingKind.normal,
+        weekday: weekday,
+        isActive: isActive,
+        description: description,
+      );
+      await cache.upsertMeeting(churchId, meeting);
+      await queue.removeByEntityId(id);
+      await queue.enqueue(
+        QueuedOperation(
+          id: await queue.generateId('op'),
+          type: OfflineOpType.meetingCreate,
+          payload: {
+            'local_id': id,
+            'church_id': churchId,
+            'created_by': (await _requireProfile()).id,
+            'name': name,
+            'name_ar': nameAr,
+            'kind': MeetingKind.normal.value,
+            'weekday': weekday,
+            'description': description,
+          },
+          queuedAt: DateTime.now(),
+        ),
+      );
+      return OfflineSaveResult(data: meeting, syncedToServer: false);
+    }
+
+    try {
+      final row = await client
+          .from('meetings')
+          .update({
+            'name': name,
+            'name_ar': nameAr,
+            'weekday': weekday,
+            'is_active': isActive,
+            'description': description,
+          })
+          .eq('id', id)
+          .select()
+          .single();
+      final meeting = MeetingEntity.fromJson(row);
+      await cache.upsertMeeting(churchId, meeting);
+      return OfflineSaveResult(data: meeting, syncedToServer: true);
+    } catch (error) {
+      if (!isRecoverableOfflineError(error)) rethrow;
+      final existing = (await cache.readMeetings(
+        churchId,
+      ))?.firstWhere((item) => item.id == id);
+      final meeting = MeetingEntity(
+        id: id,
+        churchId: churchId,
+        name: name,
+        nameAr: nameAr,
+        kind: existing?.kind ?? MeetingKind.normal,
+        weekday: weekday,
+        isActive: isActive,
+        description: description,
+      );
+      await cache.upsertMeeting(churchId, meeting);
+      await queue.enqueue(
+        QueuedOperation(
+          id: await queue.generateId('op'),
+          type: OfflineOpType.meetingUpdate,
+          payload: {
+            'id': id,
+            'name': name,
+            'name_ar': nameAr,
+            'weekday': weekday,
+            'is_active': isActive,
+            'description': description,
+          },
+          queuedAt: DateTime.now(),
+        ),
+      );
+      return OfflineSaveResult(data: meeting, syncedToServer: false);
+    }
+  }
+
+  Future<bool> deleteMeeting(String churchId, String id) async {
+    if (isOfflineId(id)) {
+      await cache.removeMeeting(churchId, id);
+      await queue.removeByEntityId(id);
+      return false;
+    }
+
+    if (await _shouldQueueDeleteInsteadOfServerCall()) {
+      await _queueEntityDelete(
+        type: OfflineOpType.meetingDelete,
+        id: id,
+        removeFromCache: () => cache.removeMeeting(churchId, id),
+      );
+      return false;
+    }
+
+    try {
+      await client.rpc(
+        'delete_meeting_cascade',
+        params: {'target_meeting_id': id},
+      );
+      await cache.removeMeeting(churchId, id);
+      return true;
+    } catch (error) {
+      if (!isRecoverableOfflineError(error)) rethrow;
+      await cache.removeMeeting(churchId, id);
+      await queue.enqueue(
+        QueuedOperation(
+          id: await queue.generateId('op'),
+          type: OfflineOpType.meetingDelete,
+          payload: {'id': id},
+          queuedAt: DateTime.now(),
+        ),
+      );
+      return false;
+    }
+  }
+
+  Future<OfflineSaveResult<SundaySchoolClassEntity>> createSundaySchoolClass({
+    required String churchId,
+    required String meetingId,
+    required String name,
+    required String nameAr,
+    required int displayOrder,
+  }) async {
+    final resolvedMeetingId = await queue.resolveId(meetingId);
+    try {
+      final row = await client
+          .from('sunday_school_classes')
+          .insert({
+            'church_id': churchId,
+            'meeting_id': resolvedMeetingId,
+            'name': name,
+            'name_ar': nameAr,
+            'display_order': displayOrder,
+          })
+          .select()
+          .single();
+      final cls = SundaySchoolClassEntity.fromJson(row);
+      await cache.upsertClass(churchId, cls);
+      return OfflineSaveResult(data: cls, syncedToServer: true);
+    } catch (error) {
+      if (!isRecoverableOfflineError(error)) rethrow;
+      final localId = await queue.generateId('class');
+      final cls = SundaySchoolClassEntity(
+        id: localId,
+        churchId: churchId,
+        meetingId: meetingId,
+        name: name,
+        nameAr: nameAr,
+        displayOrder: displayOrder,
+        isActive: true,
+      );
+      await cache.upsertClass(churchId, cls);
+      await queue.enqueue(
+        QueuedOperation(
+          id: await queue.generateId('op'),
+          type: OfflineOpType.classCreate,
+          payload: {
+            'local_id': localId,
+            'church_id': churchId,
+            'meeting_id': meetingId,
+            'name': name,
+            'name_ar': nameAr,
+            'display_order': displayOrder,
+          },
+          queuedAt: DateTime.now(),
+        ),
+      );
+      return OfflineSaveResult(data: cls, syncedToServer: false);
+    }
+  }
+
+  Future<OfflineSaveResult<SundaySchoolClassEntity>> updateSundaySchoolClass({
+    required String churchId,
+    required String id,
+    required String name,
+    required String nameAr,
+    required int displayOrder,
+    required bool isActive,
+  }) async {
+    final classes = await cache.readClasses(churchId) ?? [];
+    final existing = classes.where((item) => item.id == id).firstOrNull;
+
+    if (isOfflineId(id) && existing != null) {
+      final cls = SundaySchoolClassEntity(
+        id: id,
+        churchId: churchId,
+        meetingId: existing.meetingId,
+        name: name,
+        nameAr: nameAr,
+        displayOrder: displayOrder,
+        isActive: isActive,
+      );
+      await cache.upsertClass(churchId, cls);
+      await queue.removeByEntityId(id);
+      await queue.enqueue(
+        QueuedOperation(
+          id: await queue.generateId('op'),
+          type: OfflineOpType.classCreate,
+          payload: {
+            'local_id': id,
+            'church_id': churchId,
+            'meeting_id': existing.meetingId,
+            'name': name,
+            'name_ar': nameAr,
+            'display_order': displayOrder,
+          },
+          queuedAt: DateTime.now(),
+        ),
+      );
+      return OfflineSaveResult(data: cls, syncedToServer: false);
+    }
+
+    try {
+      final row = await client
+          .from('sunday_school_classes')
+          .update({
+            'name': name,
+            'name_ar': nameAr,
+            'display_order': displayOrder,
+            'is_active': isActive,
+          })
+          .eq('id', id)
+          .select()
+          .single();
+      final cls = SundaySchoolClassEntity.fromJson(row);
+      await cache.upsertClass(churchId, cls);
+      return OfflineSaveResult(data: cls, syncedToServer: true);
+    } catch (error) {
+      if (!isRecoverableOfflineError(error)) rethrow;
+      final cls = SundaySchoolClassEntity(
+        id: id,
+        churchId: churchId,
+        meetingId: existing?.meetingId ?? '',
+        name: name,
+        nameAr: nameAr,
+        displayOrder: displayOrder,
+        isActive: isActive,
+      );
+      await cache.upsertClass(churchId, cls);
+      await queue.enqueue(
+        QueuedOperation(
+          id: await queue.generateId('op'),
+          type: OfflineOpType.classUpdate,
+          payload: {
+            'id': id,
+            'name': name,
+            'name_ar': nameAr,
+            'display_order': displayOrder,
+            'is_active': isActive,
+          },
+          queuedAt: DateTime.now(),
+        ),
+      );
+      return OfflineSaveResult(data: cls, syncedToServer: false);
+    }
+  }
+
+  Future<bool> deleteSundaySchoolClass(String churchId, String id) async {
+    if (isOfflineId(id)) {
+      await cache.removeClass(churchId, id);
+      await queue.removeByEntityId(id);
+      return false;
+    }
+
+    if (await _shouldQueueDeleteInsteadOfServerCall()) {
+      await _queueEntityDelete(
+        type: OfflineOpType.classDelete,
+        id: id,
+        removeFromCache: () => cache.removeClass(churchId, id),
+      );
+      return false;
+    }
+
+    try {
+      await client.rpc(
+        'delete_sunday_school_class_cascade',
+        params: {'target_class_id': id},
+      );
+      await cache.removeClass(churchId, id);
+      return true;
+    } catch (error) {
+      if (!isRecoverableOfflineError(error)) rethrow;
+      await cache.removeClass(churchId, id);
+      await queue.enqueue(
+        QueuedOperation(
+          id: await queue.generateId('op'),
+          type: OfflineOpType.classDelete,
+          payload: {'id': id},
+          queuedAt: DateTime.now(),
+        ),
+      );
+      return false;
+    }
+  }
+
+  Future<OfflineSaveResult<AttendanceSessionEntity>> createWeeklySession({
+    required String churchId,
+    required String meetingId,
+    String? classId,
+    required DateTime sessionDate,
+    required int weekNumber,
+    String? title,
+  }) async {
+    final resolvedMeetingId = await queue.resolveId(meetingId);
+    final resolvedClassId = classId == null
+        ? null
+        : await queue.resolveId(classId);
+    try {
+      final row = await client.rpc(
+        'create_attendance_session',
+        params: {
+          'target_meeting_id': resolvedMeetingId,
+          'target_class_id': resolvedClassId,
+          'target_session_date': sessionDate.toIso8601String().split('T').first,
+          'target_week_number': weekNumber,
+          'target_title': emptyToNull(title),
+        },
+      );
+      final session = AttendanceSessionEntity.fromJson(row);
+      await cache.upsertSession(meetingId, classId, session);
+      return OfflineSaveResult(data: session, syncedToServer: true);
+    } catch (error) {
+      if (!isRecoverableOfflineError(error)) rethrow;
+      final localId = await queue.generateId('session');
+      final session = AttendanceSessionEntity(
+        id: localId,
+        churchId: churchId,
+        meetingId: meetingId,
+        classId: classId,
+        sessionDate: sessionDate,
+        weekNumber: weekNumber,
+        title: emptyToNull(title),
+      );
+      await cache.upsertSession(meetingId, classId, session);
+      await queue.enqueue(
+        QueuedOperation(
+          id: await queue.generateId('op'),
+          type: OfflineOpType.sessionCreate,
+          payload: {
+            'local_id': localId,
+            'church_id': churchId,
+            'meeting_id': meetingId,
+            'class_id': classId,
+            'session_date': sessionDate.toIso8601String().split('T').first,
+            'week_number': weekNumber,
+            'title': emptyToNull(title),
+          },
+          queuedAt: DateTime.now(),
+        ),
+      );
+      return OfflineSaveResult(data: session, syncedToServer: false);
+    }
+  }
+
+  Future<bool> deleteWeeklySession({
+    required String meetingId,
+    String? classId,
+    required String sessionId,
+  }) async {
+    if (isOfflineId(sessionId)) {
+      await cache.removeSession(meetingId, classId, sessionId);
+      await queue.removeByEntityId(sessionId);
+      return false;
+    }
+
+    if (await _shouldQueueDeleteInsteadOfServerCall()) {
+      await _queueEntityDelete(
+        type: OfflineOpType.sessionDelete,
+        id: sessionId,
+        removeFromCache: () =>
+            cache.removeSession(meetingId, classId, sessionId),
+      );
+      return false;
+    }
+
+    try {
+      await client.from('attendance_sessions').delete().eq('id', sessionId);
+      await cache.removeSession(meetingId, classId, sessionId);
+      return true;
+    } catch (error) {
+      if (!isRecoverableOfflineError(error)) rethrow;
+      await cache.removeSession(meetingId, classId, sessionId);
+      await queue.enqueue(
+        QueuedOperation(
+          id: await queue.generateId('op'),
+          type: OfflineOpType.sessionDelete,
+          payload: {'id': sessionId},
+          queuedAt: DateTime.now(),
+        ),
+      );
+      return false;
+    }
+  }
+
+  Future<bool> addFollowUp({
+    required String churchId,
+    required String createdBy,
+    required String memberId,
+    String? sessionId,
+    String? reason,
+    required String contactStatus,
+    String? result,
+    String? responsibleUserId,
+    required DateTime followUpDate,
+  }) async {
+    final resolvedMemberId = await queue.resolveId(memberId);
+    final resolvedSessionId = sessionId == null
+        ? null
+        : await queue.resolveId(sessionId);
+    try {
+      await client.from('follow_ups').insert({
+        'church_id': churchId,
+        'member_id': resolvedMemberId,
+        'session_id': resolvedSessionId,
+        'reason': emptyToNull(reason),
+        'contact_status': contactStatus,
+        'result': emptyToNull(result),
+        'responsible_user_id': responsibleUserId,
+        'follow_up_date': followUpDate.toIso8601String().split('T').first,
+        'created_by': createdBy,
+      });
+      return true;
+    } catch (error) {
+      if (!isRecoverableOfflineError(error)) rethrow;
+      final localId = await queue.generateId('followup');
+      final followUp = FollowUpEntity(
+        id: localId,
+        churchId: churchId,
+        memberId: memberId,
+        sessionId: sessionId,
+        reason: emptyToNull(reason),
+        contactStatus: contactStatus,
+        result: emptyToNull(result),
+        responsibleUserId: responsibleUserId,
+        followUpDate: followUpDate,
+      );
+      await cache.upsertFollowUp(churchId, followUp);
+      await queue.enqueue(
+        QueuedOperation(
+          id: await queue.generateId('op'),
+          type: OfflineOpType.followUpCreate,
+          payload: {
+            'local_id': localId,
+            'church_id': churchId,
+            'created_by': createdBy,
+            'member_id': memberId,
+            'session_id': sessionId,
+            'reason': emptyToNull(reason),
+            'contact_status': contactStatus,
+            'result': emptyToNull(result),
+            'responsible_user_id': responsibleUserId,
+            'follow_up_date': followUpDate.toIso8601String().split('T').first,
+          },
+          queuedAt: DateTime.now(),
+        ),
+      );
+      return false;
+    }
+  }
+
+  Future<bool> deleteFollowUp(String churchId, String id) async {
+    if (isOfflineId(id)) {
+      await cache.removeFollowUp(churchId, id);
+      await queue.removeByEntityId(id);
+      return false;
+    }
+
+    if (await _shouldQueueDeleteInsteadOfServerCall()) {
+      await _queueEntityDelete(
+        type: OfflineOpType.followUpDelete,
+        id: id,
+        removeFromCache: () => cache.removeFollowUp(churchId, id),
+      );
+      return false;
+    }
+
+    try {
+      await client.from('follow_ups').delete().eq('id', id);
+      await cache.removeFollowUp(churchId, id);
+      return true;
+    } catch (error) {
+      if (!isRecoverableOfflineError(error)) rethrow;
+      await cache.removeFollowUp(churchId, id);
+      await queue.enqueue(
+        QueuedOperation(
+          id: await queue.generateId('op'),
+          type: OfflineOpType.followUpDelete,
+          payload: {'id': id},
+          queuedAt: DateTime.now(),
+        ),
+      );
+      return false;
+    }
+  }
+
+  Future<OfflineSaveResult<InvitationCreateResult>> createInvitation({
+    required String churchId,
+    required String fullName,
+    String? email,
+    String? phone,
+    required AppRole role,
+    String? targetId,
+    String? assignmentScope,
+    bool canTakeAttendance = true,
+    bool canViewReports = true,
+  }) async {
+    final code = _generateActivationCode();
+    final inviteToken = _generateInviteToken();
+    final resolvedTargetId = targetId == null
+        ? null
+        : await queue.resolveId(targetId);
+    final normalizedEmail = emptyToNull(email?.trim());
+    final inviteLink = buildInvitationLink(
+      inviteToken: inviteToken,
+      supabaseUrl: dotenv.env['SUPABASE_URL'],
+    );
+
+    try {
+      final row = await client
+          .from('invitations')
+          .insert({
+            'church_id': churchId,
+            'full_name': fullName.trim(),
+            'email': normalizedEmail,
+            'phone': emptyToNull(phone),
+            'role': role.value,
+            'target_id': resolvedTargetId,
+            'assignment_scope': assignmentScope,
+            'can_take_attendance': canTakeAttendance,
+            'can_view_reports': canViewReports,
+            'code': code,
+            'invite_token': inviteToken,
+            'is_used': false,
+          })
+          .select()
+          .single();
+
+      final invitation = HelperInvitation.fromJson(row);
+      await cache.upsertInvitation(churchId, invitation);
+      return OfflineSaveResult(
+        data: InvitationCreateResult(
+          code: code,
+          invitationId: invitation.id,
+          inviteToken: inviteToken,
+          inviteLink: inviteLink,
+        ),
+        syncedToServer: true,
+      );
+    } catch (error) {
+      final message = error.toString();
+      if (message.contains('assignment_scope') ||
+          message.contains('can_take_attendance') ||
+          message.contains('can_view_reports') ||
+          message.contains('invite_token')) {
+        throw Exception(
+          'قاعدة البيانات تحتاج تحديث الدعوات. شغّل supabase_invitation_link_migration.sql.',
+        );
+      }
+      if (!isRecoverableOfflineError(error)) rethrow;
+
+      final localId = await queue.generateId('invitation');
+      final invitation = HelperInvitation(
+        id: localId,
+        churchId: churchId,
+        fullName: fullName.trim(),
+        email: normalizedEmail,
+        phone: emptyToNull(phone),
+        role: role,
+        targetId: resolvedTargetId,
+        assignmentScope: assignmentScope,
+        canTakeAttendance: canTakeAttendance,
+        canViewReports: canViewReports,
+        code: code,
+        inviteToken: inviteToken,
+        isUsed: false,
+        createdAt: DateTime.now(),
+      );
+      await cache.upsertInvitation(churchId, invitation);
+      await queue.enqueue(
+        QueuedOperation(
+          id: await queue.generateId('op'),
+          type: OfflineOpType.invitationCreate,
+          payload: {
+            'local_id': localId,
+            'church_id': churchId,
+            'full_name': fullName.trim(),
+            'email': normalizedEmail,
+            'phone': emptyToNull(phone),
+            'role': role.value,
+            'target_id': targetId,
+            'assignment_scope': assignmentScope,
+            'can_take_attendance': canTakeAttendance,
+            'can_view_reports': canViewReports,
+            'code': code,
+            'invite_token': inviteToken,
+          },
+          queuedAt: DateTime.now(),
+        ),
+      );
+      return OfflineSaveResult(
+        data: InvitationCreateResult(
+          code: code,
+          invitationId: localId,
+          inviteToken: inviteToken,
+          inviteLink: inviteLink,
+        ),
+        syncedToServer: false,
+      );
+    }
+  }
+
+  Future<bool> deleteInvitation(String churchId, String id) async {
+    if (isOfflineId(id)) {
+      await cache.removeInvitation(churchId, id);
+      await queue.removeByEntityId(id);
+      return false;
+    }
+
+    if (await _shouldQueueDeleteInsteadOfServerCall()) {
+      await _queueEntityDelete(
+        type: OfflineOpType.invitationDelete,
+        id: id,
+        removeFromCache: () => cache.removeInvitation(churchId, id),
+      );
+      return false;
+    }
+
+    try {
+      await client.from('invitations').delete().eq('id', id);
+      await cache.removeInvitation(churchId, id);
+      return true;
+    } catch (error) {
+      if (!isRecoverableOfflineError(error)) rethrow;
+      await cache.removeInvitation(churchId, id);
+      await queue.enqueue(
+        QueuedOperation(
+          id: await queue.generateId('op'),
+          type: OfflineOpType.invitationDelete,
+          payload: {'id': id},
+          queuedAt: DateTime.now(),
+        ),
+      );
+      return false;
+    }
+  }
+
+  String _generateActivationCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    final rand = Random.secure();
+    final suffix = List.generate(
+      8,
+      (_) => chars[rand.nextInt(chars.length)],
+    ).join();
+    return 'ACT-$suffix';
+  }
+
+  String _generateInviteToken() {
+    final rand = Random.secure();
+    final bytes = List<int>.generate(24, (_) => rand.nextInt(256));
+    return base64Url.encode(bytes).replaceAll('=', '');
+  }
+
+  Future<AppProfile> _requireProfile() async {
+    final profile = await loadProfile();
+    if (profile?.churchId == null) {
+      throw Exception('المستخدم الحالي غير مرتبط بكنيسة');
+    }
+    return profile!;
+  }
+
+  Future<void> _syncWriteQueue() async {
+    final operations = await queue.all();
+    if (operations.isEmpty) return;
+
+    final sorted = [...operations]
+      ..sort((a, b) {
+        final typeCompare = OfflineOpType.syncOrder
+            .indexOf(a.type)
+            .compareTo(OfflineOpType.syncOrder.indexOf(b.type));
+        if (typeCompare != 0) return typeCompare;
+        return a.queuedAt.compareTo(b.queuedAt);
+      });
+
+    for (final operation in sorted) {
+      try {
+        final done = await _processOperation(operation);
+        if (done) {
+          await queue.remove(operation.id);
+        }
+      } catch (_) {
+        // Keep remaining operations for the next sync attempt.
+        break;
+      }
+    }
+  }
+
+  Future<bool> _processOperation(QueuedOperation operation) async {
+    switch (operation.type) {
+      case OfflineOpType.churchUpdate:
+        await client
+            .from('churches')
+            .update({
+              'name_ar': operation.payload['name_ar'],
+              'phone': operation.payload['phone'],
+              'address': operation.payload['address'],
+            })
+            .eq('id', operation.payload['church_id']);
+        return true;
+      case OfflineOpType.meetingCreate:
+        final row = await client
+            .from('meetings')
+            .insert({
+              'church_id': operation.payload['church_id'],
+              'name': operation.payload['name'],
+              'name_ar': operation.payload['name_ar'],
+              'kind': operation.payload['kind'],
+              'weekday': operation.payload['weekday'],
+              'description': operation.payload['description'],
+              'created_by': operation.payload['created_by'],
+            })
+            .select()
+            .single();
+        await queue.mapId(
+          operation.payload['local_id'] as String,
+          row['id'] as String,
+        );
+        return true;
+      case OfflineOpType.meetingUpdate:
+        await client
+            .from('meetings')
+            .update({
+              'name': operation.payload['name'],
+              'name_ar': operation.payload['name_ar'],
+              'weekday': operation.payload['weekday'],
+              'is_active': operation.payload['is_active'],
+              'description': operation.payload['description'],
+            })
+            .eq('id', operation.payload['id']);
+        return true;
+      case OfflineOpType.meetingDelete:
+        await client.rpc(
+          'delete_meeting_cascade',
+          params: {'target_meeting_id': operation.payload['id']},
+        );
+        return true;
+      case OfflineOpType.classCreate:
+        final meetingId = await queue.resolveId(
+          operation.payload['meeting_id'] as String,
+        );
+        final row = await client
+            .from('sunday_school_classes')
+            .insert({
+              'church_id': operation.payload['church_id'],
+              'meeting_id': meetingId,
+              'name': operation.payload['name'],
+              'name_ar': operation.payload['name_ar'],
+              'display_order': operation.payload['display_order'],
+            })
+            .select()
+            .single();
+        await queue.mapId(
+          operation.payload['local_id'] as String,
+          row['id'] as String,
+        );
+        return true;
+      case OfflineOpType.classUpdate:
+        await client
+            .from('sunday_school_classes')
+            .update({
+              'name': operation.payload['name'],
+              'name_ar': operation.payload['name_ar'],
+              'display_order': operation.payload['display_order'],
+              'is_active': operation.payload['is_active'],
+            })
+            .eq('id', operation.payload['id']);
+        return true;
+      case OfflineOpType.classDelete:
+        await client.rpc(
+          'delete_sunday_school_class_cascade',
+          params: {'target_class_id': operation.payload['id']},
+        );
+        return true;
+      case OfflineOpType.memberCreate:
+        final classId = operation.payload['sunday_school_class_id'] as String?;
+        final meetingId = operation.payload['meeting_id'] as String?;
+        final row = await client
+            .from('members')
+            .insert({
+              'church_id': operation.payload['church_id'],
+              'full_name': operation.payload['full_name'],
+              'scope': operation.payload['scope'],
+              'sunday_school_class_id': classId == null
+                  ? null
+                  : await queue.resolveId(classId),
+              'meeting_id': meetingId == null
+                  ? null
+                  : await queue.resolveId(meetingId),
+              'phone': operation.payload['phone'],
+              'parent_name': operation.payload['parent_name'],
+              'parent_phone': operation.payload['parent_phone'],
+              'code': operation.payload['code'],
+              'joined_on': DateTime.now().toIso8601String().split('T').first,
+            })
+            .select()
+            .single();
+        await queue.mapId(
+          operation.payload['local_id'] as String,
+          row['id'] as String,
+        );
+        return true;
+      case OfflineOpType.memberUpdate:
+        await client
+            .from('members')
+            .update({
+              'full_name': operation.payload['full_name'],
+              'scope': operation.payload['scope'],
+              'sunday_school_class_id':
+                  operation.payload['sunday_school_class_id'],
+              'meeting_id': operation.payload['meeting_id'],
+              'phone': operation.payload['phone'],
+              'parent_name': operation.payload['parent_name'],
+              'parent_phone': operation.payload['parent_phone'],
+              'code': operation.payload['code'],
+              'is_active': operation.payload['is_active'],
+            })
+            .eq('id', operation.payload['id']);
+        return true;
+      case OfflineOpType.memberDelete:
+        await client.from('members').delete().eq('id', operation.payload['id']);
+        return true;
+      case OfflineOpType.sessionCreate:
+        final classId = operation.payload['class_id'] as String?;
+        final row = await client.rpc(
+          'create_attendance_session',
+          params: {
+            'target_meeting_id': await queue.resolveId(
+              operation.payload['meeting_id'] as String,
+            ),
+            'target_class_id': classId == null
+                ? null
+                : await queue.resolveId(classId),
+            'target_session_date': operation.payload['session_date'],
+            'target_week_number': operation.payload['week_number'],
+            'target_title': operation.payload['title'],
+          },
+        );
+        final localId = operation.payload['local_id'] as String;
+        final serverId = row['id'] as String;
+        await queue.mapId(localId, serverId);
+        await _renameAttendanceCache(localId, serverId);
+        return true;
+      case OfflineOpType.sessionDelete:
+        await client
+            .from('attendance_sessions')
+            .delete()
+            .eq('id', operation.payload['id']);
+        return true;
+      case OfflineOpType.followUpCreate:
+        final memberId = await queue.resolveId(
+          operation.payload['member_id'] as String,
+        );
+        final sessionId = operation.payload['session_id'] as String?;
+        await client.from('follow_ups').insert({
+          'church_id': operation.payload['church_id'],
+          'member_id': memberId,
+          'session_id': sessionId == null
+              ? null
+              : await queue.resolveId(sessionId),
+          'reason': operation.payload['reason'],
+          'contact_status': operation.payload['contact_status'],
+          'result': operation.payload['result'],
+          'responsible_user_id': operation.payload['responsible_user_id'],
+          'follow_up_date': operation.payload['follow_up_date'],
+          'created_by': operation.payload['created_by'],
+        });
+        return true;
+      case OfflineOpType.followUpDelete:
+        await client
+            .from('follow_ups')
+            .delete()
+            .eq('id', operation.payload['id']);
+        return true;
+      case OfflineOpType.invitationCreate:
+        final targetId = operation.payload['target_id'] as String?;
+        final row = await client
+            .from('invitations')
+            .insert({
+              'church_id': operation.payload['church_id'],
+              'full_name': operation.payload['full_name'],
+              'email': operation.payload['email'],
+              'phone': operation.payload['phone'],
+              'role': operation.payload['role'],
+              'target_id': targetId == null
+                  ? null
+                  : await queue.resolveId(targetId),
+              'assignment_scope': operation.payload['assignment_scope'],
+              'can_take_attendance': operation.payload['can_take_attendance'],
+              'can_view_reports': operation.payload['can_view_reports'],
+              'code': operation.payload['code'],
+              'invite_token': operation.payload['invite_token'],
+              'is_used': false,
+            })
+            .select()
+            .single();
+        await queue.mapId(
+          operation.payload['local_id'] as String,
+          row['id'] as String,
+        );
+        return true;
+      case OfflineOpType.invitationDelete:
+        await client
+            .from('invitations')
+            .delete()
+            .eq('id', operation.payload['id']);
+        return true;
+      default:
+        return true;
+    }
+  }
+
+  Future<void> _renameAttendanceCache(
+    String oldSessionId,
+    String newSessionId,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    final oldKey = 'offline_attendance_records_$oldSessionId';
+    final newKey = 'offline_attendance_records_$newSessionId';
+    final raw = prefs.getString(oldKey);
+    if (raw == null) return;
+    await prefs.setString(newKey, raw);
+    await prefs.remove(oldKey);
+    final unsynced = prefs.getStringList('offline_unsynced_sessions') ?? [];
+    if (unsynced.contains(oldSessionId)) {
+      unsynced
+        ..remove(oldSessionId)
+        ..add(newSessionId);
+      await prefs.setStringList('offline_unsynced_sessions', unsynced);
+    }
+  }
+
+  Future<void> _syncAttendanceWithRemapping() async {
+    final prefs = await SharedPreferences.getInstance();
+    final unsynced = prefs.getStringList('offline_unsynced_sessions') ?? [];
+    if (unsynced.isEmpty) return;
+
+    final toRemove = <String>[];
+    for (final sessionId in unsynced) {
+      final resolvedSessionId = await queue.resolveId(sessionId);
+      final cacheKey = 'offline_attendance_records_$sessionId';
+      final cachedData = prefs.getString(cacheKey);
+      if (cachedData == null) {
+        toRemove.add(sessionId);
+        continue;
+      }
+
+      final parsed = _parseOfflineAttendanceCache(cachedData);
+      if (parsed == null) {
+        toRemove.add(sessionId);
+        continue;
+      }
+
+      final remappedStatuses = <String, AttendanceStatus>{};
+      for (final entry in parsed.statuses.entries) {
+        remappedStatuses[await queue.resolveId(entry.key)] = entry.value;
+      }
+
+      try {
+        final synced = await saveAttendanceOnline(
+          sessionId: resolvedSessionId,
+          statusesByMemberId: remappedStatuses,
+        );
+        if (synced) {
+          toRemove.add(sessionId);
+          if (resolvedSessionId != sessionId) {
+            await prefs.remove(cacheKey);
+          }
+        }
+      } catch (_) {
+        break;
+      }
+    }
+
+    if (toRemove.isNotEmpty) {
+      unsynced.removeWhere(toRemove.contains);
+      await prefs.setStringList('offline_unsynced_sessions', unsynced);
+    }
+  }
+
+  ({DateTime queuedAt, Map<String, AttendanceStatus> statuses})?
+  _parseOfflineAttendanceCache(String cachedData) {
+    final decoded = jsonDecode(cachedData);
+    if (decoded is Map<String, dynamic> && decoded['statuses'] is Map) {
+      final statuses = <String, AttendanceStatus>{};
+      (decoded['statuses'] as Map).forEach((memberId, statusStr) {
+        statuses['$memberId'] = AttendanceStatus.fromJson(statusStr as String);
+      });
+      final queuedAt =
+          DateTime.tryParse(decoded['queued_at'] as String? ?? '') ??
+          DateTime.fromMillisecondsSinceEpoch(0);
+      return (queuedAt: queuedAt, statuses: statuses);
+    }
+    return null;
+  }
+}
+
+extension _FirstOrNull<E> on Iterable<E> {
+  E? get firstOrNull {
+    final iterator = this.iterator;
+    if (!iterator.moveNext()) return null;
+    return iterator.current;
+  }
+}

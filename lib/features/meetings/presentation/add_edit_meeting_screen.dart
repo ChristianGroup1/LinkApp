@@ -1,0 +1,646 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:google_fonts/google_fonts.dart';
+
+import '../../../core/theme/app_theme.dart';
+import '../../../data/models/models.dart';
+import '../logic/meetings_bloc.dart';
+import 'widgets/meeting_dialogs.dart';
+
+class AddEditMeetingScreen extends StatefulWidget {
+  final MeetingEntity? meeting;
+
+  const AddEditMeetingScreen({super.key, this.meeting});
+
+  @override
+  State<AddEditMeetingScreen> createState() => _AddEditMeetingScreenState();
+}
+
+class _AddEditMeetingScreenState extends State<AddEditMeetingScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
+  final _classController = TextEditingController();
+
+  final _classNames = <String>[];
+  int _selectedWeekday = 5;
+  bool _hasClasses = false;
+  bool _isSaving = false;
+
+  bool get _isEdit => widget.meeting != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final meeting = widget.meeting;
+    if (meeting != null) {
+      final displayName = meeting.nameAr.trim().isNotEmpty
+          ? meeting.nameAr
+          : meeting.name;
+      _nameController.text = displayName;
+      _selectedWeekday = meeting.weekday;
+      _hasClasses = meeting.kind == MeetingKind.sundaySchool;
+    }
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _classController.dispose();
+    super.dispose();
+  }
+
+  void _addClassName() {
+    final name = _classController.text.trim();
+    if (name.isEmpty || _classNames.contains(name)) return;
+    setState(() {
+      _classNames.add(name);
+      _classController.clear();
+    });
+  }
+
+  void _submit() {
+    if (!_formKey.currentState!.validate()) return;
+
+    final name = _nameController.text.trim();
+
+    if (!_isEdit && _hasClasses && _classNames.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'أضف فصلاً واحداً على الأقل للاجتماع',
+            style: GoogleFonts.cairo(),
+          ),
+          backgroundColor: AppTheme.accentRed,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isSaving = true);
+    final bloc = context.read<MeetingsBloc>();
+
+    if (_isEdit) {
+      bloc.add(
+        UpdateExistingMeeting(
+          id: widget.meeting!.id,
+          name: name,
+          nameAr: name,
+          weekday: _selectedWeekday,
+          isActive: true,
+          description: widget.meeting?.description,
+        ),
+      );
+    } else {
+      bloc.add(
+        CreateNewMeeting(
+          name: name,
+          nameAr: name,
+          kind: _hasClasses ? MeetingKind.sundaySchool : MeetingKind.normal,
+          weekday: _selectedWeekday,
+          description: null,
+          classes: _hasClasses
+              ? _classNames
+                    .map(
+                      (className) => NewMeetingClassDraft(
+                        name: className,
+                        nameAr: className,
+                      ),
+                    )
+                    .toList()
+              : const [],
+        ),
+      );
+    }
+
+    Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        backgroundColor: AppTheme.background,
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          title: Text(
+            _isEdit ? 'تعديل الاجتماع' : 'إضافة اجتماع جديد',
+            style: GoogleFonts.cairo(
+              color: AppTheme.textDark,
+              fontWeight: FontWeight.w900,
+              fontSize: 18,
+            ),
+          ),
+          centerTitle: true,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_forward_rounded, color: AppTheme.textDark),
+            onPressed: _isSaving ? null : () => Navigator.pop(context),
+          ),
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(1),
+            child: Container(
+              height: 1,
+              color: AppTheme.border.withValues(alpha: 0.7),
+            ),
+          ),
+        ),
+        body: Form(
+          key: _formKey,
+          child: Column(
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _MeetingFormHero(isEdit: _isEdit),
+                      const SizedBox(height: 16),
+                      _FormSectionCard(
+                        title: 'بيانات الاجتماع',
+                        icon: Icons.event_note_rounded,
+                        children: [
+                          TextFormField(
+                            controller: _nameController,
+                            style: GoogleFonts.cairo(),
+                            decoration: meetingFormInputDecoration(
+                              'اسم الاجتماع*',
+                              Icons.title_rounded,
+                            ),
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return 'اكتب اسم الاجتماع أولاً';
+                              }
+                              return null;
+                            },
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      _FormSectionCard(
+                        title: 'موعد الاجتماع',
+                        icon: Icons.calendar_month_rounded,
+                        children: [
+                          Text(
+                            'اختر يوم الاجتماع الأسبوعي',
+                            style: GoogleFonts.cairo(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: AppTheme.textLight,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: List.generate(7, (index) {
+                              final day = index + 1;
+                              final selected = _selectedWeekday == day;
+                              return Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  onTap: () => setState(() => _selectedWeekday = day),
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Ink(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 9,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: selected
+                                          ? AppTheme.primary
+                                          : AppTheme.surfaceMuted,
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: selected
+                                            ? AppTheme.primary
+                                            : AppTheme.border.withValues(alpha: 0.7),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      kWeekdaysAr[index],
+                                      style: GoogleFonts.cairo(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w800,
+                                        color: selected
+                                            ? Colors.white
+                                            : AppTheme.textDark,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }),
+                          ),
+                        ],
+                      ),
+                      if (!_isEdit) ...[
+                        const SizedBox(height: 12),
+                        _FormSectionCard(
+                          title: 'تقسيم الاجتماع',
+                          icon: Icons.account_tree_rounded,
+                          children: [
+                            _OptionTile(
+                              icon: Icons.class_rounded,
+                              title: 'الاجتماع يحتوي على فصول',
+                              subtitle: 'فعّل الخيار لو الاجتماع منقسم لفصول',
+                              value: _hasClasses,
+                              onChanged: (value) {
+                                setState(() {
+                                  _hasClasses = value;
+                                  if (!value) _classNames.clear();
+                                });
+                              },
+                            ),
+                            if (_hasClasses) ...[
+                              const SizedBox(height: 14),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: TextField(
+                                      controller: _classController,
+                                      style: GoogleFonts.cairo(),
+                                      decoration: meetingFormInputDecoration(
+                                        'اسم الفصل',
+                                        Icons.class_rounded,
+                                      ),
+                                      onSubmitted: (_) => _addClassName(),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  IconButton.filled(
+                                    onPressed: _addClassName,
+                                    icon: const Icon(Icons.add_rounded),
+                                    style: IconButton.styleFrom(
+                                      backgroundColor: AppTheme.primary,
+                                      foregroundColor: Colors.white,
+                                      minimumSize: const Size(46, 46),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              if (_classNames.isEmpty)
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.surfaceMuted,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    'أضف فصلاً واحداً على الأقل.',
+                                    textAlign: TextAlign.center,
+                                    style: GoogleFonts.cairo(
+                                      fontSize: 12,
+                                      color: AppTheme.textLight,
+                                    ),
+                                  ),
+                                )
+                              else
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: _classNames.map((name) {
+                                    return _GroupTag(
+                                      label: name,
+                                      onRemove: () {
+                                        setState(() => _classNames.remove(name));
+                                      },
+                                    );
+                                  }).toList(),
+                                ),
+                            ],
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  border: Border(
+                    top: BorderSide(
+                      color: AppTheme.border.withValues(alpha: 0.75),
+                    ),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.04),
+                      blurRadius: 12,
+                      offset: const Offset(0, -4),
+                    ),
+                  ],
+                ),
+                child: SafeArea(
+                  top: false,
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: _isSaving ? null : _submit,
+                      icon: _isSaving
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : Icon(_isEdit ? Icons.save_rounded : Icons.add_rounded),
+                      label: Text(
+                        _isEdit ? 'حفظ التعديلات' : 'إضافة الاجتماع',
+                        style: GoogleFonts.cairo(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 15,
+                        ),
+                      ),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppTheme.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MeetingFormHero extends StatelessWidget {
+  final bool isEdit;
+
+  const _MeetingFormHero({required this.isEdit});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: AppTheme.primaryGradient,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.primary.withValues(alpha: 0.22),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.16),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(
+              isEdit ? Icons.edit_calendar_rounded : Icons.event_available_rounded,
+              color: Colors.white,
+              size: 26,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isEdit ? 'تحديث بيانات الاجتماع' : 'إنشاء اجتماع خدمة جديد',
+                  style: GoogleFonts.cairo(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  isEdit
+                      ? 'عدّل الاسم أو موعد الاجتماع.'
+                      : 'حدد الاسم واليوم، وأضف الفصول إن وُجدت.',
+                  style: GoogleFonts.cairo(
+                    color: Colors.white.withValues(alpha: 0.85),
+                    fontSize: 11.5,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FormSectionCard extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final List<Widget> children;
+
+  const _FormSectionCard({
+    required this.title,
+    required this.icon,
+    required this.children,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppTheme.border.withValues(alpha: 0.75)),
+        boxShadow: AppTheme.softShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryLight,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: AppTheme.primary, size: 18),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                title,
+                style: GoogleFonts.cairo(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 14,
+                  color: AppTheme.textDark,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          ...children,
+        ],
+      ),
+    );
+  }
+}
+
+class _OptionTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  const _OptionTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceMuted,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: value
+              ? AppTheme.primary.withValues(alpha: 0.28)
+              : AppTheme.border.withValues(alpha: 0.6),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: value ? AppTheme.primaryLight : Colors.white,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              icon,
+              size: 18,
+              color: value ? AppTheme.primary : AppTheme.textLight,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: GoogleFonts.cairo(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: AppTheme.textDark,
+                  ),
+                ),
+                Text(
+                  subtitle,
+                  style: GoogleFonts.cairo(
+                    fontSize: 11,
+                    color: AppTheme.textLight,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Switch.adaptive(
+            value: value,
+            activeThumbColor: AppTheme.primary,
+            onChanged: onChanged,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GroupTag extends StatelessWidget {
+  final String label;
+  final VoidCallback onRemove;
+
+  const _GroupTag({required this.label, required this.onRemove});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppTheme.primaryLight,
+        borderRadius: BorderRadius.circular(9),
+        border: Border.all(color: AppTheme.primary.withValues(alpha: 0.14)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.class_rounded, size: 13, color: AppTheme.primary),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: GoogleFonts.cairo(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: AppTheme.primary,
+            ),
+          ),
+          const SizedBox(width: 4),
+          GestureDetector(
+            onTap: onRemove,
+            child: const Icon(Icons.close_rounded, size: 14, color: AppTheme.primary),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+void showAddMeetingScreen(BuildContext context, {MeetingsBloc? meetingsBloc}) {
+  final bloc = meetingsBloc ?? context.read<MeetingsBloc>();
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => BlocProvider.value(
+        value: bloc,
+        child: const AddEditMeetingScreen(),
+      ),
+    ),
+  );
+}
+
+void showEditMeetingScreen(
+  BuildContext context,
+  MeetingEntity meeting, {
+  MeetingsBloc? meetingsBloc,
+}) {
+  final bloc = meetingsBloc ?? context.read<MeetingsBloc>();
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => BlocProvider.value(
+        value: bloc,
+        child: AddEditMeetingScreen(meeting: meeting),
+      ),
+    ),
+  );
+}

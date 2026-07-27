@@ -1,0 +1,10 @@
+{
+  "dart.flutterRunAdditionalArgs": ["--dart-define-from-file=.env"],
+  "dart.flutterBuildAdditionalArgs": ["--dart-define-from-file=.env"],
+  "json.schemas": [
+    {
+      "fileMatch": [".vscode/launch.json"],
+      "url": ".vscode/launch.schema.json"
+    }
+  ]
+}
