@@ -247,7 +247,7 @@ class AuthenticationGate extends StatelessWidget {
     return BlocBuilder<AuthBloc, AuthState>(
       builder: (context, state) {
         if (state is AuthAuthenticated) {
-          return const MainNavigationWrapper();
+          return MainNavigationWrapper(key: MainNavigationWrapper.wrapperKey);
         } else if (state is AuthUnauthenticated ||
             state is AuthError ||
             state is AuthPasswordResetEmailSent ||

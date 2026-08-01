@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../../core/notifications/meeting_reminder_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/models.dart';
 import '../logic/meetings_bloc.dart';
@@ -24,7 +25,7 @@ class _AddEditMeetingScreenState extends State<AddEditMeetingScreen> {
   final _classNames = <String>[];
   int _selectedWeekday = 5;
   bool _hasClasses = false;
-  bool _reminderEnabled = false;
+  bool _reminderEnabled = true;
   TimeOfDay _reminderTime = const TimeOfDay(hour: 18, minute: 0);
   bool _isSaving = false;
 
@@ -48,6 +49,9 @@ class _AddEditMeetingScreenState extends State<AddEditMeetingScreen> {
           hour: reminderMinutes ~/ 60,
           minute: reminderMinutes % 60,
         );
+      } else {
+        _reminderEnabled = true;
+        _reminderTime = const TimeOfDay(hour: 18, minute: 0);
       }
     }
   }
@@ -327,6 +331,49 @@ class _AddEditMeetingScreenState extends State<AddEditMeetingScreen> {
                                       ),
                                     ],
                                   ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            OutlinedButton.icon(
+                              onPressed: () async {
+                                final name = _nameController.text.trim();
+                                await MeetingReminderService.instance
+                                    .showInstantReminder(
+                                  meetingName:
+                                      name.isNotEmpty ? name : 'الاجتماع',
+                                  meetingId: widget.meeting?.id ?? 'test_id',
+                                );
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        'تم إرسال الإشعار التجريبي 🔔',
+                                        style: GoogleFonts.cairo(),
+                                      ),
+                                      backgroundColor: Colors.green,
+                                    ),
+                                  );
+                                }
+                              },
+                              icon: const Icon(
+                                Icons.notifications_active_rounded,
+                                size: 18,
+                              ),
+                              label: Text(
+                                'اختبار الإشعار التجريبي الآن 🔔',
+                                style: GoogleFonts.cairo(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 12,
+                                ),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppTheme.primary,
+                                side: const BorderSide(
+                                  color: AppTheme.primary,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
                                 ),
                               ),
                             ),

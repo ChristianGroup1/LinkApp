@@ -24,6 +24,9 @@ import '../../shared/ui/tab_navigator.dart';
 import '../../shared/data/app_data_changes.dart';
 
 class MainNavigationWrapper extends StatefulWidget {
+  static final GlobalKey<State<MainNavigationWrapper>> wrapperKey =
+      GlobalKey<State<MainNavigationWrapper>>();
+
   const MainNavigationWrapper({super.key});
 
   @override
@@ -32,6 +35,10 @@ class MainNavigationWrapper extends StatefulWidget {
 
 class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
   int _currentIndex = 0;
+
+  void switchToTab(int index) {
+    _selectTab(index);
+  }
   bool _showInAppTour = false;
   int _inAppTourStep = 0;
 

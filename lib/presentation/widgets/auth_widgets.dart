@@ -163,17 +163,14 @@ class AuthFieldLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsetsDirectional.only(bottom: 8, start: 2, end: 2),
-      child: SizedBox(
-        width: double.infinity,
-        child: Text(
-          text,
-          textAlign: TextAlign.right,
-          style: GoogleFonts.cairo(
-            color: AppTheme.textDark,
-            fontSize: 13,
-            fontWeight: FontWeight.w800,
-            height: 1.35,
-          ),
+      child: Text(
+        text,
+        textAlign: TextAlign.right,
+        style: GoogleFonts.cairo(
+          color: AppTheme.textDark,
+          fontSize: 13,
+          fontWeight: FontWeight.w800,
+          height: 1.35,
         ),
       ),
     );
