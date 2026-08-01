@@ -12,8 +12,8 @@ function InviteContent() {
     : 'io.supabase.link://invite';
 
   const androidIntentLink = token
-    ? `intent://invite?t=${encodeURIComponent(token)}#Intent;scheme=io.supabase.link;package=com.link.app;end;`
-    : 'intent://invite#Intent;scheme=io.supabase.link;package=com.link.app;end;';
+    ? `intent://invite?t=${encodeURIComponent(token)}#Intent;scheme=io.supabase.link;end;`
+    : 'intent://invite#Intent;scheme=io.supabase.link;end;';
 
   useEffect(() => {
     if (token) {
@@ -21,7 +21,7 @@ function InviteContent() {
       const targetLink = isAndroid ? androidIntentLink : customSchemeLink;
 
       const timer = setTimeout(() => {
-        window.location.href = targetLink;
+        window.location.href = customSchemeLink;
       }, 100);
       return () => clearTimeout(timer);
     }
@@ -89,12 +89,8 @@ function InviteContent() {
 
         <a
           href={customSchemeLink}
-          onClick={(e) => {
-            const isAndroid = /android/i.test(navigator.userAgent || '');
-            if (isAndroid) {
-              e.preventDefault();
-              window.location.href = androidIntentLink;
-            }
+          onClick={() => {
+            window.location.href = customSchemeLink;
           }}
           style={{
             display: 'inline-block',
