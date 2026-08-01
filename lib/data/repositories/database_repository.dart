@@ -12,6 +12,7 @@ import '../offline/offline_network_policy.dart';
 import '../offline/offline_save_result.dart';
 import '../offline/offline_write_handler.dart';
 import '../offline/offline_write_queue.dart';
+import '../../shared/data/app_data_changes.dart';
 
 abstract class DatabaseRepository {
   // Auth
@@ -68,6 +69,7 @@ abstract class DatabaseRepository {
     required String nameAr,
     required MeetingKind kind,
     required int weekday,
+    int? attendanceReminderMinutes,
     String? description,
   });
   Future<OfflineSaveResult<MeetingEntity>> updateMeeting({
@@ -76,6 +78,7 @@ abstract class DatabaseRepository {
     required String nameAr,
     required int weekday,
     required bool isActive,
+    int? attendanceReminderMinutes,
     String? description,
   });
   Future<bool> deleteMeeting(String id);
@@ -114,6 +117,7 @@ abstract class DatabaseRepository {
     String? parentName,
     String? parentPhone,
     String? code,
+    DateTime? birthDate,
   });
   Future<OfflineSaveResult<MemberEntity>> updateMember({
     required String id,
@@ -125,6 +129,7 @@ abstract class DatabaseRepository {
     String? parentName,
     String? parentPhone,
     String? code,
+    DateTime? birthDate,
     required bool isActive,
   });
   Future<bool> deleteMember(String id);
@@ -241,6 +246,12 @@ class SupabaseRepository implements DatabaseRepository {
     emptyToNull: _emptyToNull,
   );
 
+  Future<T> _notifyAfter<T>(Future<T> operation, Set<AppDataArea> areas) async {
+    final result = await operation;
+    AppDataChanges.instance.notify(areas);
+    return result;
+  }
+
   bool _isRecoverableOfflineError(Object error) =>
       _offlineWriter.isRecoverableOfflineError(error);
 
@@ -278,14 +289,10 @@ class SupabaseRepository implements DatabaseRepository {
     Set<String> pendingDeletes,
   ) {
     if (pendingDeletes.isEmpty) {
-      return rows
-          .map((row) => Map<String, dynamic>.from(row as Map))
-          .toList();
+      return rows.map((row) => Map<String, dynamic>.from(row as Map)).toList();
     }
     return rows
-        .where(
-          (row) => !pendingDeletes.contains((row as Map)['id'] as String),
-        )
+        .where((row) => !pendingDeletes.contains((row as Map)['id'] as String))
         .map((row) => Map<String, dynamic>.from(row as Map))
         .toList();
   }
@@ -300,7 +307,13 @@ class SupabaseRepository implements DatabaseRepository {
   }
 
   @override
-  Future<void> syncPendingOfflineData() => _offlineWriter.syncAll();
+  Future<void> syncPendingOfflineData() async {
+    final hadPendingData = await _offlineWriter.hasPendingData();
+    await _offlineWriter.syncAll();
+    if (hadPendingData) {
+      AppDataChanges.instance.notify(AppDataArea.values.toSet());
+    }
+  }
 
   @override
   Future<bool> hasPendingOfflineData() => _offlineWriter.hasPendingData();
@@ -381,6 +394,10 @@ class SupabaseRepository implements DatabaseRepository {
         throw Exception(
           'تم قبول بيانات الدخول، لكن الحساب غير مربوط بملف خادم داخل الكنيسة. اطلب من مسؤول الكنيسة إعادة دعوتك أو إصلاح حسابك.',
         );
+      }
+      if (!profile.isActive) {
+        await _client.auth.signOut();
+        throw Exception('تم إيقاف حسابك. راجع مسؤول الكنيسة لإعادة تفعيله.');
       }
       unawaited(warmOfflineCache());
       return profile;
@@ -667,14 +684,79 @@ class SupabaseRepository implements DatabaseRepository {
     final user = _client.auth.currentUser;
     if (user == null) throw Exception('لا يوجد حساب مسجل دخول');
 
-    final row = await _client
-        .from('profiles')
-        .update({'full_name': fullName.trim(), 'phone': _emptyToNull(phone)})
-        .eq('id', user.id)
-        .select()
-        .single();
-    await _offlineCache.saveProfile(Map<String, dynamic>.from(row));
-    return AppProfile.fromJson(row);
+    final cachedProfile = await _readCachedProfileForCurrentUser();
+    await OfflineNetworkPolicy.ensureReady();
+    if (OfflineNetworkPolicy.isConnectivityOffline) {
+      return _saveCurrentProfileOffline(
+        userId: user.id,
+        existing: cachedProfile,
+        fullName: fullName,
+        phone: phone,
+      );
+    }
+
+    try {
+      final row = await _client
+          .from('profiles')
+          .update({'full_name': fullName.trim(), 'phone': _emptyToNull(phone)})
+          .eq('id', user.id)
+          .select()
+          .single();
+      await _offlineCache.saveProfile(Map<String, dynamic>.from(row));
+      final profile = AppProfile.fromJson(row);
+      if (profile.churchId != null) {
+        await _offlineCache.upsertProfile(profile.churchId!, profile);
+      }
+      AppDataChanges.instance.notify({AppDataArea.profile});
+      return profile;
+    } catch (error) {
+      if (!_isRecoverableOfflineError(error)) rethrow;
+      return _saveCurrentProfileOffline(
+        userId: user.id,
+        existing: cachedProfile,
+        fullName: fullName,
+        phone: phone,
+      );
+    }
+  }
+
+  Future<AppProfile> _saveCurrentProfileOffline({
+    required String userId,
+    required AppProfile? existing,
+    required String fullName,
+    String? phone,
+  }) async {
+    if (existing == null) {
+      throw Exception('بيانات الحساب غير متاحة محليًا بعد');
+    }
+    final updated = AppProfile(
+      id: existing.id,
+      churchId: existing.churchId,
+      fullName: fullName.trim(),
+      role: existing.role,
+      email: existing.email,
+      phone: _emptyToNull(phone),
+      isActive: existing.isActive,
+    );
+    await _offlineCache.saveProfile(profileToJson(updated));
+    if (updated.churchId != null) {
+      await _offlineCache.upsertProfile(updated.churchId!, updated);
+    }
+    await _writeQueue.removeByEntityId(userId);
+    await _writeQueue.enqueue(
+      QueuedOperation(
+        id: await _writeQueue.generateId('op'),
+        type: OfflineOpType.currentProfileUpdate,
+        payload: {
+          'id': userId,
+          'full_name': updated.fullName,
+          'phone': updated.phone,
+        },
+        queuedAt: DateTime.now(),
+      ),
+    );
+    AppDataChanges.instance.notify({AppDataArea.profile});
+    return updated;
   }
 
   @override
@@ -770,7 +852,10 @@ class SupabaseRepository implements DatabaseRepository {
     String? phone,
     String? address,
   ) {
-    return _offlineWriter.updateChurch(churchId, nameAr, phone, address);
+    return _notifyAfter(
+      _offlineWriter.updateChurch(churchId, nameAr, phone, address),
+      {AppDataArea.church},
+    );
   }
 
   // Meetings
@@ -812,20 +897,25 @@ class SupabaseRepository implements DatabaseRepository {
     required String nameAr,
     required MeetingKind kind,
     required int weekday,
+    int? attendanceReminderMinutes,
     String? description,
   }) async {
     final profile = await getCurrentProfile();
     if (profile?.churchId == null) {
       throw Exception('المستخدم الحالي غير مرتبط بكنيسة');
     }
-    return _offlineWriter.createMeeting(
-      churchId: profile!.churchId!,
-      createdBy: profile.id,
-      name: name,
-      nameAr: nameAr,
-      kind: kind,
-      weekday: weekday,
-      description: description,
+    return _notifyAfter(
+      _offlineWriter.createMeeting(
+        churchId: profile!.churchId!,
+        createdBy: profile.id,
+        name: name,
+        nameAr: nameAr,
+        kind: kind,
+        weekday: weekday,
+        attendanceReminderMinutes: attendanceReminderMinutes,
+        description: description,
+      ),
+      {AppDataArea.meetings},
     );
   }
 
@@ -836,20 +926,25 @@ class SupabaseRepository implements DatabaseRepository {
     required String nameAr,
     required int weekday,
     required bool isActive,
+    int? attendanceReminderMinutes,
     String? description,
   }) async {
     final profile = await getCurrentProfile();
     if (profile?.churchId == null) {
       throw Exception('المستخدم الحالي غير مرتبط بكنيسة');
     }
-    return _offlineWriter.updateMeeting(
-      churchId: profile!.churchId!,
-      id: id,
-      name: name,
-      nameAr: nameAr,
-      weekday: weekday,
-      isActive: isActive,
-      description: description,
+    return _notifyAfter(
+      _offlineWriter.updateMeeting(
+        churchId: profile!.churchId!,
+        id: id,
+        name: name,
+        nameAr: nameAr,
+        weekday: weekday,
+        isActive: isActive,
+        attendanceReminderMinutes: attendanceReminderMinutes,
+        description: description,
+      ),
+      {AppDataArea.meetings},
     );
   }
 
@@ -859,7 +954,10 @@ class SupabaseRepository implements DatabaseRepository {
     if (profile?.churchId == null) {
       throw Exception('المستخدم الحالي غير مرتبط بكنيسة');
     }
-    return _offlineWriter.deleteMeeting(profile!.churchId!, id);
+    return _notifyAfter(_offlineWriter.deleteMeeting(profile!.churchId!, id), {
+      AppDataArea.meetings,
+      AppDataArea.classes,
+    });
   }
 
   // Classes
@@ -934,12 +1032,15 @@ class SupabaseRepository implements DatabaseRepository {
     if (profile?.churchId == null) {
       throw Exception('المستخدم الحالي غير مرتبط بكنيسة');
     }
-    return _offlineWriter.createSundaySchoolClass(
-      churchId: profile!.churchId!,
-      meetingId: meetingId,
-      name: name,
-      nameAr: nameAr,
-      displayOrder: displayOrder,
+    return _notifyAfter(
+      _offlineWriter.createSundaySchoolClass(
+        churchId: profile!.churchId!,
+        meetingId: meetingId,
+        name: name,
+        nameAr: nameAr,
+        displayOrder: displayOrder,
+      ),
+      {AppDataArea.classes},
     );
   }
 
@@ -955,13 +1056,16 @@ class SupabaseRepository implements DatabaseRepository {
     if (profile?.churchId == null) {
       throw Exception('المستخدم الحالي غير مرتبط بكنيسة');
     }
-    return _offlineWriter.updateSundaySchoolClass(
-      churchId: profile!.churchId!,
-      id: id,
-      name: name,
-      nameAr: nameAr,
-      displayOrder: displayOrder,
-      isActive: isActive,
+    return _notifyAfter(
+      _offlineWriter.updateSundaySchoolClass(
+        churchId: profile!.churchId!,
+        id: id,
+        name: name,
+        nameAr: nameAr,
+        displayOrder: displayOrder,
+        isActive: isActive,
+      ),
+      {AppDataArea.classes},
     );
   }
 
@@ -971,7 +1075,10 @@ class SupabaseRepository implements DatabaseRepository {
     if (profile?.churchId == null) {
       throw Exception('المستخدم الحالي غير مرتبط بكنيسة');
     }
-    return _offlineWriter.deleteSundaySchoolClass(profile!.churchId!, id);
+    return _notifyAfter(
+      _offlineWriter.deleteSundaySchoolClass(profile!.churchId!, id),
+      {AppDataArea.classes},
+    );
   }
 
   // Members
@@ -986,9 +1093,10 @@ class SupabaseRepository implements DatabaseRepository {
             .eq('sunday_school_class_id', classId)
             .eq('is_active', true)
             .order('full_name');
-        return _filterDeletedRows(rows as List, pendingDeletes)
-            .map((json) => MemberEntity.fromJson(json))
-            .toList();
+        return _filterDeletedRows(
+          rows as List,
+          pendingDeletes,
+        ).map((json) => MemberEntity.fromJson(json)).toList();
       },
       offline: () async {
         final members = await _readCachedMembers();
@@ -1014,16 +1122,15 @@ class SupabaseRepository implements DatabaseRepository {
             .eq('meeting_id', meetingId)
             .eq('is_active', true)
             .order('full_name');
-        return _filterDeletedRows(rows as List, pendingDeletes)
-            .map((json) => MemberEntity.fromJson(json))
-            .toList();
+        return _filterDeletedRows(
+          rows as List,
+          pendingDeletes,
+        ).map((json) => MemberEntity.fromJson(json)).toList();
       },
       offline: () async {
         final members = await _readCachedMembers();
         return _filterDeletedEntities(
-          members
-              .where((m) => m.isActive && m.meetingId == meetingId)
-              .toList(),
+          members.where((m) => m.isActive && m.meetingId == meetingId).toList(),
           (item) => item.id,
           pendingDeletes,
         )..sort((a, b) => a.fullName.compareTo(b.fullName));
@@ -1047,9 +1154,7 @@ class SupabaseRepository implements DatabaseRepository {
             .order('full_name');
         final filteredRows = _filterDeletedRows(rows as List, pendingDeletes);
         await _offlineCache.saveMembers(churchId, filteredRows);
-        return filteredRows
-            .map((json) => MemberEntity.fromJson(json))
-            .toList();
+        return filteredRows.map((json) => MemberEntity.fromJson(json)).toList();
       },
       offline: () async {
         final members = await _offlineCache.readMembers(churchId) ?? [];
@@ -1096,16 +1201,21 @@ class SupabaseRepository implements DatabaseRepository {
     String? parentName,
     String? parentPhone,
     String? code,
+    DateTime? birthDate,
   }) {
-    return _offlineWriter.createMember(
-      fullName: fullName,
-      scope: scope,
-      sundaySchoolClassId: sundaySchoolClassId,
-      meetingId: meetingId,
-      phone: phone,
-      parentName: parentName,
-      parentPhone: parentPhone,
-      code: code,
+    return _notifyAfter(
+      _offlineWriter.createMember(
+        fullName: fullName,
+        scope: scope,
+        sundaySchoolClassId: sundaySchoolClassId,
+        meetingId: meetingId,
+        phone: phone,
+        parentName: parentName,
+        parentPhone: parentPhone,
+        code: code,
+        birthDate: birthDate,
+      ),
+      {AppDataArea.members},
     );
   }
 
@@ -1120,24 +1230,30 @@ class SupabaseRepository implements DatabaseRepository {
     String? parentName,
     String? parentPhone,
     String? code,
+    DateTime? birthDate,
     required bool isActive,
   }) {
-    return _offlineWriter.updateMember(
-      id: id,
-      fullName: fullName,
-      scope: scope,
-      sundaySchoolClassId: sundaySchoolClassId,
-      meetingId: meetingId,
-      phone: phone,
-      parentName: parentName,
-      parentPhone: parentPhone,
-      code: code,
-      isActive: isActive,
+    return _notifyAfter(
+      _offlineWriter.updateMember(
+        id: id,
+        fullName: fullName,
+        scope: scope,
+        sundaySchoolClassId: sundaySchoolClassId,
+        meetingId: meetingId,
+        phone: phone,
+        parentName: parentName,
+        parentPhone: parentPhone,
+        code: code,
+        birthDate: birthDate,
+        isActive: isActive,
+      ),
+      {AppDataArea.members},
     );
   }
 
   @override
-  Future<bool> deleteMember(String id) => _offlineWriter.deleteMember(id);
+  Future<bool> deleteMember(String id) =>
+      _notifyAfter(_offlineWriter.deleteMember(id), {AppDataArea.members});
 
   // Assignments
   @override
@@ -1196,17 +1312,64 @@ class SupabaseRepository implements DatabaseRepository {
     bool canViewReports = true,
   }) async {
     final profile = await getCurrentProfile();
-    if (profile?.churchId == null)
+    if (profile?.churchId == null) {
       throw Exception('المستخدم الحالي غير مرتبط بكنيسة');
+    }
 
-    await _client.from('class_assignments').upsert({
+    final payload = {
       'church_id': profile!.churchId!,
       'class_id': classId,
       'user_id': userId,
       'can_take_attendance': canTakeAttendance,
       'can_view_reports': canViewReports,
       'assigned_by': profile.id,
-    }, onConflict: 'class_id,user_id');
+    };
+    await OfflineNetworkPolicy.ensureReady();
+    if (OfflineNetworkPolicy.isConnectivityOffline) {
+      await _saveClassAssignmentOffline(payload);
+      AppDataChanges.instance.notify({AppDataArea.assignments});
+      return;
+    }
+    try {
+      final row = await _client
+          .from('class_assignments')
+          .upsert(payload, onConflict: 'class_id,user_id')
+          .select('id')
+          .single();
+      await _offlineCache.upsertClassAssignment(
+        churchId: profile.churchId!,
+        assignmentId: row['id'] as String,
+        classId: classId,
+        userId: userId,
+        canTakeAttendance: canTakeAttendance,
+        canViewReports: canViewReports,
+      );
+    } catch (error) {
+      if (!_isRecoverableOfflineError(error)) rethrow;
+      await _saveClassAssignmentOffline(payload);
+    }
+    AppDataChanges.instance.notify({AppDataArea.assignments});
+  }
+
+  Future<void> _saveClassAssignmentOffline(Map<String, dynamic> payload) async {
+    final localId = await _writeQueue.generateId('class_assignment');
+    final resolvedId = await _offlineCache.upsertClassAssignment(
+      churchId: payload['church_id'] as String,
+      assignmentId: localId,
+      classId: payload['class_id'] as String,
+      userId: payload['user_id'] as String,
+      canTakeAttendance: payload['can_take_attendance'] as bool,
+      canViewReports: payload['can_view_reports'] as bool,
+    );
+    await _writeQueue.removeByEntityId(resolvedId);
+    await _writeQueue.enqueue(
+      QueuedOperation(
+        id: await _writeQueue.generateId('op'),
+        type: OfflineOpType.classAssignmentUpsert,
+        payload: {...payload, 'local_id': resolvedId},
+        queuedAt: DateTime.now(),
+      ),
+    );
   }
 
   @override
@@ -1235,27 +1398,122 @@ class SupabaseRepository implements DatabaseRepository {
     bool canViewReports = true,
   }) async {
     final profile = await getCurrentProfile();
-    if (profile?.churchId == null)
+    if (profile?.churchId == null) {
       throw Exception('المستخدم الحالي غير مرتبط بكنيسة');
+    }
 
-    await _client.from('meeting_assignments').upsert({
+    final payload = {
       'church_id': profile!.churchId!,
       'meeting_id': meetingId,
       'user_id': userId,
       'can_take_attendance': canTakeAttendance,
       'can_view_reports': canViewReports,
       'assigned_by': profile.id,
-    }, onConflict: 'meeting_id,user_id');
+    };
+    await OfflineNetworkPolicy.ensureReady();
+    if (OfflineNetworkPolicy.isConnectivityOffline) {
+      await _saveMeetingAssignmentOffline(payload);
+      AppDataChanges.instance.notify({AppDataArea.assignments});
+      return;
+    }
+    try {
+      final row = await _client
+          .from('meeting_assignments')
+          .upsert(payload, onConflict: 'meeting_id,user_id')
+          .select('id')
+          .single();
+      await _offlineCache.upsertMeetingAssignment(
+        churchId: profile.churchId!,
+        assignmentId: row['id'] as String,
+        meetingId: meetingId,
+        userId: userId,
+        canTakeAttendance: canTakeAttendance,
+        canViewReports: canViewReports,
+      );
+    } catch (error) {
+      if (!_isRecoverableOfflineError(error)) rethrow;
+      await _saveMeetingAssignmentOffline(payload);
+    }
+    AppDataChanges.instance.notify({AppDataArea.assignments});
+  }
+
+  Future<void> _saveMeetingAssignmentOffline(
+    Map<String, dynamic> payload,
+  ) async {
+    final localId = await _writeQueue.generateId('meeting_assignment');
+    final resolvedId = await _offlineCache.upsertMeetingAssignment(
+      churchId: payload['church_id'] as String,
+      assignmentId: localId,
+      meetingId: payload['meeting_id'] as String,
+      userId: payload['user_id'] as String,
+      canTakeAttendance: payload['can_take_attendance'] as bool,
+      canViewReports: payload['can_view_reports'] as bool,
+    );
+    await _writeQueue.removeByEntityId(resolvedId);
+    await _writeQueue.enqueue(
+      QueuedOperation(
+        id: await _writeQueue.generateId('op'),
+        type: OfflineOpType.meetingAssignmentUpsert,
+        payload: {...payload, 'local_id': resolvedId},
+        queuedAt: DateTime.now(),
+      ),
+    );
   }
 
   @override
   Future<void> removeClassAssignment(String assignmentId) async {
-    await _client.from('class_assignments').delete().eq('id', assignmentId);
+    await _removeAssignment(
+      assignmentId,
+      table: 'class_assignments',
+      operationType: OfflineOpType.classAssignmentDelete,
+      isClassAssignment: true,
+    );
+    AppDataChanges.instance.notify({AppDataArea.assignments});
   }
 
   @override
   Future<void> removeMeetingAssignment(String assignmentId) async {
-    await _client.from('meeting_assignments').delete().eq('id', assignmentId);
+    await _removeAssignment(
+      assignmentId,
+      table: 'meeting_assignments',
+      operationType: OfflineOpType.meetingAssignmentDelete,
+      isClassAssignment: false,
+    );
+    AppDataChanges.instance.notify({AppDataArea.assignments});
+  }
+
+  Future<void> _removeAssignment(
+    String assignmentId, {
+    required String table,
+    required String operationType,
+    required bool isClassAssignment,
+  }) async {
+    await _offlineCache.removeAssignmentEverywhere(
+      assignmentId,
+      isClassAssignment: isClassAssignment,
+    );
+    final resolvedId = await _writeQueue.resolveId(assignmentId);
+    if (isOfflineId(assignmentId) && resolvedId == assignmentId) {
+      await _writeQueue.removeByEntityId(assignmentId);
+      return;
+    }
+    await OfflineNetworkPolicy.ensureReady();
+    if (!OfflineNetworkPolicy.isConnectivityOffline) {
+      try {
+        await _client.from(table).delete().eq('id', resolvedId);
+        return;
+      } catch (error) {
+        if (!_isRecoverableOfflineError(error)) rethrow;
+      }
+    }
+    await _writeQueue.enqueue(
+      QueuedOperation(
+        id: await _writeQueue.generateId('op'),
+        type: operationType,
+        payload: {'id': resolvedId},
+        queuedAt: DateTime.now(),
+      ),
+    );
   }
 
   @override
@@ -1327,18 +1585,90 @@ class SupabaseRepository implements DatabaseRepository {
 
   @override
   Future<void> updateProfileRole(String userId, AppRole role) async {
-    await _client.rpc(
-      'admin_update_profile_role',
-      params: {'target_user_id': userId, 'new_role': role.value},
-    );
+    await OfflineNetworkPolicy.ensureReady();
+    var shouldQueue = OfflineNetworkPolicy.isConnectivityOffline;
+    if (!shouldQueue) {
+      try {
+        await _client.rpc(
+          'admin_update_profile_role',
+          params: {'target_user_id': userId, 'new_role': role.value},
+        );
+      } catch (error) {
+        if (!_isRecoverableOfflineError(error)) rethrow;
+        shouldQueue = true;
+      }
+    }
+    await _updateCachedProfile(userId, role: role);
+    if (shouldQueue) {
+      await _writeQueue.enqueue(
+        QueuedOperation(
+          id: await _writeQueue.generateId('op'),
+          type: OfflineOpType.profileRoleUpdate,
+          payload: {'user_id': userId, 'role': role.value},
+          queuedAt: DateTime.now(),
+        ),
+      );
+    }
+    AppDataChanges.instance.notify({
+      AppDataArea.profile,
+      AppDataArea.assignments,
+    });
   }
 
   @override
   Future<void> updateProfileStatus(String userId, bool isActive) async {
-    await _client.rpc(
-      'admin_update_profile_status',
-      params: {'target_user_id': userId, 'new_is_active': isActive},
+    await OfflineNetworkPolicy.ensureReady();
+    var shouldQueue = OfflineNetworkPolicy.isConnectivityOffline;
+    if (!shouldQueue) {
+      try {
+        await _client.rpc(
+          'admin_update_profile_status',
+          params: {'target_user_id': userId, 'new_is_active': isActive},
+        );
+      } catch (error) {
+        if (!_isRecoverableOfflineError(error)) rethrow;
+        shouldQueue = true;
+      }
+    }
+    await _updateCachedProfile(userId, isActive: isActive);
+    if (shouldQueue) {
+      await _writeQueue.enqueue(
+        QueuedOperation(
+          id: await _writeQueue.generateId('op'),
+          type: OfflineOpType.profileStatusUpdate,
+          payload: {'user_id': userId, 'is_active': isActive},
+          queuedAt: DateTime.now(),
+        ),
+      );
+    }
+    AppDataChanges.instance.notify({AppDataArea.profile});
+  }
+
+  Future<void> _updateCachedProfile(
+    String userId, {
+    AppRole? role,
+    bool? isActive,
+  }) async {
+    final current = await _readCachedProfileForCurrentUser();
+    final churchId = current?.churchId ?? await _cachedChurchIdForCurrentUser();
+    if (churchId == null) return;
+    final profiles = await _offlineCache.readProfiles(churchId) ?? [];
+    final target = profiles.where((item) => item.id == userId).firstOrNull;
+    final source = target ?? (current?.id == userId ? current : null);
+    if (source == null) return;
+    final updated = AppProfile(
+      id: source.id,
+      churchId: source.churchId,
+      fullName: source.fullName,
+      role: role ?? source.role,
+      email: source.email,
+      phone: source.phone,
+      isActive: isActive ?? source.isActive,
     );
+    await _offlineCache.upsertProfile(churchId, updated);
+    if (current?.id == userId) {
+      await _offlineCache.saveProfile(profileToJson(updated));
+    }
   }
 
   // Attendance Sessions
@@ -1391,13 +1721,16 @@ class SupabaseRepository implements DatabaseRepository {
     if (profile?.churchId == null) {
       throw Exception('المستخدم الحالي غير مرتبط بكنيسة');
     }
-    return _offlineWriter.createWeeklySession(
-      churchId: profile!.churchId!,
-      meetingId: meetingId,
-      classId: classId,
-      sessionDate: sessionDate,
-      weekNumber: weekNumber,
-      title: title,
+    return _notifyAfter(
+      _offlineWriter.createWeeklySession(
+        churchId: profile!.churchId!,
+        meetingId: meetingId,
+        classId: classId,
+        sessionDate: sessionDate,
+        weekNumber: weekNumber,
+        title: title,
+      ),
+      {AppDataArea.attendance},
     );
   }
 
@@ -1407,10 +1740,13 @@ class SupabaseRepository implements DatabaseRepository {
     String? meetingId,
     String? classId,
   }) {
-    return _offlineWriter.deleteWeeklySession(
-      meetingId: meetingId ?? '',
-      classId: classId,
-      sessionId: sessionId,
+    return _notifyAfter(
+      _offlineWriter.deleteWeeklySession(
+        meetingId: meetingId ?? '',
+        classId: classId,
+        sessionId: sessionId,
+      ),
+      {AppDataArea.attendance},
     );
   }
 
@@ -1511,14 +1847,21 @@ class SupabaseRepository implements DatabaseRepository {
     required Map<String, AttendanceStatus> statusesByMemberId,
   }) async {
     try {
+      await OfflineNetworkPolicy.ensureReady();
+      if (OfflineNetworkPolicy.isConnectivityOffline) {
+        throw TimeoutException('offline');
+      }
       final resolvedSessionId = await _writeQueue.resolveId(sessionId);
       final remappedStatuses = <String, AttendanceStatus>{};
       for (final entry in statusesByMemberId.entries) {
         remappedStatuses[await _writeQueue.resolveId(entry.key)] = entry.value;
       }
-      return await _saveAttendanceRecordsOnline(
-        sessionId: resolvedSessionId,
-        statusesByMemberId: remappedStatuses,
+      return await _notifyAfter(
+        _saveAttendanceRecordsOnline(
+          sessionId: resolvedSessionId,
+          statusesByMemberId: remappedStatuses,
+        ),
+        {AppDataArea.attendance},
       );
     } catch (e) {
       if (!_isRecoverableOfflineError(e)) rethrow;
@@ -1530,6 +1873,7 @@ class SupabaseRepository implements DatabaseRepository {
           unsynced.add(sessionId);
           await prefs.setStringList('offline_unsynced_sessions', unsynced);
         }
+        AppDataChanges.instance.notify({AppDataArea.attendance});
         return false;
       } catch (_) {
         rethrow;
@@ -1649,16 +1993,19 @@ class SupabaseRepository implements DatabaseRepository {
     if (profile == null || profile.churchId == null) {
       throw Exception('المستخدم الحالي غير مرتبط بكنيسة');
     }
-    return _offlineWriter.addFollowUp(
-      churchId: profile.churchId!,
-      createdBy: profile.id,
-      memberId: memberId,
-      sessionId: sessionId,
-      reason: reason,
-      contactStatus: contactStatus,
-      result: result,
-      responsibleUserId: responsibleUserId,
-      followUpDate: followUpDate,
+    return _notifyAfter(
+      _offlineWriter.addFollowUp(
+        churchId: profile.churchId!,
+        createdBy: profile.id,
+        memberId: memberId,
+        sessionId: sessionId,
+        reason: reason,
+        contactStatus: contactStatus,
+        result: result,
+        responsibleUserId: responsibleUserId,
+        followUpDate: followUpDate,
+      ),
+      {AppDataArea.followUps},
     );
   }
 
@@ -1668,7 +2015,9 @@ class SupabaseRepository implements DatabaseRepository {
     if (profile?.churchId == null) {
       throw Exception('المستخدم الحالي غير مرتبط بكنيسة');
     }
-    return _offlineWriter.deleteFollowUp(profile!.churchId!, id);
+    return _notifyAfter(_offlineWriter.deleteFollowUp(profile!.churchId!, id), {
+      AppDataArea.followUps,
+    });
   }
 
   // Reports
@@ -1710,16 +2059,19 @@ class SupabaseRepository implements DatabaseRepository {
     if (profile?.churchId == null) {
       throw Exception('المستخدم غير مرتبط بكنيسة');
     }
-    return _offlineWriter.createInvitation(
-      churchId: profile!.churchId!,
-      fullName: fullName,
-      email: email,
-      phone: phone,
-      role: role,
-      targetId: targetId,
-      assignmentScope: assignmentScope,
-      canTakeAttendance: canTakeAttendance,
-      canViewReports: canViewReports,
+    return _notifyAfter(
+      _offlineWriter.createInvitation(
+        churchId: profile!.churchId!,
+        fullName: fullName,
+        email: email,
+        phone: phone,
+        role: role,
+        targetId: targetId,
+        assignmentScope: assignmentScope,
+        canTakeAttendance: canTakeAttendance,
+        canViewReports: canViewReports,
+      ),
+      {AppDataArea.invitations, AppDataArea.assignments},
     );
   }
 
@@ -1783,23 +2135,33 @@ class SupabaseRepository implements DatabaseRepository {
     if (profile?.churchId == null) {
       throw Exception('المستخدم غير مرتبط بكنيسة');
     }
-    return _offlineWriter.deleteInvitation(profile!.churchId!, id);
+    return _notifyAfter(
+      _offlineWriter.deleteInvitation(profile!.churchId!, id),
+      {AppDataArea.invitations, AppDataArea.assignments},
+    );
   }
 
   // Realtime Sync
   @override
   Stream<List<AttendanceRecordEntity>> subscribeToAttendanceRecords(
     String sessionId,
-  ) {
-    return _client
-        .from('attendance_records')
-        .stream(primaryKey: ['id'])
-        .eq('session_id', sessionId)
-        .map((rows) {
-          return rows
-              .map((row) => AttendanceRecordEntity.fromJson(row))
-              .toList();
-        });
+  ) async* {
+    await OfflineNetworkPolicy.ensureReady();
+    if (OfflineNetworkPolicy.isConnectivityOffline) {
+      yield await _readCachedAttendanceRecords(sessionId);
+      return;
+    }
+    try {
+      await for (final rows
+          in _client
+              .from('attendance_records')
+              .stream(primaryKey: ['id'])
+              .eq('session_id', sessionId)) {
+        yield rows.map((row) => AttendanceRecordEntity.fromJson(row)).toList();
+      }
+    } catch (_) {
+      yield await _readCachedAttendanceRecords(sessionId);
+    }
   }
 
   // Offline Auto-Sync Queue — handled by OfflineWriteHandler.syncAll()

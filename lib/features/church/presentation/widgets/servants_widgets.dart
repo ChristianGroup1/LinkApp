@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/invitations/invitation_link.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../data/models/models.dart';
@@ -76,108 +77,97 @@ class ServantsHeroHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
+        gradient: const LinearGradient(
           colors: [
-            AppTheme.primary.withValues(alpha: 0.12),
-            AppTheme.primaryLight.withValues(alpha: 0.45),
+            Color(0xFF4338CA), // Deep Indigo
+            AppTheme.primary,
+            Color(0xFF6366F1), // Indigo Accent
           ],
-          begin: Alignment.topRight,
-          end: Alignment.bottomLeft,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppTheme.primary.withValues(alpha: 0.12)),
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.primary.withValues(alpha: 0.28),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
+              _HeroStatChip(
+                icon: Icons.groups_rounded,
+                label: 'الخدام النشطون',
+                value: '$totalServants',
+              ),
               Container(
-                padding: const EdgeInsets.all(11),
+                height: 38,
+                width: 1,
+                color: Colors.white.withValues(alpha: 0.25),
+              ),
+              _HeroStatChip(
+                icon: Icons.mark_email_unread_rounded,
+                label: 'دعوات معلقة',
+                value: '$pendingInvitations',
+              ),
+              Container(
+                height: 38,
+                width: 1,
+                color: Colors.white.withValues(alpha: 0.25),
+              ),
+              _HeroStatChip(
+                icon: Icons.assignment_turned_in_rounded,
+                label: 'المهام والصلاحيات',
+                value: '$totalAssignments',
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onInvite,
+              borderRadius: BorderRadius.circular(14),
+              child: Ink(
+                padding: const EdgeInsets.symmetric(vertical: 12),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(14),
-                ),
-                child: const Icon(
-                  Icons.groups_rounded,
-                  color: AppTheme.primary,
-                  size: 24,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'إدارة الخدام',
-                      style: GoogleFonts.cairo(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w900,
-                        color: AppTheme.textDark,
-                      ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.08),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
                     ),
-                    const SizedBox(height: 4),
+                  ],
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.person_add_alt_1_rounded,
+                      size: 20,
+                      color: AppTheme.primary,
+                    ),
+                    const SizedBox(width: 8),
                     Text(
-                      'ادعُ خداماً جدداً، اسند لهم الفصول والاجتماعات، وحدد صلاحيات الحضور والتقارير.',
+                      'دعوة خادم جديد',
                       style: GoogleFonts.cairo(
-                        fontSize: 12,
-                        color: AppTheme.textLight,
-                        height: 1.5,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 14,
+                        color: AppTheme.primary,
                       ),
                     ),
                   ],
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: _HeroStatChip(
-                  icon: Icons.person_outline_rounded,
-                  label: 'خدام',
-                  value: '$totalServants',
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _HeroStatChip(
-                  icon: Icons.mail_outline_rounded,
-                  label: 'دعوات',
-                  value: '$pendingInvitations',
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _HeroStatChip(
-                  icon: Icons.assignment_outlined,
-                  label: 'إسنادات',
-                  value: '$totalAssignments',
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          FilledButton.icon(
-            onPressed: onInvite,
-            style: FilledButton.styleFrom(
-              backgroundColor: AppTheme.primary,
-              minimumSize: const Size.fromHeight(46),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
-            ),
-            icon: const Icon(Icons.person_add_alt_1_rounded, size: 18),
-            label: Text(
-              'دعوة خادم جديد',
-              style: GoogleFonts.cairo(
-                fontWeight: FontWeight.w900,
-                color: Colors.white,
               ),
             ),
           ),
@@ -200,35 +190,35 @@ class _HeroStatChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.82),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white),
-      ),
-      child: Column(
-        children: [
-          Icon(icon, size: 16, color: AppTheme.primary),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: GoogleFonts.outfit(
-              fontSize: 18,
-              fontWeight: FontWeight.w900,
-              color: AppTheme.textDark,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: Colors.white.withValues(alpha: 0.9)),
+            const SizedBox(width: 4),
+            Text(
+              value,
+              style: GoogleFonts.cairo(
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+                color: Colors.white,
+                height: 1.1,
+              ),
             ),
+          ],
+        ),
+        const SizedBox(height: 2),
+        Text(
+          label,
+          style: GoogleFonts.cairo(
+            fontSize: 10.5,
+            fontWeight: FontWeight.w700,
+            color: Colors.white.withValues(alpha: 0.8),
           ),
-          Text(
-            label,
-            style: GoogleFonts.cairo(
-              fontSize: 10,
-              fontWeight: FontWeight.w800,
-              color: AppTheme.textLight,
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -250,11 +240,18 @@ class ServantsSearchBox extends StatelessWidget {
     return TextField(
       controller: controller,
       onChanged: onChanged,
-      style: GoogleFonts.cairo(),
+      style: GoogleFonts.cairo(fontSize: 14),
       decoration: InputDecoration(
-        hintText: 'ابحث باسم الخادم أو البريد أو الهاتف',
-        hintStyle: GoogleFonts.cairo(color: AppTheme.textLight, fontSize: 13),
-        prefixIcon: const Icon(Icons.search_rounded, color: AppTheme.primary),
+        hintText: 'ابحث باسم الخادم أو البريد أو الهاتف...',
+        hintStyle: GoogleFonts.cairo(
+          color: AppTheme.textLight.withValues(alpha: 0.7),
+          fontSize: 13,
+        ),
+        prefixIcon: const Icon(
+          Icons.search_rounded,
+          color: AppTheme.primary,
+          size: 22,
+        ),
         suffixIcon: query.isEmpty
             ? null
             : IconButton(
@@ -262,14 +259,36 @@ class ServantsSearchBox extends StatelessWidget {
                   controller.clear();
                   onChanged('');
                 },
-                icon: const Icon(Icons.close_rounded),
+                icon: const Icon(
+                  Icons.clear_rounded,
+                  size: 18,
+                  color: AppTheme.textLight,
+                ),
               ),
         filled: true,
-        fillColor: AppTheme.surfaceMuted,
-        contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+        fillColor: Colors.white,
+        contentPadding: const EdgeInsets.symmetric(
+          vertical: 12,
+          horizontal: 16,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide.none,
+          borderSide: BorderSide(
+            color: AppTheme.border.withValues(alpha: 0.8),
+          ),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(
+            color: AppTheme.border.withValues(alpha: 0.8),
+          ),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(
+            color: AppTheme.primary,
+            width: 1.5,
+          ),
         ),
       ),
     );
@@ -292,44 +311,32 @@ class ServantsFilterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Ink(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: selected
-                ? AppTheme.primary.withValues(alpha: 0.12)
-                : AppTheme.surfaceMuted,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: selected
-                  ? AppTheme.primary.withValues(alpha: 0.28)
-                  : Colors.transparent,
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                icon,
-                size: 15,
-                color: selected ? AppTheme.primary : AppTheme.textLight,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: GoogleFonts.cairo(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
-                  color: selected ? AppTheme.primary : AppTheme.textLight,
-                ),
-              ),
-            ],
-          ),
+    return ChoiceChip(
+      avatar: Icon(
+        icon,
+        size: 15,
+        color: selected ? Colors.white : AppTheme.primary,
+      ),
+      label: Text(
+        label,
+        style: GoogleFonts.cairo(
+          fontSize: 12,
+          fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+          color: selected ? Colors.white : AppTheme.textDark,
         ),
+      ),
+      selected: selected,
+      onSelected: (_) => onTap(),
+      selectedColor: AppTheme.primary,
+      backgroundColor: Colors.white,
+      side: BorderSide(
+        color: selected
+            ? AppTheme.primary
+            : AppTheme.border.withValues(alpha: 0.8),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
       ),
     );
   }
@@ -350,7 +357,7 @@ class ServantsSectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10, top: 4),
+      padding: const EdgeInsets.only(bottom: 12, top: 6),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -361,17 +368,17 @@ class ServantsSectionHeader extends StatelessWidget {
                 Text(
                   title,
                   style: GoogleFonts.cairo(
-                    fontSize: 15,
+                    fontSize: 16,
                     fontWeight: FontWeight.w900,
                     color: AppTheme.textDark,
                   ),
                 ),
                 if (subtitle != null) ...[
-                  const SizedBox(height: 2),
+                  const SizedBox(height: 3),
                   Text(
                     subtitle!,
                     style: GoogleFonts.cairo(
-                      fontSize: 11,
+                      fontSize: 11.5,
                       color: AppTheme.textLight,
                       height: 1.4,
                     ),
@@ -382,15 +389,15 @@ class ServantsSectionHeader extends StatelessWidget {
           ),
           if (count != null)
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3.5),
               decoration: BoxDecoration(
                 color: AppTheme.primaryLight,
-                borderRadius: BorderRadius.circular(999),
+                borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
                 '$count',
                 style: GoogleFonts.cairo(
-                  fontSize: 11,
+                  fontSize: 11.5,
                   fontWeight: FontWeight.w900,
                   color: AppTheme.primary,
                 ),
@@ -413,22 +420,25 @@ class ServantsEmptyState extends StatelessWidget {
       padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.border.withValues(alpha: 0.75)),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppTheme.border.withValues(alpha: 0.8)),
       ),
       child: Column(
         children: [
           Icon(
             query.isEmpty ? Icons.groups_outlined : Icons.search_off_rounded,
-            size: 42,
-            color: AppTheme.textLight.withValues(alpha: 0.7),
+            size: 44,
+            color: AppTheme.textLight.withValues(alpha: 0.6),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           Text(
-            query.isEmpty ? 'لا يوجد خدام مسجلين حالياً.' : 'لا توجد نتائج للبحث.',
+            query.isEmpty
+                ? 'لا يوجد خدام مسجلين حالياً.'
+                : 'لا توجد نتائج للبحث.',
             style: GoogleFonts.cairo(
               color: AppTheme.textLight,
               fontWeight: FontWeight.w700,
+              fontSize: 13,
             ),
             textAlign: TextAlign.center,
           ),
@@ -443,6 +453,8 @@ class ServantPermissionCard extends StatelessWidget {
   final ServantsPermissionsData data;
   final ValueChanged<AppRole> onRoleChanged;
   final VoidCallback onAddAssignment;
+  final bool canChangeStatus;
+  final VoidCallback onStatusChanged;
   final Future<void> Function() onRemoved;
 
   const ServantPermissionCard({
@@ -451,150 +463,241 @@ class ServantPermissionCard extends StatelessWidget {
     required this.data,
     required this.onRoleChanged,
     required this.onAddAssignment,
+    required this.canChangeStatus,
+    required this.onStatusChanged,
     required this.onRemoved,
   });
 
+  String _getInitials(String fullName) {
+    final parts = fullName.trim().split(' ');
+    if (parts.length >= 2 && parts[1].isNotEmpty) {
+      return '${parts[0][0]}${parts[1][0]}';
+    }
+    return fullName.isNotEmpty ? fullName[0] : '?';
+  }
+
   @override
   Widget build(BuildContext context) {
-    final roleColor = _roleColor(servant.role);
-    final initial = servant.fullName.trim().isEmpty
-        ? '?'
-        : servant.fullName.trim().characters.first;
+    final roleColor = servant.isActive
+        ? _roleColor(servant.role)
+        : AppTheme.textLight;
+    final initials = _getInitials(servant.fullName);
     final assignmentCount =
         (data.classAssignmentsByUserId[servant.id]?.length ?? 0) +
         (data.meetingAssignmentsByUserId[servant.id]?.length ?? 0);
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
+      margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.border.withValues(alpha: 0.75)),
-        boxShadow: AppTheme.softShadow,
+        color: servant.isActive ? Colors.white : AppTheme.surfaceMuted,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppTheme.border.withValues(alpha: 0.8)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0F172A).withValues(alpha: 0.04),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Container(width: 4, color: roleColor),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
+        borderRadius: BorderRadius.circular(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Top Accent Line
+            Container(height: 4, color: roleColor),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Container(
-                            width: 44,
-                            height: 44,
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  roleColor.withValues(alpha: 0.16),
-                                  roleColor.withValues(alpha: 0.08),
-                                ],
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                              ),
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(
-                                color: roleColor.withValues(alpha: 0.14),
-                              ),
-                            ),
-                            alignment: Alignment.center,
-                            child: Text(
-                              initial,
+                      Container(
+                        width: 46,
+                        height: 46,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              roleColor.withValues(alpha: 0.2),
+                              roleColor.withValues(alpha: 0.08),
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(15),
+                          border: Border.all(
+                            color: roleColor.withValues(alpha: 0.2),
+                          ),
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          initials,
+                          style: GoogleFonts.cairo(
+                            color: roleColor,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              servant.fullName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: GoogleFonts.cairo(
-                                color: roleColor,
-                                fontSize: 17,
                                 fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  servant.fullName,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: GoogleFonts.cairo(
-                                    fontWeight: FontWeight.w900,
-                                    fontSize: 15,
-                                    color: AppTheme.textDark,
-                                  ),
-                                ),
-                                const SizedBox(height: 5),
-                                Text(
-                                  servant.email ??
-                                      servant.phone ??
-                                      'بدون بيانات تواصل',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: GoogleFonts.cairo(
-                                    fontSize: 11,
-                                    color: AppTheme.textLight,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          _RoleTag(role: servant.role, onChanged: onRoleChanged),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              assignmentCount == 0
-                                  ? 'لا توجد مهام مسندة بعد'
-                                  : 'المهام المسندة ($assignmentCount)',
-                              style: GoogleFonts.cairo(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w800,
+                                fontSize: 16,
                                 color: AppTheme.textDark,
+                                height: 1.2,
                               ),
                             ),
-                          ),
-                          TextButton.icon(
-                            onPressed: onAddAssignment,
-                            icon: const Icon(Icons.add_rounded, size: 16),
-                            label: Text(
-                              'إسناد',
+                            const SizedBox(height: 4),
+                            Text(
+                              servant.email ??
+                                  servant.phone ??
+                                  'بدون بيانات تواصل',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: GoogleFonts.cairo(
-                                fontWeight: FontWeight.w800,
+                                fontSize: 11.5,
+                                color: AppTheme.textLight,
                               ),
                             ),
-                            style: TextButton.styleFrom(
-                              foregroundColor: AppTheme.primary,
-                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                          ],
+                        ),
+                      ),
+                      if (!servant.isActive)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 9,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppTheme.accentRedLight,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            'موقوف',
+                            style: GoogleFonts.cairo(
+                              color: AppTheme.accentRed,
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w900,
                             ),
                           ),
-                        ],
-                      ),
-                      ServantAssignmentsPreview(
-                        servant: servant,
-                        classAssignments:
-                            data.classAssignmentsByUserId[servant.id] ??
-                            const [],
-                        meetingAssignments:
-                            data.meetingAssignmentsByUserId[servant.id] ??
-                            const [],
-                        onRemoved: onRemoved,
-                      ),
+                        )
+                      else
+                        _RoleTag(
+                          role: servant.role,
+                          onChanged: onRoleChanged,
+                        ),
                     ],
                   ),
-                ),
+                  const SizedBox(height: 14),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            'المهام والصلاحيات المسندة',
+                            style: GoogleFonts.cairo(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w800,
+                              color: AppTheme.textDark,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: assignmentCount > 0 ? AppTheme.primaryLight : AppTheme.surfaceMuted,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              '$assignmentCount',
+                              style: GoogleFonts.cairo(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.bold,
+                                color: assignmentCount > 0 ? AppTheme.primary : AppTheme.textLight,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (servant.isActive)
+                        TextButton.icon(
+                          onPressed: onAddAssignment,
+                          icon: const Icon(Icons.add_circle_outline_rounded, size: 16),
+                          label: Text(
+                            'إسناد مهمة',
+                            style: GoogleFonts.cairo(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 12,
+                            ),
+                          ),
+                          style: TextButton.styleFrom(
+                            foregroundColor: AppTheme.primary,
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  ServantAssignmentsPreview(
+                    servant: servant,
+                    classAssignments:
+                        data.classAssignmentsByUserId[servant.id] ??
+                        const [],
+                    meetingAssignments:
+                        data.meetingAssignmentsByUserId[servant.id] ??
+                        const [],
+                    onRemoved: onRemoved,
+                  ),
+                  if (canChangeStatus) ...[
+                    const SizedBox(height: 8),
+                    Divider(
+                      color: AppTheme.border.withValues(alpha: 0.7),
+                      height: 16,
+                    ),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        onPressed: onStatusChanged,
+                        icon: Icon(
+                          servant.isActive
+                              ? Icons.person_off_outlined
+                              : Icons.person_add_alt_1_rounded,
+                          size: 16,
+                        ),
+                        label: Text(
+                          servant.isActive ? 'شطب الخادم' : 'إعادة التفعيل',
+                          style: GoogleFonts.cairo(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        style: TextButton.styleFrom(
+                          foregroundColor: servant.isActive
+                              ? AppTheme.accentRed
+                              : AppTheme.secondary,
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -646,7 +749,10 @@ class _RoleTag extends StatelessWidget {
           ),
           items: const [
             DropdownMenuItem(value: AppRole.churchAdmin, child: Text('مدير')),
-            DropdownMenuItem(value: AppRole.classLeader, child: Text('أمين فصل')),
+            DropdownMenuItem(
+              value: AppRole.classLeader,
+              child: Text('أمين فصل'),
+            ),
             DropdownMenuItem(
               value: AppRole.attendanceOfficer,
               child: Text('مسؤول حضور'),
@@ -880,12 +986,7 @@ class ServantsScopeOptionsList extends StatelessWidget {
   });
 
   static const _options = [
-    (
-      'class',
-      'فصل واحد',
-      'خادم على فصل مدرسة أحد محدد',
-      Icons.school_outlined,
-    ),
+    ('class', 'فصل واحد', 'خادم على فصل مدرسة أحد محدد', Icons.school_outlined),
     (
       'meeting_classes',
       'كل فصول اجتماع',
@@ -1115,23 +1216,48 @@ class ServantsGeneratedInviteLinkCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          OutlinedButton.icon(
-            onPressed: () {
-              Clipboard.setData(ClipboardData(text: inviteLink));
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    'تم نسخ رابط الدعوة',
-                    style: GoogleFonts.cairo(),
-                  ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              OutlinedButton.icon(
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: inviteLink));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'تم نسخ رابط الدعوة',
+                        style: GoogleFonts.cairo(),
+                      ),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.copy_rounded, size: 16),
+                label: Text(
+                  'نسخ الرابط',
+                  style: GoogleFonts.cairo(fontWeight: FontWeight.w800),
                 ),
-              );
-            },
-            icon: const Icon(Icons.copy, size: 16),
-            label: Text(
-              'نسخ الرابط',
-              style: GoogleFonts.cairo(fontWeight: FontWeight.w800),
-            ),
+              ),
+              const SizedBox(width: 8),
+              FilledButton.icon(
+                onPressed: () async {
+                  final text = Uri.encodeComponent(
+                    'سلام ونعمة، ادعوك للانضمام لخدمتنا على تطبيق LinkApp:\n$inviteLink',
+                  );
+                  final waUri = Uri.parse('https://wa.me/?text=$text');
+                  if (await canLaunchUrl(waUri)) {
+                    await launchUrl(waUri);
+                  }
+                },
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF25D366),
+                ),
+                icon: const Icon(Icons.chat_bubble_outline_rounded, size: 16, color: Colors.white),
+                label: Text(
+                  'مشاركة واتساب',
+                  style: GoogleFonts.cairo(fontWeight: FontWeight.w800, color: Colors.white),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -1236,9 +1362,7 @@ class ServantsPendingInvitationsSection extends StatelessWidget {
                 tooltip: 'نسخ الرابط',
                 onPressed: () {
                   final link = invitation.inviteToken.isNotEmpty
-                      ? buildInvitationLink(
-                          inviteToken: invitation.inviteToken,
-                        )
+                      ? buildInvitationLink(inviteToken: invitation.inviteToken)
                       : invitation.code;
                   Clipboard.setData(ClipboardData(text: link));
                   ScaffoldMessenger.of(context).showSnackBar(

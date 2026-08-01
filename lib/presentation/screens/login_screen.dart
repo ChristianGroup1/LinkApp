@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../data/repositories/database_repository.dart';
 import '../../logic/auth/auth_bloc.dart';
 import '../widgets/auth_widgets.dart';
 
@@ -15,7 +16,16 @@ part 'forgot_password_screen.dart';
 part 'reset_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  final String? initialEmail;
+  final String? invitationToken;
+  final String? activationCode;
+
+  const LoginScreen({
+    super.key,
+    this.initialEmail,
+    this.invitationToken,
+    this.activationCode,
+  });
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -33,7 +43,11 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   void initState() {
     super.initState();
-    _loadRememberedCredentials();
+    if (widget.initialEmail != null && widget.initialEmail!.trim().isNotEmpty) {
+      _emailController.text = widget.initialEmail!.trim();
+    } else {
+      _loadRememberedCredentials();
+    }
   }
 
   Future<void> _loadRememberedCredentials() async {
@@ -96,7 +110,21 @@ class _LoginScreenState extends State<LoginScreen> {
       child: AuthShell(
         child: BlocConsumer<AuthBloc, AuthState>(
           listener: (context, state) {
-            if (state is AuthError) {
+            if (state is AuthAuthenticated) {
+              final inviteToken = widget.invitationToken;
+              if (inviteToken != null && inviteToken.isNotEmpty) {
+                context.read<DatabaseRepository>().acceptInvitationLink(inviteToken).then((_) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('تم تسجيل الدخول وتفعيل الدعوة بنجاح 🎉', style: GoogleFonts.cairo()),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  }
+                }).catchError((_) {});
+              }
+            } else if (state is AuthError) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(state.message, style: GoogleFonts.cairo()),
@@ -116,7 +144,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 const Center(child: AuthLogoMark(size: 96)),
                 const SizedBox(height: 16),
                 Text(
-                  'LINK',
+                  'Link',
                   textAlign: TextAlign.center,
                   style: GoogleFonts.outfit(
                     color: AppTheme.primary,
@@ -156,89 +184,84 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 28),
                 AuthFormSection(
                   children: [
-                      const AuthFieldLabel('البريد الإلكتروني'),
-                      AuthSoftTextField(
-                        controller: _emailController,
-                        hint: 'example@link.org',
-                        icon: Icons.mail_outline,
-                        latinInput: true,
-                        keyboardType: TextInputType.emailAddress,
-                      ),
-                      const SizedBox(height: 18),
-                      Row(
-                        textDirection: TextDirection.rtl,
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          const Expanded(
-                            child: AuthFieldLabel('كلمة المرور'),
-                          ),
-                          TextButton(
-                            onPressed: isLoading
-                                ? null
-                                : () => Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) =>
-                                          const ForgotPasswordScreen(),
-                                    ),
-                                  ),
-                            child: Text(
-                              'نسيت كلمة السر؟',
-                              style: GoogleFonts.cairo(
-                                color: AppTheme.primary,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      AuthSoftTextField(
-                        controller: _passwordController,
-                        hint: '••••••••',
-                        icon: Icons.lock_outline,
-                        obscureText: obscure,
-                        trailing: IconButton(
+                    const AuthFieldLabel('البريد الإلكتروني'),
+                    AuthSoftTextField(
+                      controller: _emailController,
+                      hint: 'example@link.org',
+                      icon: Icons.mail_outline,
+                      latinInput: true,
+                      keyboardType: TextInputType.emailAddress,
+                    ),
+                    const SizedBox(height: 18),
+                    Row(
+                      textDirection: TextDirection.rtl,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        const Expanded(child: AuthFieldLabel('كلمة المرور')),
+                        TextButton(
                           onPressed: isLoading
                               ? null
-                              : () => setState(() => obscure = !obscure),
-                          icon: Icon(
-                            obscure
-                                ? Icons.visibility_outlined
-                                : Icons.visibility_off,
-                            color: AppTheme.textLight,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-                      Row(
-                        textDirection: TextDirection.rtl,
-                        children: [
-                          Switch(
-                            value: remember,
-                            onChanged: isLoading
-                                ? null
-                                : (value) =>
-                                      setState(() => remember = value),
-                            activeTrackColor: AppTheme.primary,
-                          ),
-                          Text(
-                            'تذكرني',
+                              : () => Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        const ForgotPasswordScreen(),
+                                  ),
+                                ),
+                          child: Text(
+                            'نسيت كلمة السر؟',
                             style: GoogleFonts.cairo(
-                              color: AppTheme.textLight,
+                              color: AppTheme.primary,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12,
                             ),
                           ),
-                        ],
+                        ),
+                      ],
+                    ),
+                    AuthSoftTextField(
+                      controller: _passwordController,
+                      hint: '••••••••',
+                      icon: Icons.lock_outline,
+                      obscureText: obscure,
+                      trailing: IconButton(
+                        onPressed: isLoading
+                            ? null
+                            : () => setState(() => obscure = !obscure),
+                        icon: Icon(
+                          obscure
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off,
+                          color: AppTheme.textLight,
+                        ),
                       ),
-                      const SizedBox(height: 18),
-                      AuthPrimaryButton(
-                        label: isLoading
-                            ? 'جاري تسجيل الدخول...'
-                            : 'تسجيل الدخول',
-                        icon: isLoading ? null : Icons.login,
-                        onTap: isLoading ? () {} : _submitLogin,
-                      ),
-                    ],
+                    ),
+                    const SizedBox(height: 18),
+                    Row(
+                      textDirection: TextDirection.rtl,
+                      children: [
+                        Switch(
+                          value: remember,
+                          onChanged: isLoading
+                              ? null
+                              : (value) => setState(() => remember = value),
+                          activeTrackColor: AppTheme.primary,
+                        ),
+                        Text(
+                          'تذكرني',
+                          style: GoogleFonts.cairo(color: AppTheme.textLight),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+                    AuthPrimaryButton(
+                      label: isLoading
+                          ? 'جاري تسجيل الدخول...'
+                          : 'تسجيل الدخول',
+                      icon: isLoading ? null : Icons.login,
+                      onTap: isLoading ? () {} : _submitLogin,
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 26),
                 Row(
@@ -270,7 +293,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 32),
                 Text(
-                  '© LINK 2026 جميع الحقوق محفوظة\nالإصدار 1.0.0',
+                  '© Link 2026 جميع الحقوق محفوظة\nالإصدار 1.0.0',
                   textAlign: TextAlign.center,
                   style: GoogleFonts.cairo(
                     color: const Color(0xFFA8B0C2),

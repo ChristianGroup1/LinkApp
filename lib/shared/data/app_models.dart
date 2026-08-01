@@ -100,6 +100,7 @@ class AppProfile {
   final AppRole role;
   final String? email;
   final String? phone;
+  final bool isActive;
 
   const AppProfile({
     required this.id,
@@ -108,6 +109,7 @@ class AppProfile {
     required this.role,
     this.email,
     this.phone,
+    this.isActive = true,
   });
 
   factory AppProfile.fromJson(Map<String, dynamic> json) {
@@ -118,6 +120,7 @@ class AppProfile {
       role: AppRole.fromJson(json['role'] as String),
       email: json['email'] as String?,
       phone: json['phone'] as String?,
+      isActive: json['is_active'] as bool? ?? true,
     );
   }
 }
@@ -131,6 +134,7 @@ class MeetingEntity {
   final int weekday;
   final bool isActive;
   final String? description;
+  final int? attendanceReminderMinutes;
 
   const MeetingEntity({
     required this.id,
@@ -141,6 +145,7 @@ class MeetingEntity {
     required this.weekday,
     required this.isActive,
     this.description,
+    this.attendanceReminderMinutes,
   });
 
   factory MeetingEntity.fromJson(Map<String, dynamic> json) {
@@ -153,6 +158,7 @@ class MeetingEntity {
       weekday: json['weekday'] as int? ?? 7,
       isActive: json['is_active'] as bool? ?? true,
       description: json['description'] as String?,
+      attendanceReminderMinutes: json['attendance_reminder_minutes'] as int?,
     );
   }
 }

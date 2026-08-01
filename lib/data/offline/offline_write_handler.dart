@@ -23,6 +23,8 @@ typedef AttendanceSaver =
       required Map<String, AttendanceStatus> statusesByMemberId,
     });
 
+String? _dateOnly(DateTime? value) => value?.toIso8601String().split('T').first;
+
 class OfflineWriteHandler {
   final SupabaseClient client;
   final OfflineCache cache;
@@ -54,6 +56,13 @@ class OfflineWriteHandler {
         message.contains('timeout') ||
         message.contains('offline') ||
         message.contains('internet');
+  }
+
+  Future<void> _throwIfKnownOffline() async {
+    await OfflineNetworkPolicy.ensureReady();
+    if (OfflineNetworkPolicy.isConnectivityOffline) {
+      throw const SocketException('offline');
+    }
   }
 
   Future<bool> _shouldQueueDeleteInsteadOfServerCall() async {
@@ -110,11 +119,13 @@ class OfflineWriteHandler {
     String? parentName,
     String? parentPhone,
     String? code,
+    DateTime? birthDate,
   }) async {
     final profile = await _requireProfile();
     final churchId = profile.churchId!;
 
     try {
+      await _throwIfKnownOffline();
       final row = await client
           .from('members')
           .insert({
@@ -133,6 +144,8 @@ class OfflineWriteHandler {
             'parent_name': emptyToNull(parentName),
             'parent_phone': emptyToNull(parentPhone),
             'code': emptyToNull(code),
+            'birth_date': _dateOnly(birthDate),
+            'is_active': true,
             'joined_on': DateTime.now().toIso8601String().split('T').first,
           })
           .select()
@@ -155,6 +168,7 @@ class OfflineWriteHandler {
         parentName: emptyToNull(parentName),
         parentPhone: emptyToNull(parentPhone),
         code: emptyToNull(code),
+        birthDate: birthDate,
         isActive: true,
       );
       await cache.upsertMember(churchId, member);
@@ -173,6 +187,8 @@ class OfflineWriteHandler {
             'parent_name': emptyToNull(parentName),
             'parent_phone': emptyToNull(parentPhone),
             'code': emptyToNull(code),
+            'birth_date': _dateOnly(birthDate),
+            'is_active': true,
           },
           queuedAt: DateTime.now(),
         ),
@@ -191,12 +207,20 @@ class OfflineWriteHandler {
     String? parentName,
     String? parentPhone,
     String? code,
+    DateTime? birthDate,
     required bool isActive,
   }) async {
     final profile = await _requireProfile();
     final churchId = profile.churchId!;
+    final resolvedId = await queue.resolveId(id);
+    final resolvedClassId = sundaySchoolClassId == null
+        ? null
+        : await queue.resolveId(sundaySchoolClassId);
+    final resolvedMeetingId = meetingId == null
+        ? null
+        : await queue.resolveId(meetingId);
 
-    if (isOfflineId(id)) {
+    if (isOfflineId(id) && resolvedId == id) {
       final member = MemberEntity(
         id: id,
         churchId: churchId,
@@ -208,6 +232,7 @@ class OfflineWriteHandler {
         parentName: emptyToNull(parentName),
         parentPhone: emptyToNull(parentPhone),
         code: emptyToNull(code),
+        birthDate: birthDate,
         isActive: isActive,
       );
       await cache.upsertMember(churchId, member);
@@ -227,6 +252,8 @@ class OfflineWriteHandler {
             'parent_name': emptyToNull(parentName),
             'parent_phone': emptyToNull(parentPhone),
             'code': emptyToNull(code),
+            'birth_date': _dateOnly(birthDate),
+            'is_active': isActive,
           },
           queuedAt: DateTime.now(),
         ),
@@ -235,32 +262,37 @@ class OfflineWriteHandler {
     }
 
     try {
+      await _throwIfKnownOffline();
       final row = await client
           .from('members')
           .update({
             'full_name': fullName.trim(),
             'scope': scope.value,
             'sunday_school_class_id': scope == MemberScope.sundaySchoolClass
-                ? sundaySchoolClassId
+                ? resolvedClassId
                 : null,
-            'meeting_id': scope == MemberScope.meeting ? meetingId : null,
+            'meeting_id': scope == MemberScope.meeting
+                ? resolvedMeetingId
+                : null,
             'phone': emptyToNull(phone),
             'parent_name': emptyToNull(parentName),
             'parent_phone': emptyToNull(parentPhone),
             'code': emptyToNull(code),
+            'birth_date': _dateOnly(birthDate),
             'is_active': isActive,
           })
-          .eq('id', id)
+          .eq('id', resolvedId)
           .select()
           .single();
       final member = MemberEntity.fromJson(row);
+      if (resolvedId != id) await cache.removeMember(churchId, id);
       await cache.upsertMember(churchId, member);
       return OfflineSaveResult(data: member, syncedToServer: true);
     } catch (error) {
       if (!isRecoverableOfflineError(error)) rethrow;
 
       final member = MemberEntity(
-        id: id,
+        id: resolvedId,
         churchId: churchId,
         fullName: fullName.trim(),
         scope: scope,
@@ -270,15 +302,17 @@ class OfflineWriteHandler {
         parentName: emptyToNull(parentName),
         parentPhone: emptyToNull(parentPhone),
         code: emptyToNull(code),
+        birthDate: birthDate,
         isActive: isActive,
       );
+      if (resolvedId != id) await cache.removeMember(churchId, id);
       await cache.upsertMember(churchId, member);
       await queue.enqueue(
         QueuedOperation(
           id: await queue.generateId('op'),
           type: OfflineOpType.memberUpdate,
           payload: {
-            'id': id,
+            'id': resolvedId,
             'full_name': fullName.trim(),
             'scope': scope.value,
             'sunday_school_class_id': sundaySchoolClassId,
@@ -287,6 +321,7 @@ class OfflineWriteHandler {
             'parent_name': emptyToNull(parentName),
             'parent_phone': emptyToNull(parentPhone),
             'code': emptyToNull(code),
+            'birth_date': _dateOnly(birthDate),
             'is_active': isActive,
           },
           queuedAt: DateTime.now(),
@@ -299,8 +334,9 @@ class OfflineWriteHandler {
   Future<bool> deleteMember(String id) async {
     final profile = await _requireProfile();
     final churchId = profile.churchId!;
+    final resolvedId = await queue.resolveId(id);
 
-    if (isOfflineId(id)) {
+    if (isOfflineId(id) && resolvedId == id) {
       await cache.removeMember(churchId, id);
       await queue.removeByEntityId(id);
       return false;
@@ -309,15 +345,16 @@ class OfflineWriteHandler {
     if (await _shouldQueueDeleteInsteadOfServerCall()) {
       await _queueEntityDelete(
         type: OfflineOpType.memberDelete,
-        id: id,
+        id: resolvedId,
         removeFromCache: () => cache.removeMember(churchId, id),
       );
       return false;
     }
 
     try {
-      await client.from('members').delete().eq('id', id);
+      await client.from('members').delete().eq('id', resolvedId);
       await cache.removeMember(churchId, id);
+      if (resolvedId != id) await cache.removeMember(churchId, resolvedId);
       return true;
     } catch (error) {
       if (!isRecoverableOfflineError(error)) rethrow;
@@ -326,7 +363,7 @@ class OfflineWriteHandler {
         QueuedOperation(
           id: await queue.generateId('op'),
           type: OfflineOpType.memberDelete,
-          payload: {'id': id},
+          payload: {'id': resolvedId},
           queuedAt: DateTime.now(),
         ),
       );
@@ -341,6 +378,7 @@ class OfflineWriteHandler {
     String? address,
   ) async {
     try {
+      await _throwIfKnownOffline();
       await client
           .from('churches')
           .update({'name_ar': nameAr, 'phone': phone, 'address': address})
@@ -404,9 +442,11 @@ class OfflineWriteHandler {
     required String nameAr,
     required MeetingKind kind,
     required int weekday,
+    int? attendanceReminderMinutes,
     String? description,
   }) async {
     try {
+      await _throwIfKnownOffline();
       final row = await client
           .from('meetings')
           .insert({
@@ -415,7 +455,9 @@ class OfflineWriteHandler {
             'name_ar': nameAr,
             'kind': kind.value,
             'weekday': weekday,
+            'attendance_reminder_minutes': attendanceReminderMinutes,
             'description': description,
+            'is_active': true,
             'created_by': createdBy,
           })
           .select()
@@ -435,6 +477,7 @@ class OfflineWriteHandler {
         weekday: weekday,
         isActive: true,
         description: description,
+        attendanceReminderMinutes: attendanceReminderMinutes,
       );
       await cache.upsertMeeting(churchId, meeting);
       await queue.enqueue(
@@ -449,7 +492,9 @@ class OfflineWriteHandler {
             'name_ar': nameAr,
             'kind': kind.value,
             'weekday': weekday,
+            'attendance_reminder_minutes': attendanceReminderMinutes,
             'description': description,
+            'is_active': true,
           },
           queuedAt: DateTime.now(),
         ),
@@ -465,18 +510,25 @@ class OfflineWriteHandler {
     required String nameAr,
     required int weekday,
     required bool isActive,
+    int? attendanceReminderMinutes,
     String? description,
   }) async {
-    if (isOfflineId(id)) {
+    final resolvedId = await queue.resolveId(id);
+    if (isOfflineId(id) && resolvedId == id) {
+      final meetings = await cache.readMeetings(churchId) ?? [];
+      final existing = meetings
+          .where((item) => item.id == id || item.id == resolvedId)
+          .firstOrNull;
       final meeting = MeetingEntity(
         id: id,
         churchId: churchId,
         name: name,
         nameAr: nameAr,
-        kind: MeetingKind.normal,
+        kind: existing?.kind ?? MeetingKind.normal,
         weekday: weekday,
         isActive: isActive,
         description: description,
+        attendanceReminderMinutes: attendanceReminderMinutes,
       );
       await cache.upsertMeeting(churchId, meeting);
       await queue.removeByEntityId(id);
@@ -490,9 +542,11 @@ class OfflineWriteHandler {
             'created_by': (await _requireProfile()).id,
             'name': name,
             'name_ar': nameAr,
-            'kind': MeetingKind.normal.value,
+            'kind': meeting.kind.value,
             'weekday': weekday,
+            'attendance_reminder_minutes': attendanceReminderMinutes,
             'description': description,
+            'is_active': isActive,
           },
           queuedAt: DateTime.now(),
         ),
@@ -501,28 +555,31 @@ class OfflineWriteHandler {
     }
 
     try {
+      await _throwIfKnownOffline();
       final row = await client
           .from('meetings')
           .update({
             'name': name,
             'name_ar': nameAr,
             'weekday': weekday,
+            'attendance_reminder_minutes': attendanceReminderMinutes,
             'is_active': isActive,
             'description': description,
           })
-          .eq('id', id)
+          .eq('id', resolvedId)
           .select()
           .single();
       final meeting = MeetingEntity.fromJson(row);
+      if (resolvedId != id) await cache.removeMeeting(churchId, id);
       await cache.upsertMeeting(churchId, meeting);
       return OfflineSaveResult(data: meeting, syncedToServer: true);
     } catch (error) {
       if (!isRecoverableOfflineError(error)) rethrow;
-      final existing = (await cache.readMeetings(
-        churchId,
-      ))?.firstWhere((item) => item.id == id);
+      final existing = (await cache.readMeetings(churchId) ?? [])
+          .where((item) => item.id == id || item.id == resolvedId)
+          .firstOrNull;
       final meeting = MeetingEntity(
-        id: id,
+        id: resolvedId,
         churchId: churchId,
         name: name,
         nameAr: nameAr,
@@ -530,17 +587,20 @@ class OfflineWriteHandler {
         weekday: weekday,
         isActive: isActive,
         description: description,
+        attendanceReminderMinutes: attendanceReminderMinutes,
       );
+      if (resolvedId != id) await cache.removeMeeting(churchId, id);
       await cache.upsertMeeting(churchId, meeting);
       await queue.enqueue(
         QueuedOperation(
           id: await queue.generateId('op'),
           type: OfflineOpType.meetingUpdate,
           payload: {
-            'id': id,
+            'id': resolvedId,
             'name': name,
             'name_ar': nameAr,
             'weekday': weekday,
+            'attendance_reminder_minutes': attendanceReminderMinutes,
             'is_active': isActive,
             'description': description,
           },
@@ -552,7 +612,8 @@ class OfflineWriteHandler {
   }
 
   Future<bool> deleteMeeting(String churchId, String id) async {
-    if (isOfflineId(id)) {
+    final resolvedId = await queue.resolveId(id);
+    if (isOfflineId(id) && resolvedId == id) {
       await cache.removeMeeting(churchId, id);
       await queue.removeByEntityId(id);
       return false;
@@ -561,8 +622,13 @@ class OfflineWriteHandler {
     if (await _shouldQueueDeleteInsteadOfServerCall()) {
       await _queueEntityDelete(
         type: OfflineOpType.meetingDelete,
-        id: id,
-        removeFromCache: () => cache.removeMeeting(churchId, id),
+        id: resolvedId,
+        removeFromCache: () async {
+          await cache.removeMeeting(churchId, id);
+          if (resolvedId != id) {
+            await cache.removeMeeting(churchId, resolvedId);
+          }
+        },
       );
       return false;
     }
@@ -570,18 +636,20 @@ class OfflineWriteHandler {
     try {
       await client.rpc(
         'delete_meeting_cascade',
-        params: {'target_meeting_id': id},
+        params: {'target_meeting_id': resolvedId},
       );
       await cache.removeMeeting(churchId, id);
+      if (resolvedId != id) await cache.removeMeeting(churchId, resolvedId);
       return true;
     } catch (error) {
       if (!isRecoverableOfflineError(error)) rethrow;
       await cache.removeMeeting(churchId, id);
+      if (resolvedId != id) await cache.removeMeeting(churchId, resolvedId);
       await queue.enqueue(
         QueuedOperation(
           id: await queue.generateId('op'),
           type: OfflineOpType.meetingDelete,
-          payload: {'id': id},
+          payload: {'id': resolvedId},
           queuedAt: DateTime.now(),
         ),
       );
@@ -598,6 +666,7 @@ class OfflineWriteHandler {
   }) async {
     final resolvedMeetingId = await queue.resolveId(meetingId);
     try {
+      await _throwIfKnownOffline();
       final row = await client
           .from('sunday_school_classes')
           .insert({
@@ -606,6 +675,7 @@ class OfflineWriteHandler {
             'name': name,
             'name_ar': nameAr,
             'display_order': displayOrder,
+            'is_active': true,
           })
           .select()
           .single();
@@ -636,6 +706,7 @@ class OfflineWriteHandler {
             'name': name,
             'name_ar': nameAr,
             'display_order': displayOrder,
+            'is_active': true,
           },
           queuedAt: DateTime.now(),
         ),
@@ -653,9 +724,12 @@ class OfflineWriteHandler {
     required bool isActive,
   }) async {
     final classes = await cache.readClasses(churchId) ?? [];
-    final existing = classes.where((item) => item.id == id).firstOrNull;
+    final resolvedId = await queue.resolveId(id);
+    final existing = classes
+        .where((item) => item.id == id || item.id == resolvedId)
+        .firstOrNull;
 
-    if (isOfflineId(id) && existing != null) {
+    if (isOfflineId(id) && resolvedId == id && existing != null) {
       final cls = SundaySchoolClassEntity(
         id: id,
         churchId: churchId,
@@ -686,6 +760,7 @@ class OfflineWriteHandler {
     }
 
     try {
+      await _throwIfKnownOffline();
       final row = await client
           .from('sunday_school_classes')
           .update({
@@ -694,16 +769,17 @@ class OfflineWriteHandler {
             'display_order': displayOrder,
             'is_active': isActive,
           })
-          .eq('id', id)
+          .eq('id', resolvedId)
           .select()
           .single();
       final cls = SundaySchoolClassEntity.fromJson(row);
+      if (resolvedId != id) await cache.removeClass(churchId, id);
       await cache.upsertClass(churchId, cls);
       return OfflineSaveResult(data: cls, syncedToServer: true);
     } catch (error) {
       if (!isRecoverableOfflineError(error)) rethrow;
       final cls = SundaySchoolClassEntity(
-        id: id,
+        id: resolvedId,
         churchId: churchId,
         meetingId: existing?.meetingId ?? '',
         name: name,
@@ -711,13 +787,14 @@ class OfflineWriteHandler {
         displayOrder: displayOrder,
         isActive: isActive,
       );
+      if (resolvedId != id) await cache.removeClass(churchId, id);
       await cache.upsertClass(churchId, cls);
       await queue.enqueue(
         QueuedOperation(
           id: await queue.generateId('op'),
           type: OfflineOpType.classUpdate,
           payload: {
-            'id': id,
+            'id': resolvedId,
             'name': name,
             'name_ar': nameAr,
             'display_order': displayOrder,
@@ -731,7 +808,8 @@ class OfflineWriteHandler {
   }
 
   Future<bool> deleteSundaySchoolClass(String churchId, String id) async {
-    if (isOfflineId(id)) {
+    final resolvedId = await queue.resolveId(id);
+    if (isOfflineId(id) && resolvedId == id) {
       await cache.removeClass(churchId, id);
       await queue.removeByEntityId(id);
       return false;
@@ -740,8 +818,13 @@ class OfflineWriteHandler {
     if (await _shouldQueueDeleteInsteadOfServerCall()) {
       await _queueEntityDelete(
         type: OfflineOpType.classDelete,
-        id: id,
-        removeFromCache: () => cache.removeClass(churchId, id),
+        id: resolvedId,
+        removeFromCache: () async {
+          await cache.removeClass(churchId, id);
+          if (resolvedId != id) {
+            await cache.removeClass(churchId, resolvedId);
+          }
+        },
       );
       return false;
     }
@@ -749,18 +832,20 @@ class OfflineWriteHandler {
     try {
       await client.rpc(
         'delete_sunday_school_class_cascade',
-        params: {'target_class_id': id},
+        params: {'target_class_id': resolvedId},
       );
       await cache.removeClass(churchId, id);
+      if (resolvedId != id) await cache.removeClass(churchId, resolvedId);
       return true;
     } catch (error) {
       if (!isRecoverableOfflineError(error)) rethrow;
       await cache.removeClass(churchId, id);
+      if (resolvedId != id) await cache.removeClass(churchId, resolvedId);
       await queue.enqueue(
         QueuedOperation(
           id: await queue.generateId('op'),
           type: OfflineOpType.classDelete,
-          payload: {'id': id},
+          payload: {'id': resolvedId},
           queuedAt: DateTime.now(),
         ),
       );
@@ -781,6 +866,7 @@ class OfflineWriteHandler {
         ? null
         : await queue.resolveId(classId);
     try {
+      await _throwIfKnownOffline();
       final row = await client.rpc(
         'create_attendance_session',
         params: {
@@ -832,7 +918,8 @@ class OfflineWriteHandler {
     String? classId,
     required String sessionId,
   }) async {
-    if (isOfflineId(sessionId)) {
+    final resolvedSessionId = await queue.resolveId(sessionId);
+    if (isOfflineId(sessionId) && resolvedSessionId == sessionId) {
       await cache.removeSession(meetingId, classId, sessionId);
       await queue.removeByEntityId(sessionId);
       return false;
@@ -841,25 +928,38 @@ class OfflineWriteHandler {
     if (await _shouldQueueDeleteInsteadOfServerCall()) {
       await _queueEntityDelete(
         type: OfflineOpType.sessionDelete,
-        id: sessionId,
-        removeFromCache: () =>
-            cache.removeSession(meetingId, classId, sessionId),
+        id: resolvedSessionId,
+        removeFromCache: () async {
+          await cache.removeSession(meetingId, classId, sessionId);
+          if (resolvedSessionId != sessionId) {
+            await cache.removeSession(meetingId, classId, resolvedSessionId);
+          }
+        },
       );
       return false;
     }
 
     try {
-      await client.from('attendance_sessions').delete().eq('id', sessionId);
+      await client
+          .from('attendance_sessions')
+          .delete()
+          .eq('id', resolvedSessionId);
       await cache.removeSession(meetingId, classId, sessionId);
+      if (resolvedSessionId != sessionId) {
+        await cache.removeSession(meetingId, classId, resolvedSessionId);
+      }
       return true;
     } catch (error) {
       if (!isRecoverableOfflineError(error)) rethrow;
       await cache.removeSession(meetingId, classId, sessionId);
+      if (resolvedSessionId != sessionId) {
+        await cache.removeSession(meetingId, classId, resolvedSessionId);
+      }
       await queue.enqueue(
         QueuedOperation(
           id: await queue.generateId('op'),
           type: OfflineOpType.sessionDelete,
-          payload: {'id': sessionId},
+          payload: {'id': resolvedSessionId},
           queuedAt: DateTime.now(),
         ),
       );
@@ -883,6 +983,7 @@ class OfflineWriteHandler {
         ? null
         : await queue.resolveId(sessionId);
     try {
+      await _throwIfKnownOffline();
       await client.from('follow_ups').insert({
         'church_id': churchId,
         'member_id': resolvedMemberId,
@@ -934,7 +1035,8 @@ class OfflineWriteHandler {
   }
 
   Future<bool> deleteFollowUp(String churchId, String id) async {
-    if (isOfflineId(id)) {
+    final resolvedId = await queue.resolveId(id);
+    if (isOfflineId(id) && resolvedId == id) {
       await cache.removeFollowUp(churchId, id);
       await queue.removeByEntityId(id);
       return false;
@@ -943,24 +1045,31 @@ class OfflineWriteHandler {
     if (await _shouldQueueDeleteInsteadOfServerCall()) {
       await _queueEntityDelete(
         type: OfflineOpType.followUpDelete,
-        id: id,
-        removeFromCache: () => cache.removeFollowUp(churchId, id),
+        id: resolvedId,
+        removeFromCache: () async {
+          await cache.removeFollowUp(churchId, id);
+          if (resolvedId != id) {
+            await cache.removeFollowUp(churchId, resolvedId);
+          }
+        },
       );
       return false;
     }
 
     try {
-      await client.from('follow_ups').delete().eq('id', id);
+      await client.from('follow_ups').delete().eq('id', resolvedId);
       await cache.removeFollowUp(churchId, id);
+      if (resolvedId != id) await cache.removeFollowUp(churchId, resolvedId);
       return true;
     } catch (error) {
       if (!isRecoverableOfflineError(error)) rethrow;
       await cache.removeFollowUp(churchId, id);
+      if (resolvedId != id) await cache.removeFollowUp(churchId, resolvedId);
       await queue.enqueue(
         QueuedOperation(
           id: await queue.generateId('op'),
           type: OfflineOpType.followUpDelete,
-          payload: {'id': id},
+          payload: {'id': resolvedId},
           queuedAt: DateTime.now(),
         ),
       );
@@ -991,6 +1100,7 @@ class OfflineWriteHandler {
     );
 
     try {
+      await _throwIfKnownOffline();
       final row = await client
           .from('invitations')
           .insert({
@@ -1085,7 +1195,8 @@ class OfflineWriteHandler {
   }
 
   Future<bool> deleteInvitation(String churchId, String id) async {
-    if (isOfflineId(id)) {
+    final resolvedId = await queue.resolveId(id);
+    if (isOfflineId(id) && resolvedId == id) {
       await cache.removeInvitation(churchId, id);
       await queue.removeByEntityId(id);
       return false;
@@ -1094,24 +1205,35 @@ class OfflineWriteHandler {
     if (await _shouldQueueDeleteInsteadOfServerCall()) {
       await _queueEntityDelete(
         type: OfflineOpType.invitationDelete,
-        id: id,
-        removeFromCache: () => cache.removeInvitation(churchId, id),
+        id: resolvedId,
+        removeFromCache: () async {
+          await cache.removeInvitation(churchId, id);
+          if (resolvedId != id) {
+            await cache.removeInvitation(churchId, resolvedId);
+          }
+        },
       );
       return false;
     }
 
     try {
-      await client.from('invitations').delete().eq('id', id);
+      await client.from('invitations').delete().eq('id', resolvedId);
       await cache.removeInvitation(churchId, id);
+      if (resolvedId != id) {
+        await cache.removeInvitation(churchId, resolvedId);
+      }
       return true;
     } catch (error) {
       if (!isRecoverableOfflineError(error)) rethrow;
       await cache.removeInvitation(churchId, id);
+      if (resolvedId != id) {
+        await cache.removeInvitation(churchId, resolvedId);
+      }
       await queue.enqueue(
         QueuedOperation(
           id: await queue.generateId('op'),
           type: OfflineOpType.invitationDelete,
-          payload: {'id': id},
+          payload: {'id': resolvedId},
           queuedAt: DateTime.now(),
         ),
       );
@@ -1190,14 +1312,25 @@ class OfflineWriteHandler {
               'name_ar': operation.payload['name_ar'],
               'kind': operation.payload['kind'],
               'weekday': operation.payload['weekday'],
+              'attendance_reminder_minutes':
+                  operation.payload['attendance_reminder_minutes'],
               'description': operation.payload['description'],
               'created_by': operation.payload['created_by'],
+              'is_active': operation.payload['is_active'] ?? true,
             })
             .select()
             .single();
         await queue.mapId(
           operation.payload['local_id'] as String,
           row['id'] as String,
+        );
+        await cache.removeMeeting(
+          operation.payload['church_id'] as String,
+          operation.payload['local_id'] as String,
+        );
+        await cache.upsertMeeting(
+          operation.payload['church_id'] as String,
+          MeetingEntity.fromJson(row),
         );
         return true;
       case OfflineOpType.meetingUpdate:
@@ -1207,6 +1340,8 @@ class OfflineWriteHandler {
               'name': operation.payload['name'],
               'name_ar': operation.payload['name_ar'],
               'weekday': operation.payload['weekday'],
+              'attendance_reminder_minutes':
+                  operation.payload['attendance_reminder_minutes'],
               'is_active': operation.payload['is_active'],
               'description': operation.payload['description'],
             })
@@ -1230,12 +1365,21 @@ class OfflineWriteHandler {
               'name': operation.payload['name'],
               'name_ar': operation.payload['name_ar'],
               'display_order': operation.payload['display_order'],
+              'is_active': operation.payload['is_active'] ?? true,
             })
             .select()
             .single();
         await queue.mapId(
           operation.payload['local_id'] as String,
           row['id'] as String,
+        );
+        await cache.removeClass(
+          operation.payload['church_id'] as String,
+          operation.payload['local_id'] as String,
+        );
+        await cache.upsertClass(
+          operation.payload['church_id'] as String,
+          SundaySchoolClassEntity.fromJson(row),
         );
         return true;
       case OfflineOpType.classUpdate:
@@ -1274,6 +1418,8 @@ class OfflineWriteHandler {
               'parent_name': operation.payload['parent_name'],
               'parent_phone': operation.payload['parent_phone'],
               'code': operation.payload['code'],
+              'birth_date': operation.payload['birth_date'],
+              'is_active': operation.payload['is_active'] ?? true,
               'joined_on': DateTime.now().toIso8601String().split('T').first,
             })
             .select()
@@ -1282,20 +1428,34 @@ class OfflineWriteHandler {
           operation.payload['local_id'] as String,
           row['id'] as String,
         );
+        await cache.removeMember(
+          operation.payload['church_id'] as String,
+          operation.payload['local_id'] as String,
+        );
+        await cache.upsertMember(
+          operation.payload['church_id'] as String,
+          MemberEntity.fromJson(row),
+        );
         return true;
       case OfflineOpType.memberUpdate:
+        final classId = operation.payload['sunday_school_class_id'] as String?;
+        final meetingId = operation.payload['meeting_id'] as String?;
         await client
             .from('members')
             .update({
               'full_name': operation.payload['full_name'],
               'scope': operation.payload['scope'],
-              'sunday_school_class_id':
-                  operation.payload['sunday_school_class_id'],
-              'meeting_id': operation.payload['meeting_id'],
+              'sunday_school_class_id': classId == null
+                  ? null
+                  : await queue.resolveId(classId),
+              'meeting_id': meetingId == null
+                  ? null
+                  : await queue.resolveId(meetingId),
               'phone': operation.payload['phone'],
               'parent_name': operation.payload['parent_name'],
               'parent_phone': operation.payload['parent_phone'],
               'code': operation.payload['code'],
+              'birth_date': operation.payload['birth_date'],
               'is_active': operation.payload['is_active'],
             })
             .eq('id', operation.payload['id']);
@@ -1323,6 +1483,16 @@ class OfflineWriteHandler {
         final serverId = row['id'] as String;
         await queue.mapId(localId, serverId);
         await _renameAttendanceCache(localId, serverId);
+        await cache.removeSession(
+          operation.payload['meeting_id'] as String,
+          classId,
+          localId,
+        );
+        await cache.upsertSession(
+          operation.payload['meeting_id'] as String,
+          classId,
+          AttendanceSessionEntity.fromJson(row),
+        );
         return true;
       case OfflineOpType.sessionDelete:
         await client
@@ -1335,19 +1505,35 @@ class OfflineWriteHandler {
           operation.payload['member_id'] as String,
         );
         final sessionId = operation.payload['session_id'] as String?;
-        await client.from('follow_ups').insert({
-          'church_id': operation.payload['church_id'],
-          'member_id': memberId,
-          'session_id': sessionId == null
-              ? null
-              : await queue.resolveId(sessionId),
-          'reason': operation.payload['reason'],
-          'contact_status': operation.payload['contact_status'],
-          'result': operation.payload['result'],
-          'responsible_user_id': operation.payload['responsible_user_id'],
-          'follow_up_date': operation.payload['follow_up_date'],
-          'created_by': operation.payload['created_by'],
-        });
+        final row = await client
+            .from('follow_ups')
+            .insert({
+              'church_id': operation.payload['church_id'],
+              'member_id': memberId,
+              'session_id': sessionId == null
+                  ? null
+                  : await queue.resolveId(sessionId),
+              'reason': operation.payload['reason'],
+              'contact_status': operation.payload['contact_status'],
+              'result': operation.payload['result'],
+              'responsible_user_id': operation.payload['responsible_user_id'],
+              'follow_up_date': operation.payload['follow_up_date'],
+              'created_by': operation.payload['created_by'],
+            })
+            .select()
+            .single();
+        await queue.mapId(
+          operation.payload['local_id'] as String,
+          row['id'] as String,
+        );
+        await cache.removeFollowUp(
+          operation.payload['church_id'] as String,
+          operation.payload['local_id'] as String,
+        );
+        await cache.upsertFollowUp(
+          operation.payload['church_id'] as String,
+          FollowUpEntity.fromJson(row),
+        );
         return true;
       case OfflineOpType.followUpDelete:
         await client
@@ -1381,10 +1567,97 @@ class OfflineWriteHandler {
           operation.payload['local_id'] as String,
           row['id'] as String,
         );
+        await cache.removeInvitation(
+          operation.payload['church_id'] as String,
+          operation.payload['local_id'] as String,
+        );
+        await cache.upsertInvitation(
+          operation.payload['church_id'] as String,
+          HelperInvitation.fromJson(row),
+        );
         return true;
       case OfflineOpType.invitationDelete:
         await client
             .from('invitations')
+            .delete()
+            .eq('id', operation.payload['id']);
+        return true;
+      case OfflineOpType.currentProfileUpdate:
+        await client
+            .from('profiles')
+            .update({
+              'full_name': operation.payload['full_name'],
+              'phone': operation.payload['phone'],
+            })
+            .eq('id', operation.payload['id']);
+        return true;
+      case OfflineOpType.profileRoleUpdate:
+        await client.rpc(
+          'admin_update_profile_role',
+          params: {
+            'target_user_id': operation.payload['user_id'],
+            'new_role': operation.payload['role'],
+          },
+        );
+        return true;
+      case OfflineOpType.profileStatusUpdate:
+        await client.rpc(
+          'admin_update_profile_status',
+          params: {
+            'target_user_id': operation.payload['user_id'],
+            'new_is_active': operation.payload['is_active'],
+          },
+        );
+        return true;
+      case OfflineOpType.classAssignmentUpsert:
+        final row = await client
+            .from('class_assignments')
+            .upsert({
+              'church_id': operation.payload['church_id'],
+              'class_id': await queue.resolveId(
+                operation.payload['class_id'] as String,
+              ),
+              'user_id': operation.payload['user_id'],
+              'can_take_attendance': operation.payload['can_take_attendance'],
+              'can_view_reports': operation.payload['can_view_reports'],
+              'assigned_by': operation.payload['assigned_by'],
+            }, onConflict: 'class_id,user_id')
+            .select('id')
+            .single();
+        await queue.mapId(
+          operation.payload['local_id'] as String,
+          row['id'] as String,
+        );
+        return true;
+      case OfflineOpType.classAssignmentDelete:
+        await client
+            .from('class_assignments')
+            .delete()
+            .eq('id', operation.payload['id']);
+        return true;
+      case OfflineOpType.meetingAssignmentUpsert:
+        final row = await client
+            .from('meeting_assignments')
+            .upsert({
+              'church_id': operation.payload['church_id'],
+              'meeting_id': await queue.resolveId(
+                operation.payload['meeting_id'] as String,
+              ),
+              'user_id': operation.payload['user_id'],
+              'can_take_attendance': operation.payload['can_take_attendance'],
+              'can_view_reports': operation.payload['can_view_reports'],
+              'assigned_by': operation.payload['assigned_by'],
+            }, onConflict: 'meeting_id,user_id')
+            .select('id')
+            .single();
+        await queue.mapId(
+          operation.payload['local_id'] as String,
+          row['id'] as String,
+        );
+        return true;
+      case OfflineOpType.meetingAssignmentDelete:
+        await client
+            .from('meeting_assignments')
             .delete()
             .eq('id', operation.payload['id']);
         return true;

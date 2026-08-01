@@ -6,7 +6,6 @@ import '../../../../data/models/models.dart';
 import '../../../../data/repositories/database_repository.dart';
 import '../../logic/meetings_bloc.dart';
 import 'meeting_dialogs.dart';
-
 import 'meeting_assignment_helpers.dart';
 
 class GroupedMeetingClassesCard extends StatelessWidget {
@@ -42,139 +41,246 @@ class GroupedMeetingClassesCard extends StatelessWidget {
       meeting.id,
       classes,
     );
+    final totalServants = aggregatedAssignments.length + meetingPending.length;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
+      margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.border.withValues(alpha: 0.75)),
-        boxShadow: AppTheme.softShadow,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppTheme.border.withValues(alpha: 0.8)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0F172A).withValues(alpha: 0.04),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
+          ),
+          BoxShadow(
+            color: AppTheme.primary.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            IntrinsicHeight(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const ColoredBox(
-                    color: AppTheme.primary,
-                    child: SizedBox(width: 4),
-                  ),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 12, 8, 12),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 42,
-                            height: 42,
-                            decoration: BoxDecoration(
-                              color: AppTheme.primaryLight,
-                              borderRadius: BorderRadius.circular(13),
-                              border: Border.all(
-                                color: AppTheme.primary.withValues(alpha: 0.14),
-                              ),
-                            ),
-                            child: const Icon(
-                              Icons.calendar_view_week_rounded,
-                              color: AppTheme.primary,
-                              size: 20,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  meeting.nameAr,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: GoogleFonts.cairo(
-                                    fontWeight: FontWeight.w900,
-                                    fontSize: 15,
-                                    color: AppTheme.textDark,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                _MeetingMetaTag(
-                                  icon: Icons.event_repeat_rounded,
-                                  label:
-                                      'كل يوم ${kWeekdaysAr[meeting.weekday - 1]}',
-                                  color: AppTheme.primary,
-                                  backgroundColor: AppTheme.primaryLight,
-                                ),
-                              ],
-                            ),
-                          ),
-                          if (isAdmin) ...[
-                            IconButton(
-                              visualDensity: VisualDensity.compact,
-                              icon: const Icon(
-                                Icons.edit_outlined,
-                                color: AppTheme.primary,
-                                size: 20,
-                              ),
-                              onPressed: onEditMeeting,
-                            ),
-                            IconButton(
-                              visualDensity: VisualDensity.compact,
-                              icon: const Icon(
-                                Icons.delete_outline,
-                                color: AppTheme.accentRed,
-                                size: 20,
-                              ),
-                              onPressed: onDeleteMeeting,
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
+            // Top Gradient Accent Strip
+            Container(
+              height: 4,
+              decoration: const BoxDecoration(
+                gradient: AppTheme.primaryGradient,
               ),
             ),
-            if (meeting.description != null && meeting.description!.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-                child: Text(
-                  meeting.description!,
-                  style: GoogleFonts.cairo(
-                    fontSize: 11.5,
-                    color: AppTheme.textLight,
-                  ),
-                ),
-              ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+              padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'خدام الاجتماع',
-                    style: GoogleFonts.cairo(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                      color: AppTheme.textLight,
-                    ),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 46,
+                        height: 46,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              AppTheme.primaryLight,
+                              AppTheme.primaryLight.withValues(alpha: 0.5),
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(15),
+                          border: Border.all(
+                            color: AppTheme.primary.withValues(alpha: 0.2),
+                          ),
+                        ),
+                        child: const Icon(
+                          Icons.school_rounded,
+                          color: AppTheme.primary,
+                          size: 22,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    meeting.nameAr,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: GoogleFonts.cairo(
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 16,
+                                      color: AppTheme.textDark,
+                                      height: 1.2,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.primaryLight,
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Text(
+                                    '${classes.length} فصول',
+                                    style: GoogleFonts.cairo(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w800,
+                                      color: AppTheme.primary,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            _MeetingMetaTag(
+                              icon: Icons.event_repeat_rounded,
+                              label: 'كل يوم ${kWeekdaysAr[meeting.weekday - 1]}',
+                              color: AppTheme.primary,
+                              backgroundColor: AppTheme.primaryLight,
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (isAdmin) ...[
+                        Material(
+                          color: Colors.transparent,
+                          borderRadius: BorderRadius.circular(10),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(10),
+                            onTap: onEditMeeting,
+                            child: Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: AppTheme.primaryLight.withValues(alpha: 0.6),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(
+                                Icons.edit_outlined,
+                                color: AppTheme.primary,
+                                size: 18,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Material(
+                          color: Colors.transparent,
+                          borderRadius: BorderRadius.circular(10),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(10),
+                            onTap: onDeleteMeeting,
+                            child: Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: AppTheme.accentRedLight.withValues(alpha: 0.6),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(
+                                Icons.delete_outline,
+                                color: AppTheme.accentRed,
+                                size: 18,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
-                  const SizedBox(height: 6),
+                  if (meeting.description != null && meeting.description!.trim().isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppTheme.surfaceMuted.withValues(alpha: 0.6),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        meeting.description!,
+                        style: GoogleFonts.cairo(
+                          fontSize: 12,
+                          color: AppTheme.textLight,
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Text(
+                        'خدام الاجتماع',
+                        style: GoogleFonts.cairo(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          color: AppTheme.textDark,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: totalServants > 0 ? AppTheme.primaryLight : AppTheme.accentRedLight,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          '$totalServants',
+                          style: GoogleFonts.cairo(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.bold,
+                            color: totalServants > 0 ? AppTheme.primary : AppTheme.accentRed,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
                   if (aggregatedAssignments.isEmpty && meetingPending.isEmpty)
-                    Text(
-                      'لا يوجد خدام أو دعوات معلقة بعد.',
-                      style: GoogleFonts.cairo(
-                        fontSize: 11,
-                        color: AppTheme.accentRed,
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: AppTheme.accentRedLight.withValues(alpha: 0.4),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: AppTheme.accentRed.withValues(alpha: 0.2),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.info_outline_rounded,
+                            size: 16,
+                            color: AppTheme.accentRed,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'لا يوجد خدام أو دعوات معلقة بعد.',
+                            style: GoogleFonts.cairo(
+                              fontSize: 11.5,
+                              color: AppTheme.accentRed,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
                       ),
                     )
                   else
                     Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
+                      spacing: 8,
+                      runSpacing: 8,
                       children: [
                         ...aggregatedAssignments.map((assign) {
                           final profile =
@@ -193,55 +299,72 @@ class GroupedMeetingClassesCard extends StatelessWidget {
                         ),
                       ],
                     ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-              child: Column(
-                children: [
-                  if (isAdmin)
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed: onAddClass,
-                        icon: const Icon(Icons.add_rounded, size: 16),
-                        label: Text(
-                          'إضافة فصل',
-                          style: GoogleFonts.cairo(fontWeight: FontWeight.w800),
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AppTheme.primary,
-                          side: const BorderSide(color: AppTheme.primary),
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'قائمة الفصول الدراسية',
+                        style: GoogleFonts.cairo(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w900,
+                          color: AppTheme.textDark,
                         ),
                       ),
-                    ),
+                      if (isAdmin)
+                        TextButton.icon(
+                          onPressed: onAddClass,
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          icon: const Icon(Icons.add_circle_outline_rounded, size: 16, color: AppTheme.primary),
+                          label: Text(
+                            'إضافة فصل',
+                            style: GoogleFonts.cairo(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 12,
+                              color: AppTheme.primary,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
                   if (classes.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 10),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: AppTheme.surfaceMuted.withValues(alpha: 0.5),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: AppTheme.border.withValues(alpha: 0.6),
+                        ),
+                      ),
                       child: Text(
                         'لا توجد فصول داخل هذا الاجتماع حالياً.',
+                        textAlign: TextAlign.center,
                         style: GoogleFonts.cairo(
-                          fontSize: 11.5,
+                          fontSize: 12,
                           color: AppTheme.textLight,
                         ),
                       ),
                     )
-                  else ...[
-                    if (isAdmin) const SizedBox(height: 10),
-                    ...classes.map(
-                      (cls) => ClassCard(
-                        cls: cls,
-                        isAdmin: isAdmin,
-                        assignments: classAssignmentsById[cls.id] ?? [],
-                        pendingInvitations: pendingInvitations,
-                      ),
+                  else
+                    Column(
+                      children: classes
+                          .map(
+                            (cls) => ClassCard(
+                              cls: cls,
+                              isAdmin: isAdmin,
+                              assignments: classAssignmentsById[cls.id] ?? [],
+                              pendingInvitations: pendingInvitations,
+                            ),
+                          )
+                          .toList(),
                     ),
-                  ],
                 ],
               ),
             ),
@@ -277,100 +400,149 @@ class _ClassCardState extends State<ClassCard> {
   Widget build(BuildContext context) {
     final classPending =
         pendingInvitesForClass(widget.pendingInvitations, widget.cls.id);
+    final totalServants = widget.assignments.length + classPending.length;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeInOut,
+      margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
-        color: AppTheme.surfaceMuted.withValues(alpha: 0.55),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.border.withValues(alpha: 0.65)),
+        color: _expanded ? Colors.white : AppTheme.surfaceMuted.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: _expanded
+              ? AppTheme.primary.withValues(alpha: 0.3)
+              : AppTheme.border.withValues(alpha: 0.7),
+        ),
+        boxShadow: _expanded ? AppTheme.cardShadow : null,
       ),
       child: Column(
         children: [
           Material(
             color: Colors.transparent,
             child: InkWell(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(16),
               onTap: () => setState(() => _expanded = !_expanded),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                padding: const EdgeInsets.all(12),
                 child: Row(
                   children: [
                     Container(
-                      width: 34,
-                      height: 34,
+                      width: 38,
+                      height: 38,
                       decoration: BoxDecoration(
-                        color: AppTheme.primaryLight,
-                        borderRadius: BorderRadius.circular(10),
+                        color: _expanded ? AppTheme.primary : AppTheme.primaryLight,
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      child: const Icon(
-                        Icons.groups_rounded,
-                        color: AppTheme.primary,
-                        size: 18,
+                      child: Icon(
+                        Icons.meeting_room_rounded,
+                        color: _expanded ? Colors.white : AppTheme.primary,
+                        size: 20,
                       ),
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            widget.cls.nameAr.trim().isNotEmpty
-                                ? widget.cls.nameAr
-                                : widget.cls.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.cairo(
-                              fontWeight: FontWeight.w900,
-                              fontSize: 13.5,
-                              color: AppTheme.textDark,
-                            ),
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  widget.cls.nameAr.trim().isNotEmpty
+                                      ? widget.cls.nameAr
+                                      : widget.cls.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: GoogleFonts.cairo(
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 14,
+                                    color: AppTheme.textDark,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 7,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.surfaceMuted,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  '$totalServants خادم',
+                                  style: GoogleFonts.cairo(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppTheme.textLight,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                           if (classPending.isNotEmpty) ...[
                             const SizedBox(height: 4),
-                            Text(
-                              '${classPending.length} دعوة بانتظار التفعيل',
-                              style: GoogleFonts.cairo(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w700,
-                                color: AppTheme.accentOrange,
-                              ),
+                            Row(
+                              children: [
+                                const Icon(
+                                  Icons.hourglass_top_rounded,
+                                  size: 12,
+                                  color: AppTheme.accentOrange,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${classPending.length} دعوة بانتظار التفعيل',
+                                  style: GoogleFonts.cairo(
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppTheme.accentOrange,
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ],
                       ),
                     ),
                     if (widget.isAdmin) ...[
-                      IconButton(
-                        visualDensity: VisualDensity.compact,
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                        icon: const Icon(
-                          Icons.edit_outlined,
-                          color: AppTheme.primary,
-                          size: 18,
+                      Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(8),
+                          onTap: () => _showEditClassDialog(context),
+                          child: const Padding(
+                            padding: EdgeInsets.all(6),
+                            child: Icon(
+                              Icons.edit_outlined,
+                              color: AppTheme.primary,
+                              size: 18,
+                            ),
+                          ),
                         ),
-                        onPressed: () => _showEditClassDialog(context),
                       ),
-                      const SizedBox(width: 6),
-                      IconButton(
-                        visualDensity: VisualDensity.compact,
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                        icon: const Icon(
-                          Icons.delete_outline,
-                          color: AppTheme.accentRed,
-                          size: 18,
+                      Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(8),
+                          onTap: () => _confirmDeleteClass(context),
+                          child: const Padding(
+                            padding: EdgeInsets.all(6),
+                            child: Icon(
+                              Icons.delete_outline,
+                              color: AppTheme.accentRed,
+                              size: 18,
+                            ),
+                          ),
                         ),
-                        onPressed: () => _confirmDeleteClass(context),
                       ),
-                      const SizedBox(width: 4),
                     ],
                     Icon(
                       _expanded
                           ? Icons.keyboard_arrow_up_rounded
                           : Icons.keyboard_arrow_down_rounded,
-                      color: AppTheme.textLight,
+                      color: _expanded ? AppTheme.primary : AppTheme.textLight,
                     ),
                   ],
                 ),
@@ -379,31 +551,42 @@ class _ClassCardState extends State<ClassCard> {
           ),
           if (_expanded)
             Padding(
-              padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  const Divider(height: 1, color: AppTheme.border),
+                  const SizedBox(height: 10),
                   Text(
-                    'خدام الفصل',
+                    'خدام الفصل المعينين',
                     style: GoogleFonts.cairo(
-                      fontSize: 11,
+                      fontSize: 11.5,
                       fontWeight: FontWeight.w800,
                       color: AppTheme.textLight,
                     ),
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 8),
                   if (widget.assignments.isEmpty && classPending.isEmpty)
-                    Text(
-                      'لا يوجد خدام معينون بعد.',
-                      style: GoogleFonts.cairo(
-                        fontSize: 11,
-                        color: AppTheme.accentRed,
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+                      decoration: BoxDecoration(
+                        color: AppTheme.accentRedLight.withValues(alpha: 0.3),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        'لا يوجد خدام معينون بعد.',
+                        style: GoogleFonts.cairo(
+                          fontSize: 11,
+                          color: AppTheme.accentRed,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     )
                   else
                     Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
+                      spacing: 8,
+                      runSpacing: 8,
                       children: [
                         ...widget.assignments.map((assign) {
                           final profile =
@@ -424,23 +607,29 @@ class _ClassCardState extends State<ClassCard> {
                       ],
                     ),
                   if (widget.isAdmin) ...[
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 12),
                     SizedBox(
                       width: double.infinity,
                       child: OutlinedButton.icon(
                         onPressed: () => showAssignLeaderDialog(context, widget.cls),
                         icon: const Icon(Icons.person_add_alt_1_rounded, size: 16),
                         label: Text(
-                          'تعيين خادم',
-                          style: GoogleFonts.cairo(fontWeight: FontWeight.w800),
+                          'تعيين خادم للفصل',
+                          style: GoogleFonts.cairo(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 12.5,
+                          ),
                         ),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: AppTheme.primary,
-                          side: const BorderSide(color: AppTheme.primary),
-                          padding: const EdgeInsets.symmetric(vertical: 9),
+                          side: BorderSide(
+                            color: AppTheme.primary.withValues(alpha: 0.5),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
+                          backgroundColor: AppTheme.primaryLight.withValues(alpha: 0.2),
                         ),
                       ),
                     ),
@@ -578,23 +767,23 @@ class _MeetingMetaTag extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
       decoration: BoxDecoration(
         color: backgroundColor,
-        borderRadius: BorderRadius.circular(9),
-        border: Border.all(color: color.withValues(alpha: 0.14)),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.18)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 12, color: color),
-          const SizedBox(width: 4),
+          Icon(icon, size: 12.5, color: color),
+          const SizedBox(width: 4.5),
           Flexible(
             child: Text(
               label,
               overflow: TextOverflow.ellipsis,
               style: GoogleFonts.cairo(
-                fontSize: 10,
+                fontSize: 10.5,
                 fontWeight: FontWeight.w700,
                 color: color,
               ),
@@ -617,45 +806,71 @@ class _MeetingPersonTag extends StatelessWidget {
     this.isPending = false,
   });
 
+  String _getInitials(String fullName) {
+    final parts = fullName.trim().split(' ');
+    if (parts.length >= 2 && parts[1].isNotEmpty) {
+      return '${parts[0][0]}${parts[1][0]}';
+    }
+    return fullName.isNotEmpty ? fullName[0] : '?';
+  }
+
   @override
   Widget build(BuildContext context) {
+    final initials = _getInitials(name);
+    final tagColor = isPending ? AppTheme.accentOrange : AppTheme.primary;
+    final tagBg = isPending
+        ? AppTheme.accentOrangeLight
+        : AppTheme.primaryLight.withValues(alpha: 0.6);
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
-        color: isPending
-            ? AppTheme.accentOrange.withValues(alpha: 0.08)
-            : Colors.white,
-        borderRadius: BorderRadius.circular(9),
+        color: tagBg,
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: isPending
-              ? AppTheme.accentOrange.withValues(alpha: 0.35)
-              : AppTheme.border.withValues(alpha: 0.7),
+          color: tagColor.withValues(alpha: isPending ? 0.4 : 0.2),
         ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            isPending
-                ? Icons.hourglass_top_rounded
-                : Icons.person_outline_rounded,
-            size: 13,
-            color: isPending ? AppTheme.accentOrange : AppTheme.primary,
+          CircleAvatar(
+            radius: 10,
+            backgroundColor: tagColor,
+            child: Text(
+              initials,
+              style: GoogleFonts.cairo(
+                fontSize: 8.5,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+              ),
+            ),
           ),
-          const SizedBox(width: 4),
+          const SizedBox(width: 6),
           Text(
             isPending ? '$name (بانتظار التفعيل)' : name,
             style: GoogleFonts.cairo(
-              fontSize: 10,
+              fontSize: 11,
               fontWeight: FontWeight.w700,
               color: AppTheme.textDark,
             ),
           ),
           if (onRemove != null) ...[
-            const SizedBox(width: 4),
+            const SizedBox(width: 6),
             GestureDetector(
               onTap: onRemove,
-              child: const Icon(Icons.close_rounded, size: 14, color: AppTheme.textLight),
+              child: Container(
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.06),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.close_rounded,
+                  size: 12,
+                  color: AppTheme.textLight,
+                ),
+              ),
             ),
           ],
         ],
@@ -663,3 +878,4 @@ class _MeetingPersonTag extends StatelessWidget {
     );
   }
 }
+

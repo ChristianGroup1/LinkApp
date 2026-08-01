@@ -251,13 +251,11 @@ class AppActionTile extends StatelessWidget {
 class AppWelcomeHeader extends StatelessWidget {
   final String greeting;
   final String subtitle;
-  final IconData icon;
 
   const AppWelcomeHeader({
     super.key,
     required this.greeting,
     required this.subtitle,
-    this.icon = Icons.church,
   });
 
   @override
@@ -276,7 +274,34 @@ class AppWelcomeHeader extends StatelessWidget {
         ],
       ),
       child: Row(
+        textDirection: TextDirection.rtl,
         children: [
+          Container(
+            width: 74,
+            height: 74,
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.72),
+                width: 1.5,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.12),
+                  blurRadius: 12,
+                  offset: const Offset(0, 5),
+                ),
+              ],
+            ),
+            child: Image.asset(
+              'assets/images/link_logo.png',
+              fit: BoxFit.contain,
+              semanticLabel: 'شعار لينك',
+            ),
+          ),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -301,14 +326,6 @@ class AppWelcomeHeader extends StatelessWidget {
                 ),
               ],
             ),
-          ),
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Icon(icon, color: Colors.white, size: 28),
           ),
         ],
       ),

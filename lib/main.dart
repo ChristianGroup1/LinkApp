@@ -4,7 +4,6 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
 import 'core/navigation/app_route_observer.dart';
 import 'core/invitations/invitation_deep_link_listener.dart';
@@ -15,6 +14,7 @@ import 'data/repositories/database_repository.dart';
 import 'logic/auth/auth_bloc.dart';
 import 'presentation/screens/login_screen.dart';
 import 'presentation/screens/main_navigation_wrapper.dart';
+import 'presentation/widgets/auth_widgets.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -103,7 +103,7 @@ class SupabaseConfigurationErrorApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'LINK Church Management',
+      title: 'Link Church Management',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       builder: _compactTextBuilder,
@@ -139,7 +139,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       navigatorKey: navigatorKey,
       navigatorObservers: [appRouteObserver],
-      title: 'LINK Church Management',
+      title: 'Link Church Management',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       localizationsDelegates: const [
@@ -266,57 +266,219 @@ class AuthenticationGate extends StatelessWidget {
           return const LoginScreen();
         }
 
-        // Splash / loader for in-progress auth operations
-        return Directionality(
-          textDirection: TextDirection.rtl,
-          child: Scaffold(
-            body: Container(
-              width: double.infinity,
-              height: double.infinity,
-              decoration:
-                  const BoxDecoration(gradient: AppTheme.primaryGradient),
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(24),
-                      ),
-                      child: const Icon(
-                        Icons.church_rounded,
-                        size: 64,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(height: 28),
-                    Text(
-                      'LINK',
-                      style: GoogleFonts.outfit(
-                        color: Colors.white,
-                        fontSize: 28,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 4,
-                      ),
-                    ),
-                    const SizedBox(height: 32),
-                    const SizedBox(
-                      width: 28,
-                      height: 28,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.5,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                      ),
-                    ),
-                  ],
+        return const _BrandedAuthLoader();
+      },
+    );
+  }
+}
+
+class _BrandedAuthLoader extends StatefulWidget {
+  const _BrandedAuthLoader();
+
+  @override
+  State<_BrandedAuthLoader> createState() => _BrandedAuthLoaderState();
+}
+
+class _BrandedAuthLoaderState extends State<_BrandedAuthLoader>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _logoScale;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2400),
+    )..repeat();
+    _logoScale = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween(
+          begin: 0.97,
+          end: 1.03,
+        ).chain(CurveTween(curve: Curves.easeInOut)),
+        weight: 50,
+      ),
+      TweenSequenceItem(
+        tween: Tween(
+          begin: 1.03,
+          end: 0.97,
+        ).chain(CurveTween(curve: Curves.easeInOut)),
+        weight: 50,
+      ),
+    ]).animate(_controller);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        body: Container(
+          width: double.infinity,
+          height: double.infinity,
+          decoration: const BoxDecoration(gradient: AppTheme.primaryGradient),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Positioned(
+                top: -130,
+                right: -100,
+                child: AuthGlow(
+                  size: 360,
+                  color: Colors.white.withValues(alpha: 0.2),
                 ),
               ),
-            ),
+              Positioned(
+                bottom: -150,
+                left: -110,
+                child: AuthGlow(
+                  size: 380,
+                  color: AppTheme.secondary.withValues(alpha: 0.32),
+                ),
+              ),
+              SafeArea(
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 28),
+                    child: Semantics(
+                      label: 'جاري تحميل التطبيق',
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(
+                            width: 240,
+                            height: 240,
+                            child: Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                RotationTransition(
+                                  turns: _controller,
+                                  child: Stack(
+                                    children: [
+                                      Positioned.fill(
+                                        child: DecoratedBox(
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            border: Border.all(
+                                              color: Colors.white.withValues(
+                                                alpha: 0.16,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      const Positioned(
+                                        top: 0,
+                                        left: 113,
+                                        child: _LoadingDot(
+                                          size: 14,
+                                          color: AppTheme.accentOrange,
+                                        ),
+                                      ),
+                                      const Positioned(
+                                        right: 17,
+                                        bottom: 38,
+                                        child: _LoadingDot(
+                                          size: 11,
+                                          color: AppTheme.secondary,
+                                        ),
+                                      ),
+                                      Positioned(
+                                        left: 24,
+                                        bottom: 46,
+                                        child: _LoadingDot(
+                                          size: 8,
+                                          color: Colors.white.withValues(
+                                            alpha: 0.8,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                ScaleTransition(
+                                  scale: _logoScale,
+                                  child: const AuthLogoMark(size: 180),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 28),
+                          Text(
+                            'لحظات ونجهز لك كل شيء',
+                            textAlign: TextAlign.center,
+                            style: AppTheme.cairo(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                              height: 1.4,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'جاري تحميل بيانات الخدمة بأمان',
+                            textAlign: TextAlign.center,
+                            style: AppTheme.cairo(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.white.withValues(alpha: 0.72),
+                              height: 1.5,
+                            ),
+                          ),
+                          const SizedBox(height: 26),
+                          SizedBox(
+                            width: 150,
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: LinearProgressIndicator(
+                                minHeight: 4,
+                                backgroundColor: Colors.white.withValues(
+                                  alpha: 0.16,
+                                ),
+                                valueColor: const AlwaysStoppedAnimation<Color>(
+                                  Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
-        );
-      },
+        ),
+      ),
+    );
+  }
+}
+
+class _LoadingDot extends StatelessWidget {
+  final double size;
+  final Color color;
+
+  const _LoadingDot({required this.size, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(color: color.withValues(alpha: 0.45), blurRadius: 10),
+        ],
+      ),
+      child: SizedBox.square(dimension: size),
     );
   }
 }

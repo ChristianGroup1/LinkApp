@@ -31,7 +31,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             const AuthLogoMark(size: 96),
             const SizedBox(height: 18),
             Text(
-              'LINK',
+              'Link',
               style: GoogleFonts.outfit(
                 color: AppTheme.primary,
                 fontSize: 20,

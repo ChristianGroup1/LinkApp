@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/notifications/meeting_reminder_service.dart';
 import '../../data/repositories/database_repository.dart';
 import '../../features/church/logic/church_bloc.dart';
 import '../../features/church/presentation/dashboard_screen.dart';
@@ -14,6 +15,7 @@ import '../../data/offline/connectivity_service.dart';
 import '../../shared/ui/bubble_bottom_nav.dart';
 import '../../shared/ui/offline_banner.dart';
 import '../../shared/ui/tab_navigator.dart';
+import '../../shared/data/app_data_changes.dart';
 
 class MainNavigationWrapper extends StatefulWidget {
   const MainNavigationWrapper({super.key});
@@ -31,6 +33,9 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
   bool _blocsInitialized = false;
   bool _offlineListenersAttached = false;
   bool _hasPendingSync = false;
+  StreamSubscription<AppDataChange>? _dataChangeSubscription;
+  Timer? _dataChangeDebounce;
+  final Set<AppDataArea> _pendingDataAreas = {};
 
   static const _navItems = [
     BubbleNavItem(
@@ -60,6 +65,28 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _appLifecycleObserver = AppLifecycleListener(
+      onResume: () {
+        if (mounted) {
+          if (_blocsInitialized) {
+            _homeBloc.add(LoadHomeData());
+            _churchBloc.add(LoadChurchContext());
+          }
+          unawaited(
+            MeetingReminderService.instance.syncForCurrentUser(
+              context.read<DatabaseRepository>(),
+            ),
+          );
+        }
+      },
+    );
+  }
+
+  late final AppLifecycleListener _appLifecycleObserver;
+
+  @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (!_blocsInitialized) {
@@ -67,7 +94,11 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
       final dbRepo = context.read<DatabaseRepository>();
       _churchBloc = ChurchBloc(repository: dbRepo)..add(LoadChurchContext());
       _homeBloc = HomeBloc(repository: dbRepo)..add(LoadHomeData());
+      _dataChangeSubscription = AppDataChanges.instance.stream.listen(
+        _onAppDataChanged,
+      );
       _ensureTabBuilt(0);
+      unawaited(MeetingReminderService.instance.syncForCurrentUser(dbRepo));
     }
 
     if (!_offlineListenersAttached) {
@@ -79,7 +110,9 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
   }
 
   Future<void> _loadPendingSyncState() async {
-    final pending = await context.read<DatabaseRepository>().hasPendingOfflineData();
+    final pending = await context
+        .read<DatabaseRepository>()
+        .hasPendingOfflineData();
     if (mounted) {
       setState(() => _hasPendingSync = pending);
     }
@@ -89,9 +122,87 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
     unawaited(_loadPendingSyncState());
   }
 
+  void _onAppDataChanged(AppDataChange change) {
+    _pendingDataAreas.addAll(change.areas);
+    _dataChangeDebounce?.cancel();
+    _dataChangeDebounce = Timer(const Duration(milliseconds: 120), () {
+      if (!mounted) return;
+      final areas = Set<AppDataArea>.of(_pendingDataAreas);
+      _pendingDataAreas.clear();
+      unawaited(_loadPendingSyncState());
+
+      const homeAreas = {
+        AppDataArea.profile,
+        AppDataArea.church,
+        AppDataArea.meetings,
+        AppDataArea.classes,
+        AppDataArea.members,
+        AppDataArea.assignments,
+        AppDataArea.attendance,
+      };
+      const churchAreas = {
+        AppDataArea.profile,
+        AppDataArea.church,
+        AppDataArea.assignments,
+        AppDataArea.invitations,
+      };
+
+      if (areas.any(homeAreas.contains)) _homeBloc.add(LoadHomeData());
+      if (areas.any(churchAreas.contains)) {
+        _churchBloc.add(LoadChurchContext());
+      }
+
+      setState(() {
+        for (final index in _tabsAffectedBy(areas)) {
+          if (index == _currentIndex) continue;
+          _refreshTokens[index]++;
+          _tabBodies[index] = null;
+        }
+      });
+    });
+  }
+
+  Set<int> _tabsAffectedBy(Set<AppDataArea> areas) {
+    final tabs = <int>{};
+    if (areas.any(
+      {
+        AppDataArea.meetings,
+        AppDataArea.classes,
+        AppDataArea.members,
+        AppDataArea.assignments,
+        AppDataArea.attendance,
+      }.contains,
+    )) {
+      tabs.add(1);
+    }
+    if (areas.any(
+      {AppDataArea.meetings, AppDataArea.classes, AppDataArea.members}.contains,
+    )) {
+      tabs.add(2);
+    }
+    if (areas.any(
+      {
+        AppDataArea.profile,
+        AppDataArea.church,
+        AppDataArea.meetings,
+        AppDataArea.classes,
+        AppDataArea.assignments,
+        AppDataArea.invitations,
+      }.contains,
+    )) {
+      tabs.add(3);
+    }
+    return tabs;
+  }
+
   @override
   void dispose() {
-    ConnectivityService.instance.isOnline.removeListener(_onConnectivityChanged);
+    _appLifecycleObserver.dispose();
+    _dataChangeDebounce?.cancel();
+    _dataChangeSubscription?.cancel();
+    ConnectivityService.instance.isOnline.removeListener(
+      _onConnectivityChanged,
+    );
     _homeBloc.close();
     _churchBloc.close();
     super.dispose();
@@ -107,7 +218,7 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
       _currentIndex = index;
       _ensureTabBuilt(index);
     });
-    if (index == 0 && sameTab) {
+    if (index == 0) {
       _homeBloc.add(LoadHomeData());
       _churchBloc.add(LoadChurchContext());
     }

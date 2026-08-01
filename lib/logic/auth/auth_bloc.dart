@@ -126,14 +126,20 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final DatabaseRepository repository;
 
   AuthBloc({required this.repository}) : super(AuthInitial()) {
-    on<AuthCheckRequested>(
-      (event, emit) async {
+    on<AuthCheckRequested>((event, emit) async {
       emit(AuthLoading());
       try {
         final profile = await repository.getCurrentProfile();
         if (profile != null) {
-          unawaited(repository.warmOfflineCache());
-          emit(AuthAuthenticated(profile));
+          if (!profile.isActive) {
+            await repository.signOut();
+            emit(
+              AuthError('تم إيقاف حسابك. راجع مسؤول الكنيسة لإعادة تفعيله.'),
+            );
+          } else {
+            unawaited(repository.warmOfflineCache());
+            emit(AuthAuthenticated(profile));
+          }
         } else if (repository.hasActiveSession()) {
           emit(
             AuthProfileLoadFailed(
@@ -154,9 +160,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           emit(AuthUnauthenticated());
         }
       }
-    },
-      transformer: restartable(),
-    );
+    }, transformer: restartable());
 
     on<LoginRequested>((event, emit) async {
       emit(AuthLoading());
@@ -255,11 +259,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         await repository.updatePassword(event.password);
         emit(AuthPasswordUpdated());
       } catch (e) {
-        emit(
-          AuthPasswordResetError(
-            'تعذر تحديث كلمة المرور. حاول مرة أخرى.',
-          ),
-        );
+        emit(AuthPasswordResetError('تعذر تحديث كلمة المرور. حاول مرة أخرى.'));
       }
     });
 

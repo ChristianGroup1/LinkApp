@@ -1,5 +1,5 @@
 -- ============================================================
--- LINK: Invitation links (accept / decline via deep link)
+-- Link: Invitation links (accept / decline via deep link)
 -- Run in Supabase SQL Editor on existing projects.
 -- ============================================================
 

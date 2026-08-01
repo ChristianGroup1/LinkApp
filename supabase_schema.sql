@@ -1,5 +1,5 @@
 -- ============================================================
--- LINK Church Attendance Management - Complete Supabase Setup
+-- Link Church Attendance Management - Complete Supabase Setup
 -- ============================================================
 -- Run this ENTIRE script in your Supabase SQL Editor to set up
 -- (or reset) the database from scratch.
@@ -99,6 +99,8 @@ create table public.meetings (
   name_ar text not null,
   kind public.meeting_kind not null default 'normal',
   weekday integer not null default 7 check (weekday between 1 and 7),
+  attendance_reminder_minutes integer
+    check (attendance_reminder_minutes between 0 and 1439),
   description text,
   is_active boolean not null default true,
   created_by uuid references auth.users(id),
@@ -290,7 +292,10 @@ security definer
 set search_path = public
 stable
 as $$
-  select church_id from public.profiles where id = auth.uid();
+  select church_id
+  from public.profiles
+  where id = auth.uid()
+    and is_active;
 $$;
 
 create or replace function public.is_church_admin(target_church_id uuid)
@@ -714,7 +719,10 @@ with check (public.is_church_admin(id));
 
 -- 8.2 Profiles
 create policy "profiles_select_same_church" on public.profiles
-for select using (church_id = public.current_church_id());
+for select using (
+  id = auth.uid()
+  or church_id = public.current_church_id()
+);
 create policy "profiles_admin_update" on public.profiles
 for update to authenticated
 using (public.is_church_admin(church_id))
@@ -1179,9 +1187,9 @@ security definer
 set search_path = public
 as $$
 declare
-  target_church_id uuid;
+  target_profile public.profiles%rowtype;
 begin
-  select church_id into target_church_id
+  select * into target_profile
   from public.profiles
   where id = target_user_id;
 
@@ -1189,8 +1197,16 @@ begin
     raise exception 'المستخدم غير موجود';
   end if;
 
-  if not public.is_church_admin(target_church_id) then
+  if not public.is_church_admin(target_profile.church_id) then
     raise exception 'غير مصرح بتعديل حالة الحساب';
+  end if;
+
+  if target_user_id = auth.uid() and not new_is_active then
+    raise exception 'لا يمكنك إيقاف حسابك الحالي';
+  end if;
+
+  if target_profile.role = 'super_admin' and not new_is_active then
+    raise exception 'لا يمكن إيقاف حساب المدير الرئيسي';
   end if;
 
   update public.profiles

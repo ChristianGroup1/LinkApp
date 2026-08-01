@@ -1,4 +1,4 @@
-# LINK
+# Link
 
 Arabic RTL church management app (Flutter + Supabase + BLoC).
 

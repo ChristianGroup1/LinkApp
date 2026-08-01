@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'package:url_launcher/url_launcher.dart';
+
+import '../../../core/invitations/invitation_link.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/models.dart';
 import '../../../data/repositories/database_repository.dart';
@@ -23,8 +26,9 @@ class _ServantsPermissionsScreenState extends State<ServantsPermissionsScreen> {
   Object? _error;
   final TextEditingController _searchController = TextEditingController();
   String _query = '';
-  String _roleFilter = 'all';
+  String _roleFilter = 'active';
   bool _dataRequested = false;
+  String? _currentProfileId;
 
   @override
   void didChangeDependencies() {
@@ -66,6 +70,7 @@ class _ServantsPermissionsScreenState extends State<ServantsPermissionsScreen> {
         repo.getMeetings(),
         repo.getAllSundaySchoolClasses(),
         repo.getInvitations(),
+        repo.getCurrentProfile(),
       ]);
       final baseData = ServantsPermissionsData(
         servants: results[0] as List<AppProfile>,
@@ -76,6 +81,7 @@ class _ServantsPermissionsScreenState extends State<ServantsPermissionsScreen> {
 
       if (!mounted) return;
       setState(() {
+        _currentProfileId = (results[4] as AppProfile?)?.id;
         _data = baseData;
         _isLoading = false;
         _isLoadingAssignments = true;
@@ -90,10 +96,8 @@ class _ServantsPermissionsScreenState extends State<ServantsPermissionsScreen> {
             repo.getUserClassAssignments(servant.id),
             repo.getUserMeetingAssignments(servant.id),
           ]);
-          classAssignmentsByUserId[servant.id] =
-              assignmentResults[0] as List<Map<String, dynamic>>;
-          meetingAssignmentsByUserId[servant.id] =
-              assignmentResults[1] as List<Map<String, dynamic>>;
+          classAssignmentsByUserId[servant.id] = assignmentResults[0];
+          meetingAssignmentsByUserId[servant.id] = assignmentResults[1];
         }),
       );
 
@@ -127,7 +131,9 @@ class _ServantsPermissionsScreenState extends State<ServantsPermissionsScreen> {
   }
 
   List<AppProfile> _filterServants(List<AppProfile> servants) {
-    var filtered = [...servants];
+    var filtered = _roleFilter == 'inactive'
+        ? servants.where((servant) => !servant.isActive).toList()
+        : servants.where((servant) => servant.isActive).toList();
     if (_roleFilter == 'admin') {
       filtered = filtered.where(_isAdmin).toList();
     } else if (_roleFilter == 'servant') {
@@ -161,6 +167,77 @@ class _ServantsPermissionsScreenState extends State<ServantsPermissionsScreen> {
     } catch (e) {
       if (!mounted) return;
       _showSnack('فشل تحديث الدور: ${e.toString()}', isError: true);
+    }
+  }
+
+  Future<void> _confirmProfileStatusChange(AppProfile servant) async {
+    final willActivate = !servant.isActive;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          icon: Icon(
+            willActivate
+                ? Icons.person_add_alt_1_rounded
+                : Icons.person_off_outlined,
+            color: willActivate ? AppTheme.secondary : AppTheme.accentRed,
+            size: 44,
+          ),
+          title: Text(
+            willActivate ? 'إعادة تفعيل الخادم؟' : 'شطب الخادم؟',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.cairo(fontWeight: FontWeight.w900),
+          ),
+          content: Text(
+            willActivate
+                ? 'سيستعيد ${servant.fullName} الدخول والصلاحيات والمهام المسندة له.'
+                : 'سيُشطب ${servant.fullName} من قائمة الخدام النشطين ولن يستطيع الدخول. ستظل سجلاته محفوظة ويمكن استعادته من قسم الموقوفين.',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.cairo(height: 1.6),
+          ),
+          actionsAlignment: MainAxisAlignment.center,
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: Text('إلغاء', style: GoogleFonts.cairo()),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              style: FilledButton.styleFrom(
+                backgroundColor: willActivate
+                    ? AppTheme.secondary
+                    : AppTheme.accentRed,
+              ),
+              child: Text(
+                willActivate ? 'إعادة التفعيل' : 'شطب الخادم',
+                style: GoogleFonts.cairo(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+    try {
+      await context.read<DatabaseRepository>().updateProfileStatus(
+        servant.id,
+        willActivate,
+      );
+      if (!mounted) return;
+      await _refresh();
+      _showSnack(
+        willActivate
+            ? 'تمت إعادة تفعيل ${servant.fullName}'
+            : 'تم شطب ${servant.fullName} من الخدام النشطين',
+      );
+    } catch (error) {
+      if (!mounted) return;
+      _showSnack(error.toString().replaceAll('Exception: ', ''), isError: true);
     }
   }
 
@@ -333,11 +410,31 @@ class _ServantsPermissionsScreenState extends State<ServantsPermissionsScreen> {
       if (!mounted) return;
       _showSnack('تم إرسال الدعوة على ${invitation.email}');
     } catch (e) {
+      final email = invitation.email;
+      if (email != null && email.isNotEmpty) {
+        final link = invitation.inviteToken.isNotEmpty
+            ? buildInvitationLink(inviteToken: invitation.inviteToken)
+            : invitation.code;
+        final mailUri = Uri(
+          scheme: 'mailto',
+          path: email,
+          queryParameters: {
+            'subject': 'دعوة خادم جديدة - تطبيق LinkApp',
+            'body': 'سلام ونعمة يا ${invitation.fullName}،\n\n'
+                'ادعوك للانضمام لخدمتنا على تطبيق LinkApp.\n'
+                'رابط الدعوة الخاص بك:\n$link\n\n'
+                'كود التفعيل: ${invitation.code}',
+          },
+        );
+        if (await canLaunchUrl(mailUri)) {
+          await launchUrl(mailUri);
+          if (!mounted) return;
+          _showSnack('تم فتح تطبيق البريد لإرسال الدعوة لـ $email');
+          return;
+        }
+      }
       if (!mounted) return;
-      _showSnack(
-        e.toString().replaceAll('Exception: ', ''),
-        isError: true,
-      );
+      _showSnack(e.toString().replaceAll('Exception: ', ''), isError: true);
     }
   }
 
@@ -432,7 +529,9 @@ class _ServantsPermissionsScreenState extends State<ServantsPermissionsScreen> {
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
               child: ServantsHeroHeader(
-                totalServants: data.servants.length,
+                totalServants: data.servants
+                    .where((servant) => servant.isActive)
+                    .length,
                 pendingInvitations: data.pendingInvitations.length,
                 totalAssignments: data.totalAssignments,
                 onInvite: _openInvite,
@@ -460,16 +559,8 @@ class _ServantsPermissionsScreenState extends State<ServantsPermissionsScreen> {
               ),
             ),
           SliverToBoxAdapter(
-            child: Container(
-              margin: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: AppTheme.border.withValues(alpha: 0.75),
-                ),
-              ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
               child: Column(
                 children: [
                   ServantsSearchBox(
@@ -485,10 +576,10 @@ class _ServantsPermissionsScreenState extends State<ServantsPermissionsScreen> {
                     child: Row(
                       children: [
                         ServantsFilterChip(
-                          label: 'الكل',
+                          label: 'النشطون',
                           icon: Icons.groups_rounded,
-                          selected: _roleFilter == 'all',
-                          onTap: () => setState(() => _roleFilter = 'all'),
+                          selected: _roleFilter == 'active',
+                          onTap: () => setState(() => _roleFilter = 'active'),
                         ),
                         const SizedBox(width: 8),
                         ServantsFilterChip(
@@ -504,6 +595,13 @@ class _ServantsPermissionsScreenState extends State<ServantsPermissionsScreen> {
                           selected: _roleFilter == 'servant',
                           onTap: () => setState(() => _roleFilter = 'servant'),
                         ),
+                        const SizedBox(width: 8),
+                        ServantsFilterChip(
+                          label: 'الموقوفون',
+                          icon: Icons.person_off_outlined,
+                          selected: _roleFilter == 'inactive',
+                          onTap: () => setState(() => _roleFilter = 'inactive'),
+                        ),
                       ],
                     ),
                   ),
@@ -517,7 +615,8 @@ class _ServantsPermissionsScreenState extends State<ServantsPermissionsScreen> {
                 padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
                 child: ServantsSectionHeader(
                   title: 'دعوات معلقة',
-                  subtitle: 'روابط لم تُستخدم بعد — أعد إرسال البريد أو انسخ الرابط.',
+                  subtitle:
+                      'روابط لم تُستخدم بعد — أعد إرسال البريد أو انسخ الرابط.',
                   count: data.pendingInvitations.length,
                 ),
               ),
@@ -537,8 +636,12 @@ class _ServantsPermissionsScreenState extends State<ServantsPermissionsScreen> {
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
               child: ServantsSectionHeader(
-                title: 'الخدام المسجلون',
-                subtitle: 'كل خادم وصلاحياته ومهامه المسندة.',
+                title: _roleFilter == 'inactive'
+                    ? 'الخدام الموقوفون'
+                    : 'الخدام المسجلون',
+                subtitle: _roleFilter == 'inactive'
+                    ? 'يمكن إعادة تفعيل أي خادم تم شطبه سابقًا.'
+                    : 'كل خادم وصلاحياته ومهامه المسندة.',
                 count: servants.length,
               ),
             ),
@@ -554,20 +657,21 @@ class _ServantsPermissionsScreenState extends State<ServantsPermissionsScreen> {
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
               sliver: SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                    final servant = servants[index];
-                    return ServantPermissionCard(
-                      servant: servant,
-                      data: data,
-                      onRoleChanged: (role) => _updateRole(servant, role),
-                      onAddAssignment: () =>
-                          _showAddAssignmentDialog(servant, data),
-                      onRemoved: _refresh,
-                    );
-                  },
-                  childCount: servants.length,
-                ),
+                delegate: SliverChildBuilderDelegate((context, index) {
+                  final servant = servants[index];
+                  return ServantPermissionCard(
+                    servant: servant,
+                    data: data,
+                    onRoleChanged: (role) => _updateRole(servant, role),
+                    onAddAssignment: () =>
+                        _showAddAssignmentDialog(servant, data),
+                    canChangeStatus:
+                        servant.id != _currentProfileId &&
+                        servant.role != AppRole.superAdmin,
+                    onStatusChanged: () => _confirmProfileStatusChange(servant),
+                    onRemoved: _refresh,
+                  );
+                }, childCount: servants.length),
               ),
             ),
         ],

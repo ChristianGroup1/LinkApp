@@ -276,6 +276,145 @@ class OfflineCache {
     return _readEntities('$_profilesPrefix$churchId', AppProfile.fromJson);
   }
 
+  Future<void> upsertProfile(String churchId, AppProfile profile) async {
+    final profiles = await readProfiles(churchId) ?? [];
+    final index = profiles.indexWhere((item) => item.id == profile.id);
+    if (index >= 0) {
+      profiles[index] = profile;
+    } else {
+      profiles.add(profile);
+    }
+    await saveProfiles(churchId, profiles.map(profileToJson).toList());
+  }
+
+  Future<String> upsertClassAssignment({
+    required String churchId,
+    required String assignmentId,
+    required String classId,
+    required String userId,
+    required bool canTakeAttendance,
+    required bool canViewReports,
+  }) async {
+    final profiles = await readProfiles(churchId) ?? [];
+    final classes = await readClasses(churchId) ?? [];
+    final profile = profiles.where((item) => item.id == userId).firstOrNull;
+    final cls = classes.where((item) => item.id == classId).firstOrNull;
+
+    final byUser = await readClassAssignments(userId) ?? [];
+    final existingByUser = byUser.indexWhere(
+      (item) => item['class_id'] == classId,
+    );
+    final resolvedId = existingByUser >= 0
+        ? byUser[existingByUser]['id'] as String? ?? assignmentId
+        : assignmentId;
+    final userRow = <String, dynamic>{
+      'id': resolvedId,
+      'class_id': classId,
+      'can_take_attendance': canTakeAttendance,
+      'can_view_reports': canViewReports,
+      'sunday_school_classes': {'name_ar': cls?.nameAr},
+    };
+    if (existingByUser >= 0) {
+      byUser[existingByUser] = userRow;
+    } else {
+      byUser.add(userRow);
+    }
+    await saveClassAssignments(userId, byUser);
+
+    final byClass = await readClassAssignmentsForClass(classId) ?? [];
+    final existingByClass = byClass.indexWhere(
+      (item) => item['user_id'] == userId,
+    );
+    final classRow = <String, dynamic>{
+      'id': resolvedId,
+      'user_id': userId,
+      'can_take_attendance': canTakeAttendance,
+      'can_view_reports': canViewReports,
+      'profiles': {'full_name': profile?.fullName, 'email': profile?.email},
+    };
+    if (existingByClass >= 0) {
+      byClass[existingByClass] = classRow;
+    } else {
+      byClass.add(classRow);
+    }
+    await saveClassAssignmentsForClass(classId, byClass);
+    return resolvedId;
+  }
+
+  Future<String> upsertMeetingAssignment({
+    required String churchId,
+    required String assignmentId,
+    required String meetingId,
+    required String userId,
+    required bool canTakeAttendance,
+    required bool canViewReports,
+  }) async {
+    final profiles = await readProfiles(churchId) ?? [];
+    final meetings = await readMeetings(churchId) ?? [];
+    final profile = profiles.where((item) => item.id == userId).firstOrNull;
+    final meeting = meetings.where((item) => item.id == meetingId).firstOrNull;
+
+    final byUser = await readMeetingAssignments(userId) ?? [];
+    final existingByUser = byUser.indexWhere(
+      (item) => item['meeting_id'] == meetingId,
+    );
+    final resolvedId = existingByUser >= 0
+        ? byUser[existingByUser]['id'] as String? ?? assignmentId
+        : assignmentId;
+    final userRow = <String, dynamic>{
+      'id': resolvedId,
+      'meeting_id': meetingId,
+      'can_take_attendance': canTakeAttendance,
+      'can_view_reports': canViewReports,
+      'meetings': {'name_ar': meeting?.nameAr},
+    };
+    if (existingByUser >= 0) {
+      byUser[existingByUser] = userRow;
+    } else {
+      byUser.add(userRow);
+    }
+    await saveMeetingAssignments(userId, byUser);
+
+    final byMeeting = await readMeetingAssignmentsForMeeting(meetingId) ?? [];
+    final existingByMeeting = byMeeting.indexWhere(
+      (item) => item['user_id'] == userId,
+    );
+    final meetingRow = <String, dynamic>{
+      'id': resolvedId,
+      'user_id': userId,
+      'can_take_attendance': canTakeAttendance,
+      'can_view_reports': canViewReports,
+      'profiles': {'full_name': profile?.fullName, 'email': profile?.email},
+    };
+    if (existingByMeeting >= 0) {
+      byMeeting[existingByMeeting] = meetingRow;
+    } else {
+      byMeeting.add(meetingRow);
+    }
+    await saveMeetingAssignmentsForMeeting(meetingId, byMeeting);
+    return resolvedId;
+  }
+
+  Future<void> removeAssignmentEverywhere(
+    String assignmentId, {
+    required bool isClassAssignment,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    final prefixes = isClassAssignment
+        ? [_classAssignmentsPrefix, _classAssignmentsByClassPrefix]
+        : [_meetingAssignmentsPrefix, _meetingAssignmentsByMeetingPrefix];
+    final keys = prefs
+        .getKeys()
+        .where((key) => prefixes.any(key.startsWith))
+        .toList();
+    for (final key in keys) {
+      final rows = await _readList(key);
+      if (rows == null) continue;
+      rows.removeWhere((row) => (row as Map)['id']?.toString() == assignmentId);
+      await _writeList(key, rows);
+    }
+  }
+
   Future<void> saveInvitations(String churchId, List<dynamic> rows) async {
     await _writeList('$_invitationsPrefix$churchId', rows);
   }

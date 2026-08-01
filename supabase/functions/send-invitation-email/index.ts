@@ -54,73 +54,69 @@ function buildArabicEmailHtml(params: {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>دعوة للانضمام إلى LINK</title>
+  <title>دعوة خادم جديدة - لينك</title>
 </head>
-<body style="margin:0;padding:0;background:#f4f7fb;font-family:Tahoma,Arial,sans-serif;direction:rtl;text-align:right;">
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f4f7fb;padding:24px 12px;">
+<body style="margin:0;padding:0;background-color:#f4f7fb;font-family:system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;direction:rtl;text-align:right;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#f4f7fb;padding:32px 16px;">
     <tr>
       <td align="center">
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background:#ffffff;border-radius:18px;overflow:hidden;border:1px solid #e6ebf2;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:540px;background-color:#ffffff;border-radius:24px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,0.05);border:1px solid #e8edf5;">
+          
+          <!-- Header Banner with Logo -->
           <tr>
-            <td style="padding:28px 24px 12px;text-align:center;background:linear-gradient(180deg,#f8fbff 0%,#ffffff 100%);">
-              <img src="${logoUrl}" alt="LINK" width="88" height="88" style="display:block;margin:0 auto 14px;border-radius:20px;" />
-              <div style="font-size:24px;font-weight:800;color:#1f3b68;letter-spacing:1px;">LINK</div>
-              <div style="font-size:13px;color:#6b7c93;margin-top:4px;">نظام إدارة الكنيسة</div>
+            <td style="padding:36px 28px 24px;text-align:center;background:linear-gradient(135deg,#4338ca 0%,#312e81 100%);color:#ffffff;">
+              <img src="https://zowxjinnpqcldhtyjjmd.supabase.co/storage/v1/object/public/app-assets/link_logo.png" 
+                   alt="LinkApp Logo" 
+                   width="72" 
+                   height="72" 
+                   style="display:block;margin:0 auto 16px;border-radius:20px;box-shadow:0 6px 16px rgba(0,0,0,0.25);background:#ffffff;padding:4px;" />
+              <h1 style="margin:0;font-size:26px;font-weight:900;letter-spacing:-0.5px;color:#ffffff;">لينك</h1>
+              <p style="margin:6px 0 0;font-size:13px;color:rgba(255,255,255,0.85);">نظام خدمة وإدارة الاجتماعات</p>
             </td>
           </tr>
+
+          <!-- Body Content -->
           <tr>
-            <td style="padding:8px 24px 0;">
-              <h1 style="margin:0 0 10px;font-size:22px;color:#152238;">مرحباً ${servantName}</h1>
-              <p style="margin:0 0 14px;font-size:15px;line-height:1.8;color:#425466;">
-                تمت دعوتك للانضمام كخادم في <strong style="color:#1f3b68;">${churchName}</strong> عبر تطبيق LINK.
+            <td style="padding:32px 28px 20px;">
+              <h2 style="margin:0 0 12px;font-size:20px;font-weight:800;color:#1e293b;">مرحباً بك 🌸</h2>
+              <p style="margin:0 0 16px;font-size:15px;line-height:1.8;color:#475569;">
+                تمت دعوتك للانضمام كخادم في تطبيق <strong style="color:#4338ca;">لينك</strong> لمتابعة الخدمة والاجتماعات.
               </p>
-              <p style="margin:0 0 18px;font-size:14px;line-height:1.8;color:#5d6b7a;">
-                اضغط الزر أدناه لفتح التطبيق والرد على الدعوة (قبول أو رفض).
-              </p>
+              
+              <div style="background-color:#f8fafc;border-radius:16px;padding:20px;margin:20px 0;border:1px solid #e2e8f0;">
+                <p style="margin:0 0 8px;font-size:14px;font-weight:700;color:#334155;">💡 للبدء وتفعيل حسابك:</p>
+                <p style="margin:0;font-size:13px;line-height:1.7;color:#64748b;">
+                  اضغط على الزر أدناه لتأكيد قبول دعوتك وإنشاء كلمة المرور الخاصة بك للانضمام فوراً.
+                </p>
+              </div>
+
+              <!-- Action Button -->
+              <div style="text-align:center;margin:28px 0 16px;">
+                <a href="{{ .ConfirmationURL }}"
+                   style="display:inline-block;background-color:#4338ca;color:#ffffff;text-decoration:none;padding:16px 36px;border-radius:16px;font-size:16px;font-weight:800;box-shadow:0 4px 14px rgba(67,56,202,0.35);">
+                  قبول الدعوة وتفعيل الحساب 🚀
+                </a>
+              </div>
             </td>
           </tr>
+
+          <!-- Footer -->
           <tr>
-            <td style="padding:0 24px 18px;text-align:center;">
-              <a href="${inviteLink}"
-                 style="display:inline-block;background:#1f5fbf;color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:14px;font-size:16px;font-weight:800;">
-                فتح الدعوة في LINK
-              </a>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:0 24px 8px;">
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f8fafc;border-radius:12px;border:1px solid #e8edf4;">
-                <tr>
-                  <td style="padding:14px 16px;font-size:13px;line-height:1.8;color:#425466;">
-                    <div><strong>نطاق الخدمة:</strong> ${scope}</div>
-                    <div><strong>الصلاحيات:</strong> ${permissions}</div>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:18px 24px 8px;">
-              <ol style="margin:0;padding-right:18px;font-size:14px;line-height:1.9;color:#425466;">
-                <li>حمّل تطبيق LINK على هاتفك إن لم يكن مثبتاً.</li>
-                <li>اضغط زر <strong>فتح الدعوة في LINK</strong>.</li>
-                <li>راجع التفاصيل ثم اختر <strong>قبول</strong> أو <strong>رفض</strong>.</li>
-              </ol>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:8px 24px 26px;">
-              <p style="margin:0;font-size:12px;line-height:1.7;color:#8a97a8;">
-                إذا لم تكن تتوقع هذه الدعوة، يمكنك تجاهل الرسالة أو رفضها من داخل التطبيق.
+            <td style="padding:20px 28px 28px;background-color:#f8fafc;border-top:1px solid #f1f5f9;text-align:center;">
+              <p style="margin:0;font-size:12px;color:#94a3b8;line-height:1.6;">
+                إذا لم تكن تتوقع هذه الدعوة، يمكنك تجاهل هذا البريد.<br/>
+                تطبيق LinkApp — جميع الحقوق محفوظة.
               </p>
             </td>
           </tr>
+
         </table>
       </td>
     </tr>
   </table>
 </body>
-</html>`
+</html>
+`
 }
 
 Deno.serve(async (req) => {
@@ -130,16 +126,6 @@ Deno.serve(async (req) => {
 
   try {
     const resendApiKey = Deno.env.get('RESEND_API_KEY')
-    if (!resendApiKey) {
-      return new Response(
-        JSON.stringify({ error: 'RESEND_API_KEY is not configured' }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        },
-      )
-    }
-
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -232,8 +218,46 @@ Deno.serve(async (req) => {
       Deno.env.get('INVITE_EMAIL_LOGO_URL') ??
       `${supabaseUrl}/storage/v1/object/public/app-assets/link_logo.png`
     const fromAddress =
-      Deno.env.get('INVITE_EMAIL_FROM') ?? 'LINK <onboarding@resend.dev>'
+      Deno.env.get('INVITE_EMAIL_FROM') ?? 'Link <onboarding@resend.dev>'
     const inviteLink = `${supabaseUrl}/functions/v1/invite-redirect?t=${invite.invite_token}`
+
+    const isResendKey = !!resendApiKey && resendApiKey.trim().startsWith('re_')
+
+    if (!isResendKey) {
+      // Use native Supabase Auth inviteUserByEmail
+      const { error: nativeError } = await adminClient.auth.admin.inviteUserByEmail(
+        invite.email.trim(),
+        {
+          redirectTo: inviteLink,
+          data: {
+            full_name: invite.full_name,
+            church_name: churchName,
+            invitation_id: invite.id,
+          },
+        },
+      )
+
+      if (nativeError) {
+        return new Response(
+          JSON.stringify({
+            error: 'Failed to send invitation via Supabase Auth',
+            details: nativeError.message,
+          }),
+          {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          },
+        )
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, invite_link: inviteLink }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        },
+      )
+    }
 
     const html = buildArabicEmailHtml({
       churchName,
@@ -244,29 +268,52 @@ Deno.serve(async (req) => {
       logoUrl,
     })
 
-    const emailResponse = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${resendApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from: fromAddress,
-        to: [invite.email.trim()],
-        subject: `دعوة للانضمام إلى ${churchName} — LINK`,
-        html,
-      }),
-    })
+    try {
+      const emailResponse = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${resendApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: fromAddress,
+          to: [invite.email.trim()],
+          subject: `دعوة للانضمام إلى ${churchName} — Link`,
+          html,
+        }),
+      })
 
-    if (!emailResponse.ok) {
-      const details = await emailResponse.text()
+      if (emailResponse.ok) {
+        return new Response(JSON.stringify({ success: true, invite_link: inviteLink }), {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+    } catch {
+      // Ignore Resend fetch error and fallback to Supabase Auth
+    }
+
+    // Fallback to Supabase Auth inviteUserByEmail if Resend fails
+    const { error: nativeError } = await adminClient.auth.admin.inviteUserByEmail(
+      invite.email.trim(),
+      {
+        redirectTo: inviteLink,
+        data: {
+          full_name: invite.full_name,
+          church_name: churchName,
+          invitation_id: invite.id,
+        },
+      },
+    )
+
+    if (nativeError) {
       return new Response(
         JSON.stringify({
-          error: 'Failed to send email',
-          details,
+          error: 'Failed to send email via Resend & Supabase Auth',
+          details: nativeError.message,
         }),
         {
-          status: 502,
+          status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         },
       )

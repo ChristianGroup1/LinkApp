@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'package:url_launcher/url_launcher.dart';
+
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/models.dart';
 import '../../../data/repositories/database_repository.dart';
@@ -115,17 +117,13 @@ class _InviteServantScreenState extends State<InviteServantScreen> {
     }
 
     final email = _emailController.text.trim();
-    if (email.isEmpty) {
-      _showSnack('اكتب بريد الخادم لإرسال الدعوة بالإيميل', isError: true);
-      return;
-    }
 
     setState(() => _isGenerating = true);
     try {
       final repo = context.read<DatabaseRepository>();
       final result = await repo.createInvitation(
         fullName: _nameController.text.trim(),
-        email: email,
+        email: email.isEmpty ? 'no-email@linkapp.local' : email,
         phone: _phoneController.text.trim().isEmpty
             ? null
             : _phoneController.text.trim(),
@@ -137,22 +135,26 @@ class _InviteServantScreenState extends State<InviteServantScreen> {
       );
 
       var emailSent = false;
-      if (result.syncedToServer) {
+      if (email.isNotEmpty && result.syncedToServer) {
         try {
           await repo.sendInvitationEmail(result.data.invitationId);
           emailSent = true;
         } catch (error) {
-          if (!mounted) return;
-          setState(() {
-            _generatedInviteLink = result.data.inviteLink;
-            _emailSent = false;
-            _isGenerating = false;
-          });
-          _showSnack(
-            'تم إنشاء الدعوة لكن فشل إرسال البريد: $error',
-            isError: true,
+          final mailUri = Uri(
+            scheme: 'mailto',
+            path: email,
+            queryParameters: {
+              'subject': 'دعوة خادم جديدة - تطبيق LinkApp',
+              'body': 'سلام ونعمة يا ${_nameController.text.trim()}،\n\n'
+                  'ادعوك للانضمام لخدمتنا على تطبيق LinkApp.\n'
+                  'رابط الدعوة الخاص بك:\n${result.data.inviteLink}\n\n'
+                  'كود التفعيل: ${result.data.code}',
+            },
           );
-          return;
+          if (await canLaunchUrl(mailUri)) {
+            await launchUrl(mailUri);
+            emailSent = true;
+          }
         }
       }
 
@@ -164,16 +166,13 @@ class _InviteServantScreenState extends State<InviteServantScreen> {
       });
       if (!result.syncedToServer) {
         _showSnack(
-          'تم حفظ الدعوة محلياً. اتصل بالإنترنت ثم أعد إرسال البريد من قائمة الدعوات المعلقة.',
-          isError: true,
-        );
-      } else if (email.isNotEmpty && !emailSent) {
-        _showSnack(
-          'تم إنشاء الدعوة لكن لم يُرسل البريد. انسخ الرابط وأرسله يدوياً.',
+          'تم حفظ الدعوة محلياً. اتصل بالإنترنت للمزامنة.',
           isError: true,
         );
       } else if (emailSent) {
         _showSnack('تم إرسال الدعوة على $email');
+      } else {
+        _showSnack('تم إنشاء رابط الدعوة بنجاح 🎉');
       }
     } catch (error) {
       if (!mounted) return;
@@ -259,7 +258,7 @@ class _InviteServantScreenState extends State<InviteServantScreen> {
             : SafeArea(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                  child: FilledButton(
+                  child: FilledButton.icon(
                     onPressed: _isGenerating ? null : _generateCode,
                     style: FilledButton.styleFrom(
                       backgroundColor: AppTheme.primary,
@@ -268,7 +267,8 @@ class _InviteServantScreenState extends State<InviteServantScreen> {
                         borderRadius: BorderRadius.circular(14),
                       ),
                     ),
-                    child: _isGenerating
+                    icon: const Icon(Icons.link_rounded, size: 20, color: Colors.white),
+                    label: _isGenerating
                         ? const SizedBox(
                             width: 22,
                             height: 22,
@@ -278,7 +278,7 @@ class _InviteServantScreenState extends State<InviteServantScreen> {
                             ),
                           )
                         : Text(
-                            'إرسال الدعوة بالبريد',
+                            'إنشاء رابط الدعوة',
                             style: GoogleFonts.cairo(
                               color: Colors.white,
                               fontWeight: FontWeight.w900,
@@ -294,7 +294,8 @@ class _InviteServantScreenState extends State<InviteServantScreen> {
 
   Widget _buildSuccessBody() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -309,8 +310,7 @@ class _InviteServantScreenState extends State<InviteServantScreen> {
             const SizedBox(height: 12),
             _InfoBanner(
               text:
-                  'لم يُرسل البريد تلقائياً. انسخ الرابط أعلاه وأرسله يدوياً، أو أعد الإرسال من «دعوات معلقة».',
-              isWarning: true,
+                  'تم إنشاء رابط الدعوة بنجاح! يمكنك نسخته أو مشاركته مباشرة عبر الواتساب مع الخادم.',
             ),
           ],
           const SizedBox(height: 16),
@@ -324,6 +324,9 @@ class _InviteServantScreenState extends State<InviteServantScreen> {
             style: FilledButton.styleFrom(
               backgroundColor: AppTheme.primary,
               minimumSize: const Size.fromHeight(48),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
             ),
             child: Text(
               'تم',
@@ -333,6 +336,7 @@ class _InviteServantScreenState extends State<InviteServantScreen> {
               ),
             ),
           ),
+          const SizedBox(height: 24),
         ],
       ),
     );
@@ -369,20 +373,9 @@ class _InviteServantScreenState extends State<InviteServantScreen> {
                   keyboardType: TextInputType.emailAddress,
                   style: GoogleFonts.cairo(),
                   decoration: _inputDecoration(
-                    'البريد الإلكتروني*',
+                    'البريد الإلكتروني (اختياري)',
                     Icons.email_outlined,
                   ),
-                  validator: (value) {
-                    final email = value?.trim() ?? '';
-                    if (email.isEmpty) {
-                      return 'اكتب بريد الخادم لإرسال الدعوة';
-                    }
-                    final emailPattern = RegExp(r'^[^@]+@[^@]+\.[^@]+$');
-                    if (!emailPattern.hasMatch(email)) {
-                      return 'اكتب بريداً إلكترونياً صحيحاً';
-                    }
-                    return null;
-                  },
                 ),
                 const SizedBox(height: 6),
                 Text(
@@ -566,30 +559,23 @@ class _HeroBanner extends StatelessWidget {
 
 class _InfoBanner extends StatelessWidget {
   final String text;
-  final bool isWarning;
 
-  const _InfoBanner({required this.text, this.isWarning = false});
+  const _InfoBanner({required this.text});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: isWarning
-            ? AppTheme.accentOrange.withValues(alpha: 0.08)
-            : Colors.white,
+        color: AppTheme.primaryLight.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isWarning
-              ? AppTheme.accentOrange.withValues(alpha: 0.35)
-              : AppTheme.border.withValues(alpha: 0.8),
-        ),
+        border: Border.all(color: AppTheme.primary.withValues(alpha: 0.15)),
       ),
       child: Text(
         text,
         style: GoogleFonts.cairo(
           fontSize: 12,
-          color: isWarning ? AppTheme.textDark : AppTheme.textLight,
+          color: AppTheme.textDark,
           height: 1.5,
         ),
       ),

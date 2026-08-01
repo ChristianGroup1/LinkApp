@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:bloc_concurrency/bloc_concurrency.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../data/models/models.dart';
 import '../../data/repositories/database_repository.dart';
@@ -16,6 +17,20 @@ class HomeInitial extends HomeState {}
 
 class HomeLoading extends HomeState {}
 
+class BirthdayReminder {
+  final MemberEntity member;
+  final DateTime nextBirthday;
+  final int daysUntil;
+  final int turningAge;
+
+  const BirthdayReminder({
+    required this.member,
+    required this.nextBirthday,
+    required this.daysUntil,
+    required this.turningAge,
+  });
+}
+
 class HomeLoaded extends HomeState {
   final int meetingsTodayCount;
   final int absentCount;
@@ -23,9 +38,11 @@ class HomeLoaded extends HomeState {
   final int totalMembersCount;
   final List<Map<String, dynamic>> repeatedAbsences;
   final List<Map<String, dynamic>> upcomingMeetings;
+  final List<BirthdayReminder> upcomingBirthdays;
   final bool canTakeAttendance;
   final bool canViewReports;
   final bool canManageServants;
+
   /// Admins and attendance officers can add/edit/delete members.
   final bool canManageMembers;
 
@@ -36,6 +53,7 @@ class HomeLoaded extends HomeState {
     required this.totalMembersCount,
     required this.repeatedAbsences,
     required this.upcomingMeetings,
+    required this.upcomingBirthdays,
     required this.canTakeAttendance,
     required this.canViewReports,
     required this.canManageServants,
@@ -113,10 +131,23 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
             isAdmin || takeClassIds.isNotEmpty || takeMeetingIds.isNotEmpty;
         final canViewReports =
             isAdmin || viewClassIds.isNotEmpty || viewMeetingIds.isNotEmpty;
+        final visibleMembers = allMembers
+            .where(
+              (member) =>
+                  member.isActive &&
+                  (isAdmin ||
+                      viewMeetingIds.contains(member.meetingId) ||
+                      viewClassIds.contains(member.sundaySchoolClassId) ||
+                      takeMeetingIds.contains(member.meetingId) ||
+                      takeClassIds.contains(member.sundaySchoolClassId)),
+            )
+            .toList();
 
         // 3. Today's stats
-        final today = DateTime.now();
+        final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
         final todayWeekday = today.weekday; // Monday = 1, Sunday = 7
+        final upcomingBirthdays = findUpcomingBirthdays(visibleMembers, today);
         // In our DB weekday constraint, Monday = 1 ... Sunday = 7
         final meetingsToday = allMeetings
             .where(
@@ -272,13 +303,14 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
                 ? allMembers.length
                 : allMembers
                       .where(
-                        (m) =>
-                            viewMeetingIds.contains(m.meetingId) ||
-                            viewClassIds.contains(m.sundaySchoolClassId),
+                        (member) =>
+                            viewMeetingIds.contains(member.meetingId) ||
+                            viewClassIds.contains(member.sundaySchoolClassId),
                       )
                       .length,
             repeatedAbsences: repeatedAbsences,
             upcomingMeetings: upcomingMeetings,
+            upcomingBirthdays: upcomingBirthdays,
             canTakeAttendance: canTakeAttendance,
             canViewReports: canViewReports,
             canManageServants: isAdmin,
@@ -292,9 +324,58 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       } catch (e) {
         emit(HomeError('حدث خطأ أثناء تحميل لوحة البيانات: ${e.toString()}'));
       }
-    });
+    }, transformer: restartable());
   }
 }
+
+List<BirthdayReminder> findUpcomingBirthdays(
+  List<MemberEntity> members,
+  DateTime today, {
+  int withinDays = 30,
+}) {
+  final reminders = <BirthdayReminder>[];
+  for (final member in members) {
+    final birthDate = member.birthDate;
+    if (birthDate == null) continue;
+
+    var nextBirthday = _birthdayInYear(birthDate, today.year);
+    if (nextBirthday.isBefore(today)) {
+      nextBirthday = _birthdayInYear(birthDate, today.year + 1);
+    }
+
+    final daysUntil = nextBirthday.difference(today).inDays;
+    if (daysUntil > withinDays) continue;
+
+    reminders.add(
+      BirthdayReminder(
+        member: member,
+        nextBirthday: nextBirthday,
+        daysUntil: daysUntil,
+        turningAge: nextBirthday.year - birthDate.year,
+      ),
+    );
+  }
+
+  reminders.sort((a, b) {
+    final byDate = a.nextBirthday.compareTo(b.nextBirthday);
+    return byDate != 0
+        ? byDate
+        : a.member.fullName.compareTo(b.member.fullName);
+  });
+  return reminders;
+}
+
+DateTime _birthdayInYear(DateTime birthDate, int year) {
+  if (birthDate.month == DateTime.february &&
+      birthDate.day == 29 &&
+      !_isLeapYear(year)) {
+    return DateTime(year, DateTime.february, 28);
+  }
+  return DateTime(year, birthDate.month, birthDate.day);
+}
+
+bool _isLeapYear(int year) =>
+    year % 400 == 0 || (year % 4 == 0 && year % 100 != 0);
 
 class _AttendanceScope {
   final MeetingEntity meeting;

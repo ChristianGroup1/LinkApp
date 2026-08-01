@@ -24,6 +24,8 @@ class _AddEditMeetingScreenState extends State<AddEditMeetingScreen> {
   final _classNames = <String>[];
   int _selectedWeekday = 5;
   bool _hasClasses = false;
+  bool _reminderEnabled = false;
+  TimeOfDay _reminderTime = const TimeOfDay(hour: 18, minute: 0);
   bool _isSaving = false;
 
   bool get _isEdit => widget.meeting != null;
@@ -39,6 +41,14 @@ class _AddEditMeetingScreenState extends State<AddEditMeetingScreen> {
       _nameController.text = displayName;
       _selectedWeekday = meeting.weekday;
       _hasClasses = meeting.kind == MeetingKind.sundaySchool;
+      final reminderMinutes = meeting.attendanceReminderMinutes;
+      if (reminderMinutes != null) {
+        _reminderEnabled = true;
+        _reminderTime = TimeOfDay(
+          hour: reminderMinutes ~/ 60,
+          minute: reminderMinutes % 60,
+        );
+      }
     }
   }
 
@@ -56,6 +66,19 @@ class _AddEditMeetingScreenState extends State<AddEditMeetingScreen> {
       _classNames.add(name);
       _classController.clear();
     });
+  }
+
+  Future<void> _pickReminderTime() async {
+    final selected = await showTimePicker(
+      context: context,
+      initialTime: _reminderTime,
+      helpText: 'اختر وقت تذكير الحضور والغياب',
+      cancelText: 'إلغاء',
+      confirmText: 'اختيار',
+    );
+    if (selected != null && mounted) {
+      setState(() => _reminderTime = selected);
+    }
   }
 
   void _submit() {
@@ -87,6 +110,9 @@ class _AddEditMeetingScreenState extends State<AddEditMeetingScreen> {
           nameAr: name,
           weekday: _selectedWeekday,
           isActive: true,
+          attendanceReminderMinutes: _reminderEnabled
+              ? _reminderTime.hour * 60 + _reminderTime.minute
+              : null,
           description: widget.meeting?.description,
         ),
       );
@@ -97,6 +123,9 @@ class _AddEditMeetingScreenState extends State<AddEditMeetingScreen> {
           nameAr: name,
           kind: _hasClasses ? MeetingKind.sundaySchool : MeetingKind.normal,
           weekday: _selectedWeekday,
+          attendanceReminderMinutes: _reminderEnabled
+              ? _reminderTime.hour * 60 + _reminderTime.minute
+              : null,
           description: null,
           classes: _hasClasses
               ? _classNames
@@ -135,7 +164,10 @@ class _AddEditMeetingScreenState extends State<AddEditMeetingScreen> {
           ),
           centerTitle: true,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_forward_rounded, color: AppTheme.textDark),
+            icon: const Icon(
+              Icons.arrow_back_rounded,
+              color: AppTheme.textDark,
+            ),
             onPressed: _isSaving ? null : () => Navigator.pop(context),
           ),
           bottom: PreferredSize(
@@ -201,7 +233,8 @@ class _AddEditMeetingScreenState extends State<AddEditMeetingScreen> {
                               return Material(
                                 color: Colors.transparent,
                                 child: InkWell(
-                                  onTap: () => setState(() => _selectedWeekday = day),
+                                  onTap: () =>
+                                      setState(() => _selectedWeekday = day),
                                   borderRadius: BorderRadius.circular(12),
                                   child: Ink(
                                     padding: const EdgeInsets.symmetric(
@@ -216,7 +249,9 @@ class _AddEditMeetingScreenState extends State<AddEditMeetingScreen> {
                                       border: Border.all(
                                         color: selected
                                             ? AppTheme.primary
-                                            : AppTheme.border.withValues(alpha: 0.7),
+                                            : AppTheme.border.withValues(
+                                                alpha: 0.7,
+                                              ),
                                       ),
                                     ),
                                     child: Text(
@@ -234,6 +269,68 @@ class _AddEditMeetingScreenState extends State<AddEditMeetingScreen> {
                               );
                             }),
                           ),
+                          const SizedBox(height: 18),
+                          Divider(
+                            color: AppTheme.border.withValues(alpha: 0.75),
+                          ),
+                          const SizedBox(height: 6),
+                          _OptionTile(
+                            icon: Icons.notifications_active_outlined,
+                            title: 'تذكير تسجيل الحضور والغياب',
+                            subtitle:
+                                'يصل أسبوعيًا لكل خادم لديه صلاحية أخذ الحضور',
+                            value: _reminderEnabled,
+                            onChanged: (value) =>
+                                setState(() => _reminderEnabled = value),
+                          ),
+                          if (_reminderEnabled) ...[
+                            const SizedBox(height: 12),
+                            Material(
+                              color: AppTheme.accentOrangeLight,
+                              borderRadius: BorderRadius.circular(14),
+                              child: InkWell(
+                                onTap: _pickReminderTime,
+                                borderRadius: BorderRadius.circular(14),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 12,
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.alarm_rounded,
+                                        color: AppTheme.accentOrange,
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Text(
+                                          'وقت التنبيه',
+                                          style: GoogleFonts.cairo(
+                                            color: AppTheme.textDark,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                      ),
+                                      Text(
+                                        _reminderTime.format(context),
+                                        style: GoogleFonts.cairo(
+                                          color: AppTheme.accentOrange,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w900,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      const Icon(
+                                        Icons.chevron_left_rounded,
+                                        color: AppTheme.accentOrange,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                       if (!_isEdit) ...[
@@ -307,7 +404,9 @@ class _AddEditMeetingScreenState extends State<AddEditMeetingScreen> {
                                     return _GroupTag(
                                       label: name,
                                       onRemove: () {
-                                        setState(() => _classNames.remove(name));
+                                        setState(
+                                          () => _classNames.remove(name),
+                                        );
                                       },
                                     );
                                   }).toList(),
@@ -352,7 +451,9 @@ class _AddEditMeetingScreenState extends State<AddEditMeetingScreen> {
                                 color: Colors.white,
                               ),
                             )
-                          : Icon(_isEdit ? Icons.save_rounded : Icons.add_rounded),
+                          : Icon(
+                              _isEdit ? Icons.save_rounded : Icons.add_rounded,
+                            ),
                       label: Text(
                         _isEdit ? 'حفظ التعديلات' : 'إضافة الاجتماع',
                         style: GoogleFonts.cairo(
@@ -409,7 +510,9 @@ class _MeetingFormHero extends StatelessWidget {
               borderRadius: BorderRadius.circular(14),
             ),
             child: Icon(
-              isEdit ? Icons.edit_calendar_rounded : Icons.event_available_rounded,
+              isEdit
+                  ? Icons.edit_calendar_rounded
+                  : Icons.event_available_rounded,
               color: Colors.white,
               size: 26,
             ),
@@ -607,7 +710,11 @@ class _GroupTag extends StatelessWidget {
           const SizedBox(width: 4),
           GestureDetector(
             onTap: onRemove,
-            child: const Icon(Icons.close_rounded, size: 14, color: AppTheme.primary),
+            child: const Icon(
+              Icons.close_rounded,
+              size: 14,
+              color: AppTheme.primary,
+            ),
           ),
         ],
       ),
@@ -620,10 +727,8 @@ void showAddMeetingScreen(BuildContext context, {MeetingsBloc? meetingsBloc}) {
   Navigator.push(
     context,
     MaterialPageRoute(
-      builder: (_) => BlocProvider.value(
-        value: bloc,
-        child: const AddEditMeetingScreen(),
-      ),
+      builder: (_) =>
+          BlocProvider.value(value: bloc, child: const AddEditMeetingScreen()),
     ),
   );
 }

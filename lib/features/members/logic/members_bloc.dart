@@ -34,6 +34,7 @@ class CreateMember extends MembersEvent {
   final String? parentName;
   final String? parentPhone;
   final String? code;
+  final DateTime? birthDate;
 
   CreateMember({
     required this.fullName,
@@ -44,6 +45,7 @@ class CreateMember extends MembersEvent {
     this.parentName,
     this.parentPhone,
     this.code,
+    this.birthDate,
   });
 }
 
@@ -57,6 +59,7 @@ class UpdateMemberEvent extends MembersEvent {
   final String? parentName;
   final String? parentPhone;
   final String? code;
+  final DateTime? birthDate;
   final bool isActive;
 
   UpdateMemberEvent({
@@ -69,6 +72,7 @@ class UpdateMemberEvent extends MembersEvent {
     this.parentName,
     this.parentPhone,
     this.code,
+    this.birthDate,
     required this.isActive,
   });
 }
@@ -123,8 +127,9 @@ class MembersLoaded extends MembersState {
       classIdFilter: classIdFilter ?? this.classIdFilter,
       meetingIdFilter: meetingIdFilter ?? this.meetingIdFilter,
       scopeFilter: scopeFilter ?? this.scopeFilter,
-      flashMessage:
-          clearFlashMessage ? null : (flashMessage ?? this.flashMessage),
+      flashMessage: clearFlashMessage
+          ? null
+          : (flashMessage ?? this.flashMessage),
     );
   }
 }
@@ -144,7 +149,8 @@ class MembersBloc extends Bloc<MembersEvent, MembersState> {
       try {
         final profile = await repository.getCurrentProfile();
         final members = await repository.getAllMembers();
-        final isAdmin = profile != null &&
+        final isAdmin =
+            profile != null &&
             (profile.role == AppRole.superAdmin ||
                 profile.role == AppRole.churchAdmin);
 
@@ -271,19 +277,17 @@ class MembersBloc extends Bloc<MembersEvent, MembersState> {
           parentName: event.parentName,
           parentPhone: event.parentPhone,
           code: event.code,
+          birthDate: event.birthDate,
         );
         add(
           LoadMembers(
-            flashMessage:
-                result.syncedToServer ? null : kOfflineSavedMessage,
+            flashMessage: result.syncedToServer ? null : kOfflineSavedMessage,
           ),
         );
       } catch (e) {
         if (previous is MembersLoaded) {
           emit(
-            previous.copyWith(
-              flashMessage: 'فشل إضافة العضو: ${e.toString()}',
-            ),
+            previous.copyWith(flashMessage: 'فشل إضافة العضو: ${e.toString()}'),
           );
         } else {
           emit(MembersError('فشل إضافة العضو: ${e.toString()}'));
@@ -304,12 +308,12 @@ class MembersBloc extends Bloc<MembersEvent, MembersState> {
           parentName: event.parentName,
           parentPhone: event.parentPhone,
           code: event.code,
+          birthDate: event.birthDate,
           isActive: event.isActive,
         );
         add(
           LoadMembers(
-            flashMessage:
-                result.syncedToServer ? null : kOfflineSavedMessage,
+            flashMessage: result.syncedToServer ? null : kOfflineSavedMessage,
           ),
         );
       } catch (e) {
@@ -329,17 +333,11 @@ class MembersBloc extends Bloc<MembersEvent, MembersState> {
       final previous = state;
       try {
         final synced = await repository.deleteMember(event.id);
-        add(
-          LoadMembers(
-            flashMessage: synced ? null : kOfflineSavedMessage,
-          ),
-        );
+        add(LoadMembers(flashMessage: synced ? null : kOfflineSavedMessage));
       } catch (e) {
         if (previous is MembersLoaded) {
           emit(
-            previous.copyWith(
-              flashMessage: 'فشل حذف العضو: ${e.toString()}',
-            ),
+            previous.copyWith(flashMessage: 'فشل حذف العضو: ${e.toString()}'),
           );
         } else {
           emit(MembersError('فشل حذف العضو: ${e.toString()}'));

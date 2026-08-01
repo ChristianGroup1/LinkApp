@@ -86,9 +86,7 @@ class _InvitationLinkScreenState extends State<InvitationLinkScreen> {
       await repo.declineInvitationByToken(widget.inviteToken);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('تم رفض الدعوة', style: GoogleFonts.cairo()),
-        ),
+        SnackBar(content: Text('تم رفض الدعوة', style: GoogleFonts.cairo())),
       );
       Navigator.pop(context);
     } catch (error) {
@@ -177,10 +175,7 @@ class _InvitationLinkScreenState extends State<InvitationLinkScreen> {
     }
 
     if (_error != null) {
-      return AppErrorState(
-        message: _error.toString(),
-        onRetry: _loadPreview,
-      );
+      return AppErrorState(message: _error.toString(), onRetry: _loadPreview);
     }
 
     final preview = _preview;
@@ -190,10 +185,7 @@ class _InvitationLinkScreenState extends State<InvitationLinkScreen> {
         'used' => 'تم استخدام هذه الدعوة بالفعل.',
         _ => 'رابط الدعوة غير صالح أو منتهي.',
       };
-      return AppEmptyState(
-        icon: Icons.link_off_rounded,
-        message: message,
-      );
+      return AppEmptyState(icon: Icons.link_off_rounded, message: message);
     }
 
     return SingleChildScrollView(
@@ -206,7 +198,9 @@ class _InvitationLinkScreenState extends State<InvitationLinkScreen> {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: AppTheme.border.withValues(alpha: 0.75)),
+              border: Border.all(
+                color: AppTheme.border.withValues(alpha: 0.75),
+              ),
               boxShadow: AppTheme.softShadow,
             ),
             child: Column(
@@ -222,17 +216,14 @@ class _InvitationLinkScreenState extends State<InvitationLinkScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'دعوة للانضمام كخادم عبر LINK',
+                  'دعوة للانضمام كخادم عبر Link',
                   style: GoogleFonts.cairo(
                     fontSize: 13,
                     color: AppTheme.textLight,
                   ),
                 ),
                 const SizedBox(height: 16),
-                _InfoRow(
-                  label: 'الاسم',
-                  value: preview.inviteeName ?? '—',
-                ),
+                _InfoRow(label: 'الاسم', value: preview.inviteeName ?? '—'),
                 if (preview.email != null && preview.email!.trim().isNotEmpty)
                   _InfoRow(label: 'البريد', value: preview.email!),
                 _InfoRow(label: 'نطاق الخدمة', value: preview.scopeLabel),

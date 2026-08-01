@@ -50,6 +50,13 @@ abstract class OfflineOpType {
   static const followUpDelete = 'follow_up.delete';
   static const invitationCreate = 'invitation.create';
   static const invitationDelete = 'invitation.delete';
+  static const currentProfileUpdate = 'profile.current_update';
+  static const profileRoleUpdate = 'profile.role_update';
+  static const profileStatusUpdate = 'profile.status_update';
+  static const classAssignmentUpsert = 'assignment.class_upsert';
+  static const classAssignmentDelete = 'assignment.class_delete';
+  static const meetingAssignmentUpsert = 'assignment.meeting_upsert';
+  static const meetingAssignmentDelete = 'assignment.meeting_delete';
 
   static const syncOrder = [
     churchUpdate,
@@ -68,6 +75,13 @@ abstract class OfflineOpType {
     followUpDelete,
     invitationCreate,
     invitationDelete,
+    currentProfileUpdate,
+    profileRoleUpdate,
+    profileStatusUpdate,
+    classAssignmentUpsert,
+    classAssignmentDelete,
+    meetingAssignmentUpsert,
+    meetingAssignmentDelete,
   ];
 }
 
@@ -109,6 +123,8 @@ class OfflineWriteQueue {
     OfflineOpType.sessionDelete,
     OfflineOpType.followUpDelete,
     OfflineOpType.invitationDelete,
+    OfflineOpType.classAssignmentDelete,
+    OfflineOpType.meetingAssignmentDelete,
   };
 
   /// Entity IDs with a delete queued but not yet synced to the server.

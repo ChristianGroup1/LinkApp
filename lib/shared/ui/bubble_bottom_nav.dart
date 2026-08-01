@@ -67,8 +67,8 @@ class AppBubbleBottomBar extends StatelessWidget {
                           duration: _duration,
                           curve: _curve,
                           padding: EdgeInsets.symmetric(
-                            horizontal: selected ? 14 : 10,
-                            vertical: 10,
+                            horizontal: selected ? 10 : 6,
+                            vertical: 8,
                           ),
                           decoration: BoxDecoration(
                             color: selected
@@ -82,7 +82,7 @@ class AppBubbleBottomBar extends StatelessWidget {
                             children: [
                               Icon(
                                 selected ? item.activeIcon : item.icon,
-                                size: 22,
+                                size: 20,
                                 color: selected ? accent : _inactiveColor,
                               ),
                               AnimatedSize(
@@ -92,16 +92,18 @@ class AppBubbleBottomBar extends StatelessWidget {
                                 child: selected
                                     ? Padding(
                                         padding: const EdgeInsetsDirectional.only(
-                                          start: 6,
+                                          start: 5,
                                         ),
-                                        child: Text(
-                                          item.label,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: GoogleFonts.cairo(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w700,
-                                            color: accent,
+                                        child: Flexible(
+                                          child: Text(
+                                            item.label,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: GoogleFonts.cairo(
+                                              fontSize: 11.5,
+                                              fontWeight: FontWeight.w700,
+                                              color: accent,
+                                            ),
                                           ),
                                         ),
                                       )

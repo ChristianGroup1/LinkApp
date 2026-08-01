@@ -1,4 +1,4 @@
--- Remove service years from an existing LINK Supabase database.
+-- Remove service years from an existing Link Supabase database.
 -- Run this once in Supabase SQL Editor after backing up the database.
 
 begin;

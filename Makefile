@@ -1,4 +1,4 @@
-# LINK — shortcuts that always load Supabase keys from local .env
+# Link — shortcuts that always load Supabase keys from local .env
 # Usage: make run | make build-web | make build-apk
 
 ENV_FILE ?= .env

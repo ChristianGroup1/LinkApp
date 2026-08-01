@@ -6,7 +6,7 @@
 -- 3) انشر Edge Function: send-invitation-email
 -- 4) أضف Secrets في Supabase Dashboard → Edge Functions:
 --    RESEND_API_KEY=...
---    INVITE_EMAIL_FROM="LINK <noreply@your-domain.com>"
+--    INVITE_EMAIL_FROM="Link <noreply@your-domain.com>"
 --    INVITE_EMAIL_LOGO_URL=https://YOUR_PROJECT.supabase.co/storage/v1/object/public/app-assets/link_logo.png
 
 alter table public.invitations

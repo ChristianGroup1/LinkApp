@@ -51,6 +51,8 @@ void main() {
     // Verify dashboard displays
     expect(find.text('أهلاً بك، مينا سمير'), findsOneWidget);
     expect(find.text('إجمالي الأعضاء'), findsOneWidget);
+    expect(find.text('أعياد الميلاد القادمة'), findsOneWidget);
+    expect(find.text('اليوم 🎉'), findsOneWidget);
 
     // Open meetings from dashboard entry
     await tester.tap(find.text('الاجتماعات'));
@@ -76,6 +78,16 @@ void main() {
 
     // Tap Members tab
     await tester.tap(find.byIcon(Icons.groups_outlined));
+    await _settle(tester);
+    expect(find.text('سجل الأعضاء والخدمة'), findsOneWidget);
+
+    // Opening a member uses a dedicated details screen, not a popup menu.
+    await tester.tap(find.text('مريم جرجس'));
+    await _settle(tester);
+    expect(find.text('بيانات العضو'), findsOneWidget);
+    expect(find.text('البيانات الأساسية'), findsOneWidget);
+    expect(find.text('التواصل والعائلة'), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.arrow_back_rounded));
     await _settle(tester);
     expect(find.text('سجل الأعضاء والخدمة'), findsOneWidget);
 
@@ -124,7 +136,7 @@ class TestRepository implements DatabaseRepository {
   ];
 
   final List<MemberEntity> _members = [
-    const MemberEntity(
+    MemberEntity(
       id: 'mem-1',
       churchId: 'ch-1',
       fullName: 'مريم جرجس',
@@ -132,6 +144,11 @@ class TestRepository implements DatabaseRepository {
       sundaySchoolClassId: 'cls-1',
       code: 'LN-0047',
       phone: '+201224567890',
+      birthDate: DateTime(
+        DateTime.now().year - 12,
+        DateTime.now().month,
+        DateTime.now().day,
+      ),
       isActive: true,
     ),
   ];
@@ -251,6 +268,7 @@ class TestRepository implements DatabaseRepository {
     required String nameAr,
     required MeetingKind kind,
     required int weekday,
+    int? attendanceReminderMinutes,
     String? description,
   }) async {
     final m = MeetingEntity(
@@ -261,6 +279,7 @@ class TestRepository implements DatabaseRepository {
       kind: kind,
       weekday: weekday,
       isActive: true,
+      attendanceReminderMinutes: attendanceReminderMinutes,
       description: description,
     );
     _meetings.add(m);
@@ -274,6 +293,7 @@ class TestRepository implements DatabaseRepository {
     required String nameAr,
     required int weekday,
     required bool isActive,
+    int? attendanceReminderMinutes,
     String? description,
   }) async {
     final m = MeetingEntity(
@@ -284,6 +304,7 @@ class TestRepository implements DatabaseRepository {
       kind: MeetingKind.normal,
       weekday: weekday,
       isActive: isActive,
+      attendanceReminderMinutes: attendanceReminderMinutes,
       description: description,
     );
     return OfflineSaveResult(data: m, syncedToServer: true);
@@ -409,6 +430,7 @@ class TestRepository implements DatabaseRepository {
 
   @override
   Future<OfflineSaveResult<MemberEntity>> createMember({
+    DateTime? birthDate,
     String? code,
     required String fullName,
     String? meetingId,
@@ -429,6 +451,7 @@ class TestRepository implements DatabaseRepository {
       phone: phone,
       parentName: parentName,
       parentPhone: parentPhone,
+      birthDate: birthDate,
       isActive: true,
     );
     _members.add(m);
@@ -438,6 +461,7 @@ class TestRepository implements DatabaseRepository {
   @override
   Future<OfflineSaveResult<MemberEntity>> updateMember({
     required String id,
+    DateTime? birthDate,
     String? code,
     required String fullName,
     String? meetingId,
@@ -459,6 +483,7 @@ class TestRepository implements DatabaseRepository {
       phone: phone,
       parentName: parentName,
       parentPhone: parentPhone,
+      birthDate: birthDate,
       isActive: isActive,
     );
     return OfflineSaveResult(data: m, syncedToServer: true);

@@ -21,7 +21,11 @@ class AuthShell extends StatelessWidget {
               gradient: LinearGradient(
                 begin: Alignment.topRight,
                 end: Alignment.bottomLeft,
-                colors: [Color(0xFFF7F7FF), Color(0xFFEEF2FF), Color(0xFFF8FAFC)],
+                colors: [
+                  Color(0xFFF7F7FF),
+                  Color(0xFFEEF2FF),
+                  Color(0xFFF8FAFC),
+                ],
               ),
             ),
           ),
@@ -87,7 +91,7 @@ class AuthBackButton extends StatelessWidget {
           child: const Padding(
             padding: EdgeInsets.all(10),
             child: Icon(
-              Icons.chevron_left,
+              Icons.arrow_back_rounded,
               color: AppTheme.primary,
               size: 24,
             ),
@@ -255,8 +259,9 @@ class _AuthSoftTextFieldState extends State<AuthSoftTextField> {
 
   @override
   Widget build(BuildContext context) {
-    final fieldDirection =
-        widget.latinInput ? TextDirection.ltr : TextDirection.rtl;
+    final fieldDirection = widget.latinInput
+        ? TextDirection.ltr
+        : TextDirection.rtl;
     const fieldAlign = TextAlign.right;
     final borderColor = _focused ? AppTheme.primary : _fieldBorder;
     final borderWidth = _focused ? 1.5 : 1.0;
@@ -419,9 +424,7 @@ class AuthPagerDots extends StatelessWidget {
           height: 8,
           margin: const EdgeInsets.all(4),
           decoration: BoxDecoration(
-            color: AppTheme.primary.withValues(
-              alpha: index == 0 ? 0.35 : 0.12,
-            ),
+            color: AppTheme.primary.withValues(alpha: index == 0 ? 0.35 : 0.12),
             borderRadius: BorderRadius.circular(8),
           ),
         ),

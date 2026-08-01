@@ -1,5 +1,5 @@
 -- ============================================================
--- LINK: Security hardening + bug fixes migration
+-- Link: Security hardening + bug fixes migration
 -- Run in Supabase SQL Editor on existing projects.
 -- ============================================================
 

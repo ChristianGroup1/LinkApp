@@ -2,6 +2,16 @@ import '../../shared/data/app_models.dart';
 
 bool isOfflineId(String id) => id.startsWith('offline_');
 
+Map<String, dynamic> profileToJson(AppProfile profile) => {
+  'id': profile.id,
+  'church_id': profile.churchId,
+  'full_name': profile.fullName,
+  'role': profile.role.value,
+  'email': profile.email,
+  'phone': profile.phone,
+  'is_active': profile.isActive,
+};
+
 Map<String, dynamic> churchToJson(Church church) => {
   'id': church.id,
   'name': church.name,
@@ -20,6 +30,7 @@ Map<String, dynamic> meetingToJson(MeetingEntity meeting) => {
   'weekday': meeting.weekday,
   'is_active': meeting.isActive,
   'description': meeting.description,
+  'attendance_reminder_minutes': meeting.attendanceReminderMinutes,
 };
 
 Map<String, dynamic> classToJson(SundaySchoolClassEntity cls) => {

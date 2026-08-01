@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../../core/notifications/meeting_reminder_service.dart';
 import '../../../data/models/models.dart';
 import '../../../data/offline/offline_messages.dart';
 import '../../../data/repositories/database_repository.dart';
@@ -24,6 +27,7 @@ class CreateNewMeeting extends MeetingsEvent {
   final String nameAr;
   final MeetingKind kind;
   final int weekday;
+  final int? attendanceReminderMinutes;
   final String? description;
   final List<NewMeetingClassDraft> classes;
   CreateNewMeeting({
@@ -31,6 +35,7 @@ class CreateNewMeeting extends MeetingsEvent {
     required this.nameAr,
     required this.kind,
     required this.weekday,
+    this.attendanceReminderMinutes,
     this.description,
     this.classes = const [],
   });
@@ -42,6 +47,7 @@ class UpdateExistingMeeting extends MeetingsEvent {
   final String nameAr;
   final int weekday;
   final bool isActive;
+  final int? attendanceReminderMinutes;
   final String? description;
   UpdateExistingMeeting({
     required this.id,
@@ -49,6 +55,7 @@ class UpdateExistingMeeting extends MeetingsEvent {
     required this.nameAr,
     required this.weekday,
     required this.isActive,
+    this.attendanceReminderMinutes,
     this.description,
   });
 }
@@ -161,8 +168,9 @@ class MeetingsBloc extends Bloc<MeetingsEvent, MeetingsState> {
         final meetings = results[0] as List<MeetingEntity>;
         final classes = results[1] as List<SundaySchoolClassEntity>;
         final invitations = results[2] as List<HelperInvitation>;
-        final pendingInvitations =
-            invitations.where((invite) => invite.isPending).toList();
+        final pendingInvitations = invitations
+            .where((invite) => invite.isPending)
+            .toList();
         final classAssignmentResults = await Future.wait(
           classes.map((cls) async {
             try {
@@ -203,6 +211,9 @@ class MeetingsBloc extends Bloc<MeetingsEvent, MeetingsState> {
             flashMessage: event.flashMessage,
           ),
         );
+        unawaited(
+          MeetingReminderService.instance.syncForCurrentUser(repository),
+        );
       } catch (e) {
         emit(MeetingsError('فشل تحميل الاجتماعات: ${e.toString()}'));
       }
@@ -216,6 +227,7 @@ class MeetingsBloc extends Bloc<MeetingsEvent, MeetingsState> {
           nameAr: event.nameAr,
           kind: event.kind,
           weekday: event.weekday,
+          attendanceReminderMinutes: event.attendanceReminderMinutes,
           description: event.description,
         );
         var synced = meetingResult.syncedToServer;
@@ -256,6 +268,7 @@ class MeetingsBloc extends Bloc<MeetingsEvent, MeetingsState> {
           nameAr: event.nameAr,
           weekday: event.weekday,
           isActive: event.isActive,
+          attendanceReminderMinutes: event.attendanceReminderMinutes,
           description: event.description,
         );
         add(
@@ -315,9 +328,7 @@ class MeetingsBloc extends Bloc<MeetingsEvent, MeetingsState> {
       } catch (e) {
         if (previous is MeetingsLoaded) {
           emit(
-            previous.copyWith(
-              flashMessage: 'فشل إنشاء الفصل: ${e.toString()}',
-            ),
+            previous.copyWith(flashMessage: 'فشل إنشاء الفصل: ${e.toString()}'),
           );
         } else {
           emit(MeetingsError('فشل إنشاء الفصل: ${e.toString()}'));
@@ -343,9 +354,7 @@ class MeetingsBloc extends Bloc<MeetingsEvent, MeetingsState> {
       } catch (e) {
         if (previous is MeetingsLoaded) {
           emit(
-            previous.copyWith(
-              flashMessage: 'فشل تعديل الفصل: ${e.toString()}',
-            ),
+            previous.copyWith(flashMessage: 'فشل تعديل الفصل: ${e.toString()}'),
           );
         } else {
           emit(MeetingsError('فشل تعديل الفصل: ${e.toString()}'));
@@ -365,9 +374,7 @@ class MeetingsBloc extends Bloc<MeetingsEvent, MeetingsState> {
       } catch (e) {
         if (previous is MeetingsLoaded) {
           emit(
-            previous.copyWith(
-              flashMessage: 'فشل حذف الفصل: ${e.toString()}',
-            ),
+            previous.copyWith(flashMessage: 'فشل حذف الفصل: ${e.toString()}'),
           );
         } else {
           emit(MeetingsError('فشل حذف الفصل: ${e.toString()}'));

@@ -8,6 +8,7 @@ import '../../../logic/auth/auth_bloc.dart';
 import '../../../shared/ui/app_widgets.dart';
 import '../logic/church_bloc.dart';
 import 'servants_permissions_screen.dart';
+import 'widgets/compact_settings_dialog.dart';
 import 'widgets/settings_cards.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -22,6 +23,12 @@ class SettingsScreen extends StatelessWidget {
             SnackBar(
               content: Text(state.message, style: GoogleFonts.cairo()),
               backgroundColor: AppTheme.accentRed,
+            ),
+          );
+        } else if (state is ChurchContextLoaded && state.flashMessage != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(state.flashMessage!, style: GoogleFonts.cairo()),
             ),
           );
         }
@@ -141,153 +148,300 @@ class _ProfileActionsCard extends StatelessWidget {
     BuildContext context,
     AppProfile profile,
   ) async {
-    final nameController = TextEditingController(text: profile.fullName);
-    final phoneController = TextEditingController(text: profile.phone);
-    await showDialog<void>(
+    await showCompactSettingsDialog<void>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(
-          'تعديل البيانات الشخصية',
-          style: GoogleFonts.cairo(fontWeight: FontWeight.w900),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(labelText: 'الاسم الكامل'),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: phoneController,
-              keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(labelText: 'رقم الهاتف'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: Text('إلغاء', style: GoogleFonts.cairo()),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final name = nameController.text.trim();
-              if (name.isEmpty) return;
-              try {
-                await context.read<DatabaseRepository>().updateCurrentProfile(
-                  fullName: name,
-                  phone: phoneController.text.trim().isEmpty
-                      ? null
-                      : phoneController.text.trim(),
-                );
-                if (!context.mounted) return;
-                Navigator.pop(dialogContext);
-                context.read<ChurchBloc>().add(LoadChurchContext());
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      'تم حفظ بيانات البروفايل',
-                      style: GoogleFonts.cairo(),
-                    ),
-                  ),
-                );
-              } catch (_) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'تعذر حفظ البيانات، حاول مرة أخرى.',
-                        style: GoogleFonts.cairo(),
-                      ),
-                      backgroundColor: AppTheme.accentRed,
-                    ),
-                  );
-                }
-              }
-            },
-            child: Text('حفظ', style: GoogleFonts.cairo(color: Colors.white)),
-          ),
-        ],
-      ),
+      title: 'تعديل البيانات الشخصية',
+      subtitle: 'حدّث اسمك ورقم التواصل',
+      icon: Icons.manage_accounts_outlined,
+      child: _EditProfileDialogForm(profile: profile, hostContext: context),
     );
-    nameController.dispose();
-    phoneController.dispose();
   }
 
   Future<void> _showChangePasswordDialog(BuildContext context) async {
-    final passwordController = TextEditingController();
-    final confirmController = TextEditingController();
-    await showDialog<void>(
+    await showCompactSettingsDialog<void>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(
-          'تغيير كلمة المرور',
-          style: GoogleFonts.cairo(fontWeight: FontWeight.w900),
+      title: 'تغيير كلمة المرور',
+      subtitle: 'استخدم كلمة قوية لحماية حسابك',
+      icon: Icons.lock_reset_rounded,
+      child: _ChangePasswordDialogForm(hostContext: context),
+    );
+  }
+}
+
+class _EditProfileDialogForm extends StatefulWidget {
+  final AppProfile profile;
+  final BuildContext hostContext;
+
+  const _EditProfileDialogForm({
+    required this.profile,
+    required this.hostContext,
+  });
+
+  @override
+  State<_EditProfileDialogForm> createState() => _EditProfileDialogFormState();
+}
+
+class _EditProfileDialogFormState extends State<_EditProfileDialogForm> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _nameController;
+  late final TextEditingController _phoneController;
+  bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.profile.fullName);
+    _phoneController = TextEditingController(text: widget.profile.phone);
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _phoneController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _isSaving = true);
+    try {
+      await widget.hostContext.read<DatabaseRepository>().updateCurrentProfile(
+        fullName: _nameController.text.trim(),
+        phone: _phoneController.text.trim().isEmpty
+            ? null
+            : _phoneController.text.trim(),
+      );
+      if (!mounted) return;
+      Navigator.pop(context);
+      if (!widget.hostContext.mounted) return;
+      widget.hostContext.read<ChurchBloc>().add(LoadChurchContext());
+      ScaffoldMessenger.of(widget.hostContext).showSnackBar(
+        SnackBar(
+          content: Text('تم حفظ البيانات الشخصية', style: GoogleFonts.cairo()),
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: passwordController,
-              obscureText: true,
-              decoration: const InputDecoration(
-                labelText: 'كلمة المرور الجديدة',
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: confirmController,
-              obscureText: true,
-              decoration: const InputDecoration(labelText: 'تأكيد كلمة المرور'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: Text('إلغاء', style: GoogleFonts.cairo()),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isSaving = false);
+      ScaffoldMessenger.of(widget.hostContext).showSnackBar(
+        SnackBar(
+          content: Text(
+            'تعذر حفظ البيانات، حاول مرة أخرى.',
+            style: GoogleFonts.cairo(),
           ),
-          ElevatedButton(
-            onPressed: () async {
-              if (passwordController.text.length < 6 ||
-                  passwordController.text != confirmController.text)
-                return;
-              try {
-                await context.read<DatabaseRepository>().updatePassword(
-                  passwordController.text,
-                );
-                if (!context.mounted) return;
-                Navigator.pop(dialogContext);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      'تم تغيير كلمة المرور بنجاح',
-                      style: GoogleFonts.cairo(),
-                    ),
-                  ),
-                );
-              } catch (_) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'تعذر تغيير كلمة المرور.',
-                        style: GoogleFonts.cairo(),
-                      ),
-                      backgroundColor: AppTheme.accentRed,
-                    ),
-                  );
-                }
-              }
-            },
-            child: Text('تحديث', style: GoogleFonts.cairo(color: Colors.white)),
+          backgroundColor: AppTheme.accentRed,
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Form(
+      key: _formKey,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextFormField(
+            controller: _nameController,
+            autofocus: true,
+            textInputAction: TextInputAction.next,
+            style: GoogleFonts.cairo(fontWeight: FontWeight.w600),
+            decoration: const InputDecoration(
+              labelText: 'الاسم الكامل',
+              isDense: true,
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 11,
+              ),
+              prefixIcon: Icon(Icons.person_outline_rounded, size: 20),
+              prefixIconConstraints: BoxConstraints(minWidth: 42),
+            ),
+            validator: (value) => value == null || value.trim().isEmpty
+                ? 'الاسم الكامل مطلوب'
+                : null,
+          ),
+          const SizedBox(height: 11),
+          TextFormField(
+            controller: _phoneController,
+            keyboardType: TextInputType.phone,
+            textInputAction: TextInputAction.done,
+            style: GoogleFonts.cairo(fontWeight: FontWeight.w600),
+            decoration: const InputDecoration(
+              labelText: 'رقم الهاتف',
+              isDense: true,
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 11,
+              ),
+              prefixIcon: Icon(Icons.phone_outlined, size: 20),
+              prefixIconConstraints: BoxConstraints(minWidth: 42),
+            ),
+            onFieldSubmitted: (_) => _save(),
+          ),
+          const SizedBox(height: 15),
+          CompactDialogActions(
+            primaryLabel: 'حفظ التعديلات',
+            onPrimary: _save,
+            isLoading: _isSaving,
           ),
         ],
       ),
     );
-    passwordController.dispose();
-    confirmController.dispose();
+  }
+}
+
+class _ChangePasswordDialogForm extends StatefulWidget {
+  final BuildContext hostContext;
+
+  const _ChangePasswordDialogForm({required this.hostContext});
+
+  @override
+  State<_ChangePasswordDialogForm> createState() =>
+      _ChangePasswordDialogFormState();
+}
+
+class _ChangePasswordDialogFormState extends State<_ChangePasswordDialogForm> {
+  final _formKey = GlobalKey<FormState>();
+  final _passwordController = TextEditingController();
+  final _confirmController = TextEditingController();
+  bool _hidePassword = true;
+  bool _hideConfirmation = true;
+  bool _isSaving = false;
+
+  @override
+  void dispose() {
+    _passwordController.dispose();
+    _confirmController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _isSaving = true);
+    try {
+      await widget.hostContext.read<DatabaseRepository>().updatePassword(
+        _passwordController.text,
+      );
+      if (!mounted) return;
+      Navigator.pop(context);
+      if (!widget.hostContext.mounted) return;
+      ScaffoldMessenger.of(widget.hostContext).showSnackBar(
+        SnackBar(
+          content: Text(
+            'تم تغيير كلمة المرور بنجاح',
+            style: GoogleFonts.cairo(),
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isSaving = false);
+      ScaffoldMessenger.of(widget.hostContext).showSnackBar(
+        SnackBar(
+          content: Text('تعذر تغيير كلمة المرور.', style: GoogleFonts.cairo()),
+          backgroundColor: AppTheme.accentRed,
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Form(
+      key: _formKey,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextFormField(
+            controller: _passwordController,
+            autofocus: true,
+            obscureText: _hidePassword,
+            textInputAction: TextInputAction.next,
+            decoration: InputDecoration(
+              labelText: 'كلمة المرور الجديدة',
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 11,
+              ),
+              prefixIcon: const Icon(Icons.lock_outline_rounded, size: 20),
+              prefixIconConstraints: const BoxConstraints(minWidth: 42),
+              suffixIcon: IconButton(
+                visualDensity: VisualDensity.compact,
+                onPressed: () => setState(() => _hidePassword = !_hidePassword),
+                icon: Icon(
+                  _hidePassword
+                      ? Icons.visibility_outlined
+                      : Icons.visibility_off_outlined,
+                  size: 19,
+                ),
+              ),
+            ),
+            validator: (value) => value == null || value.length < 6
+                ? 'كلمة المرور يجب ألا تقل عن 6 أحرف'
+                : null,
+          ),
+          const SizedBox(height: 11),
+          TextFormField(
+            controller: _confirmController,
+            obscureText: _hideConfirmation,
+            textInputAction: TextInputAction.done,
+            decoration: InputDecoration(
+              labelText: 'تأكيد كلمة المرور',
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 11,
+              ),
+              prefixIcon: const Icon(Icons.verified_user_outlined, size: 20),
+              prefixIconConstraints: const BoxConstraints(minWidth: 42),
+              suffixIcon: IconButton(
+                visualDensity: VisualDensity.compact,
+                onPressed: () =>
+                    setState(() => _hideConfirmation = !_hideConfirmation),
+                icon: Icon(
+                  _hideConfirmation
+                      ? Icons.visibility_outlined
+                      : Icons.visibility_off_outlined,
+                  size: 19,
+                ),
+              ),
+            ),
+            validator: (value) => value != _passwordController.text
+                ? 'كلمتا المرور غير متطابقتين'
+                : null,
+            onFieldSubmitted: (_) => _save(),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Icon(
+                Icons.info_outline_rounded,
+                color: AppTheme.textLight,
+                size: 15,
+              ),
+              const SizedBox(width: 5),
+              Expanded(
+                child: Text(
+                  'استخدم 6 أحرف على الأقل',
+                  style: GoogleFonts.cairo(
+                    color: AppTheme.textLight,
+                    fontSize: 9.5,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          CompactDialogActions(
+            primaryLabel: 'تحديث كلمة المرور',
+            onPrimary: _save,
+            isLoading: _isSaving,
+          ),
+        ],
+      ),
+    );
   }
 }
 

@@ -19,6 +19,17 @@ class OfflineSyncListener extends StatefulWidget {
 class _OfflineSyncListenerState extends State<OfflineSyncListener> {
   bool _wasOffline = false;
   bool _initialized = false;
+  bool _syncing = false;
+  Timer? _retryTimer;
+  late final AppLifecycleListener _lifecycleListener;
+
+  @override
+  void initState() {
+    super.initState();
+    _lifecycleListener = AppLifecycleListener(
+      onResume: () => unawaited(_trySync()),
+    );
+  }
 
   @override
   void didChangeDependencies() {
@@ -35,27 +46,60 @@ class _OfflineSyncListenerState extends State<OfflineSyncListener> {
 
     _wasOffline = !ConnectivityService.instance.isOnline.value;
     ConnectivityService.instance.isOnline.addListener(_onConnectivityChanged);
+    if (!_wasOffline) unawaited(_trySync());
   }
 
   void _onConnectivityChanged() {
     if (!mounted) return;
 
     final online = ConnectivityService.instance.isOnline.value;
-    if (online && _wasOffline) {
-      final repository = context.read<DatabaseRepository>();
-      unawaited(
-        repository.syncPendingOfflineData().then((_) {
-          if (!mounted) return;
-          context.read<AuthBloc>().add(AuthCheckRequested());
-        }),
-      );
-    }
+    if (online) unawaited(_trySync());
     _wasOffline = !online;
+  }
+
+  Future<void> _trySync() async {
+    if (!mounted || !_initialized || _syncing) return;
+    _retryTimer?.cancel();
+    await ConnectivityService.instance.ensureInitialized();
+    if (!mounted || !ConnectivityService.instance.isOnline.value) return;
+
+    _syncing = true;
+    try {
+      final repository = context.read<DatabaseRepository>();
+      if (!await repository.hasPendingOfflineData()) return;
+      await repository.syncPendingOfflineData();
+      if (!mounted) return;
+      final stillPending = await repository.hasPendingOfflineData();
+      if (!mounted) return;
+      if (stillPending) {
+        _scheduleRetry();
+        return;
+      }
+      context.read<AuthBloc>().add(AuthCheckRequested());
+    } catch (_) {
+      // Pending operations stay queued for the next connectivity/resume retry.
+      _scheduleRetry();
+    } finally {
+      _syncing = false;
+    }
+  }
+
+  void _scheduleRetry() {
+    if (!mounted || !ConnectivityService.instance.isOnline.value) return;
+    _retryTimer?.cancel();
+    _retryTimer = Timer(
+      const Duration(seconds: 20),
+      () => unawaited(_trySync()),
+    );
   }
 
   @override
   void dispose() {
-    ConnectivityService.instance.isOnline.removeListener(_onConnectivityChanged);
+    _retryTimer?.cancel();
+    _lifecycleListener.dispose();
+    ConnectivityService.instance.isOnline.removeListener(
+      _onConnectivityChanged,
+    );
     super.dispose();
   }
 

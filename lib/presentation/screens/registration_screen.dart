@@ -63,9 +63,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     final activationCode = _activationCodeController.text.trim();
 
     if (name.isEmpty ||
-        (!_isInvitationLinkFlow &&
-            !_useActivationCode &&
-            churchName.isEmpty) ||
+        (!_isInvitationLinkFlow && !_useActivationCode && churchName.isEmpty) ||
         (!_isInvitationLinkFlow &&
             _useActivationCode &&
             activationCode.isEmpty) ||
@@ -155,12 +153,25 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
               );
               Navigator.pop(context);
             } else if (state is AuthError) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(state.message, style: GoogleFonts.cairo()),
-                  backgroundColor: AppTheme.accentRed,
-                ),
-              );
+              final msg = state.message.toLowerCase();
+              final isUserAlreadyExists = msg.contains('already registered') ||
+                  msg.contains('already exists') ||
+                  msg.contains('موجود بالفعل') ||
+                  msg.contains('مسجل بالفعل');
+
+              if (isUserAlreadyExists) {
+                _showExistingUserDialog(
+                  email: _emailController.text.trim(),
+                  activationCode: _activationCodeController.text.trim(),
+                );
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(state.message, style: GoogleFonts.cairo()),
+                    backgroundColor: AppTheme.accentRed,
+                  ),
+                );
+              }
             }
           },
           builder: (context, state) {
@@ -309,7 +320,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                                       fontWeight: FontWeight.w800,
                                     ),
                                   ),
-                                  const TextSpan(text: ' الخاصة بـ LINK'),
+                                  const TextSpan(text: ' الخاصة بـ Link'),
                                 ],
                               ),
                               textAlign: TextAlign.right,
@@ -345,12 +356,79 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                 Text(
                   '• متصلين بمحبة، ننمو معاً •',
                   textAlign: TextAlign.center,
-                  style: GoogleFonts.cairo(color: const Color(0xFFA8B0C2)),
+                  style: GoogleFonts.cairo(
+                    fontSize: 11,
+                    color: AppTheme.textLight.withValues(alpha: 0.8),
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-                const SizedBox(height: 8),
               ],
             );
           },
+        ),
+      ),
+    );
+  }
+
+  void _showExistingUserDialog({
+    required String email,
+    required String activationCode,
+  }) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          icon: const Icon(
+            Icons.account_circle_rounded,
+            color: AppTheme.primary,
+            size: 48,
+          ),
+          title: Text(
+            'لديك حساب بالفعل!',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.cairo(fontWeight: FontWeight.w900),
+          ),
+          content: Text(
+            'هذا البريد الإلكتروني مسجل مسبقاً في التطبيق. قم بتسجيل الدخول وسنربط حسابك بالدعوة تلقائياً.',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.cairo(height: 1.5, fontSize: 13),
+          ),
+          actionsAlignment: MainAxisAlignment.center,
+          actions: [
+            FilledButton(
+              onPressed: () {
+                Navigator.pop(dialogContext);
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => LoginScreen(
+                      initialEmail: email,
+                      invitationToken: widget.invitationToken,
+                      activationCode:
+                          activationCode.isNotEmpty ? activationCode : null,
+                    ),
+                  ),
+                );
+              },
+              style: FilledButton.styleFrom(
+                backgroundColor: AppTheme.primary,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: Text(
+                'تسجيل الدخول وتفعيل الدعوة',
+                style: GoogleFonts.cairo(
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

@@ -38,59 +38,42 @@ function buildPage(params: {
 }) {
   const { churchName, inviteeName, scope, appLink, valid, status } = params
 
-  if (!valid) {
-    const message =
-      status === 'declined'
-        ? 'تم رفض هذه الدعوة مسبقاً.'
-        : status === 'used'
-          ? 'تم استخدام هذه الدعوة بالفعل.'
-          : 'رابط الدعوة غير صالح أو منتهي.'
-
-    return `<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>دعوة LINK</title>
-</head>
-<body style="margin:0;padding:24px;background:#f4f7fb;font-family:Tahoma,Arial,sans-serif;direction:rtl;text-align:center;">
-  <div style="max-width:480px;margin:40px auto;background:#fff;border-radius:18px;padding:28px;border:1px solid #e6ebf2;">
-    <h1 style="margin:0 0 12px;font-size:22px;color:#152238;">LINK</h1>
-    <p style="margin:0;font-size:15px;line-height:1.8;color:#5d6b7a;">${escapeHtml(message)}</p>
-  </div>
-</body>
-</html>`
-  }
+  const headingText = valid
+    ? `مرحباً <strong>${escapeHtml(inviteeName || 'خادم')}</strong>، تمت دعوتك للخدمة في <strong>${escapeHtml(churchName || 'الكنيسة')}</strong>.`
+    : status === 'declined'
+      ? 'تم رفض هذه الدعوة مسبقاً.'
+      : status === 'used'
+        ? 'تم استخدام هذه الدعوة بالفعل.'
+        : 'جاري فتح تطبيق Link ومتابعة الدعوة...'
 
   return `<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>دعوة للانضمام — LINK</title>
+  <title>دعوة للانضمام — Link</title>
   <script>
     function openApp() {
       window.location.href = ${JSON.stringify(appLink)};
     }
     window.addEventListener('load', function () {
-      setTimeout(openApp, 300);
+      setTimeout(openApp, 100);
     });
   </script>
 </head>
-<body style="margin:0;padding:24px;background:#f4f7fb;font-family:Tahoma,Arial,sans-serif;direction:rtl;text-align:center;">
-  <div style="max-width:520px;margin:32px auto;background:#fff;border-radius:18px;padding:28px;border:1px solid #e6ebf2;">
-    <h1 style="margin:0 0 10px;font-size:24px;color:#1f3b68;">LINK</h1>
-    <p style="margin:0 0 16px;font-size:15px;line-height:1.8;color:#425466;">
-      مرحباً <strong>${escapeHtml(inviteeName)}</strong>،
-      تمت دعوتك للخدمة في <strong>${escapeHtml(churchName)}</strong>.
+<body style="margin:0;padding:24px;background:#f4f7fb;font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;direction:rtl;text-align:center;">
+  <div style="max-width:520px;margin:32px auto;background:#fff;border-radius:20px;padding:32px 24px;border:1px solid #e6ebf2;box-shadow:0 10px 25px rgba(0,0,0,0.04);">
+    <h1 style="margin:0 0 12px;font-size:26px;font-weight:900;color:#1f3b68;">LinkApp</h1>
+    <p style="margin:0 0 16px;font-size:16px;line-height:1.8;color:#425466;">
+      ${headingText}
     </p>
-    <p style="margin:0 0 20px;font-size:14px;color:#5d6b7a;">نطاق الخدمة: ${escapeHtml(scope)}</p>
+    ${scope ? `<p style="margin:0 0 20px;font-size:14px;color:#5d6b7a;">نطاق الخدمة: ${escapeHtml(scope)}</p>` : ''}
     <a href="${escapeHtml(appLink)}" onclick="openApp(); return false;"
-       style="display:inline-block;background:#1f5fbf;color:#fff;text-decoration:none;padding:14px 24px;border-radius:12px;font-weight:700;font-size:15px;">
-      فتح التطبيق والرد على الدعوة
+       style="display:inline-block;background:#4338ca;color:#fff;text-decoration:none;padding:16px 28px;border-radius:14px;font-weight:800;font-size:16px;box-shadow:0 4px 14px rgba(67,56,202,0.3);">
+      فتح التطبيق والرد على الدعوة 🚀
     </a>
-    <p style="margin:18px 0 0;font-size:12px;color:#8a97a8;">
-      إذا لم يفتح التطبيق تلقائياً، اضغط الزر أعلاه بعد تثبيت LINK.
+    <p style="margin:20px 0 0;font-size:12px;color:#8a97a8;line-height:1.5;">
+      إذا لم يفتح التطبيق تلقائياً، اضغط الزر أعلاه بعد فتح التثبيت.
     </p>
   </div>
 </body>
@@ -99,12 +82,21 @@ function buildPage(params: {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return new Response('ok', {
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': '*',
+      },
+    })
   }
 
   try {
     const url = new URL(req.url)
     const token = url.searchParams.get('t')?.trim()
+    const responseHeaders = new Headers()
+    responseHeaders.set('Access-Control-Allow-Origin', '*')
+    responseHeaders.set('Content-Type', 'text/html; charset=utf-8')
+
     if (!token) {
       return new Response(
         buildPage({
@@ -116,7 +108,7 @@ Deno.serve(async (req) => {
         }),
         {
           status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'text/html; charset=utf-8' },
+          headers: responseHeaders,
         },
       )
     }
@@ -154,16 +146,19 @@ Deno.serve(async (req) => {
 
     return new Response(html, {
       status: valid ? 200 : 410,
-      headers: { ...corsHeaders, 'Content-Type': 'text/html; charset=utf-8' },
+      headers: responseHeaders,
     })
   } catch (error) {
+    const errorHeaders = new Headers()
+    errorHeaders.set('Access-Control-Allow-Origin', '*')
+    errorHeaders.set('Content-Type', 'application/json')
     return new Response(
       JSON.stringify({
         error: error instanceof Error ? error.message : 'Unexpected error',
       }),
       {
         status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: errorHeaders,
       },
     )
   }

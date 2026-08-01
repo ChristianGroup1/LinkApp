@@ -7,76 +7,132 @@ import '../../../../data/models/models.dart';
 import '../../../../data/offline/offline_messages.dart';
 import '../../../../data/repositories/database_repository.dart';
 import '../../logic/church_bloc.dart';
+import 'compact_settings_dialog.dart';
 import 'servants_widgets.dart';
 
 void showEditChurchDialog(BuildContext context, Church church) {
-  final nameArController = TextEditingController(text: church.nameAr);
-  final phoneController = TextEditingController(text: church.phone);
-  final addressController = TextEditingController(text: church.address);
-
-  showDialog(
+  showCompactSettingsDialog<void>(
     context: context,
-    builder: (dialogContext) {
-      return Directionality(
-        textDirection: TextDirection.rtl,
-        child: AlertDialog(
-          title: Text(
-            'تعديل بيانات الكنيسة',
-            style: GoogleFonts.cairo(fontWeight: FontWeight.bold),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameArController,
-                decoration: const InputDecoration(
-                  labelText: 'اسم الكنيسة (بالعربية)*',
-                ),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: phoneController,
-                decoration: const InputDecoration(labelText: 'رقم الهاتف'),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: addressController,
-                decoration: const InputDecoration(labelText: 'العنوان'),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: Text('إلغاء', style: GoogleFonts.cairo()),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                final nameAr = nameArController.text.trim();
-                if (nameAr.isNotEmpty) {
-                  context.read<ChurchBloc>().add(
-                    UpdateChurchDetails(
-                      nameAr: nameAr,
-                      phone: phoneController.text.trim(),
-                      address: addressController.text.trim(),
-                    ),
-                  );
-                  Navigator.pop(dialogContext);
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primary,
-              ),
-              child: Text(
-                'حفظ',
-                style: GoogleFonts.cairo(color: Colors.white),
-              ),
-            ),
-          ],
-        ),
-      );
-    },
+    title: 'تعديل بيانات الكنيسة',
+    subtitle: 'حدّث الاسم ورقم التواصل والعنوان',
+    icon: Icons.church_outlined,
+    child: _EditChurchDialogForm(church: church, hostContext: context),
   );
+}
+
+class _EditChurchDialogForm extends StatefulWidget {
+  final Church church;
+  final BuildContext hostContext;
+
+  const _EditChurchDialogForm({
+    required this.church,
+    required this.hostContext,
+  });
+
+  @override
+  State<_EditChurchDialogForm> createState() => _EditChurchDialogFormState();
+}
+
+class _EditChurchDialogFormState extends State<_EditChurchDialogForm> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _nameController;
+  late final TextEditingController _phoneController;
+  late final TextEditingController _addressController;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.church.nameAr);
+    _phoneController = TextEditingController(text: widget.church.phone);
+    _addressController = TextEditingController(text: widget.church.address);
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _phoneController.dispose();
+    _addressController.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    if (!_formKey.currentState!.validate()) return;
+    widget.hostContext.read<ChurchBloc>().add(
+      UpdateChurchDetails(
+        nameAr: _nameController.text.trim(),
+        phone: _phoneController.text.trim(),
+        address: _addressController.text.trim(),
+      ),
+    );
+    Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Form(
+      key: _formKey,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextFormField(
+            controller: _nameController,
+            autofocus: true,
+            textInputAction: TextInputAction.next,
+            style: GoogleFonts.cairo(fontWeight: FontWeight.w600),
+            decoration: const InputDecoration(
+              labelText: 'اسم الكنيسة',
+              isDense: true,
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 11,
+              ),
+              prefixIcon: Icon(Icons.church_outlined, size: 20),
+              prefixIconConstraints: BoxConstraints(minWidth: 42),
+            ),
+            validator: (value) => value == null || value.trim().isEmpty
+                ? 'اسم الكنيسة مطلوب'
+                : null,
+          ),
+          const SizedBox(height: 10),
+          TextFormField(
+            controller: _phoneController,
+            keyboardType: TextInputType.phone,
+            textInputAction: TextInputAction.next,
+            style: GoogleFonts.cairo(fontWeight: FontWeight.w600),
+            decoration: const InputDecoration(
+              labelText: 'رقم الهاتف',
+              isDense: true,
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 11,
+              ),
+              prefixIcon: Icon(Icons.phone_outlined, size: 20),
+              prefixIconConstraints: BoxConstraints(minWidth: 42),
+            ),
+          ),
+          const SizedBox(height: 10),
+          TextFormField(
+            controller: _addressController,
+            textInputAction: TextInputAction.done,
+            style: GoogleFonts.cairo(fontWeight: FontWeight.w600),
+            decoration: const InputDecoration(
+              labelText: 'العنوان',
+              isDense: true,
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 11,
+              ),
+              prefixIcon: Icon(Icons.location_on_outlined, size: 20),
+              prefixIconConstraints: BoxConstraints(minWidth: 42),
+            ),
+            onFieldSubmitted: (_) => _save(),
+          ),
+          const SizedBox(height: 15),
+          CompactDialogActions(primaryLabel: 'حفظ التعديلات', onPrimary: _save),
+        ],
+      ),
+    );
+  }
 }
 
 void showAddAssignmentDialog(
@@ -87,14 +143,17 @@ void showAddAssignmentDialog(
   VoidCallback onAssigned,
 ) {
   String? selectedTargetId;
-  String assignmentScope =
-      servant.role == AppRole.classLeader ? 'class' : 'meeting';
+  String assignmentScope = servant.role == AppRole.classLeader
+      ? 'class'
+      : 'meeting';
   bool canTakeAttendance = true;
   bool canViewReports = true;
-  final directMeetings =
-      meetings.where((m) => m.kind != MeetingKind.sundaySchool && m.isActive).toList();
-  final groupedMeetings =
-      meetings.where((m) => m.kind == MeetingKind.sundaySchool && m.isActive).toList();
+  final directMeetings = meetings
+      .where((m) => m.kind != MeetingKind.sundaySchool && m.isActive)
+      .toList();
+  final groupedMeetings = meetings
+      .where((m) => m.kind == MeetingKind.sundaySchool && m.isActive)
+      .toList();
 
   showDialog(
     context: context,
@@ -129,36 +188,75 @@ void showAddAssignmentDialog(
                     SwitchListTile.adaptive(
                       value: canTakeAttendance,
                       contentPadding: EdgeInsets.zero,
-                      title: Text('يقدر يسجل حضور', style: GoogleFonts.cairo(fontSize: 12)),
-                      onChanged: (v) => setDialogState(() => canTakeAttendance = v),
+                      title: Text(
+                        'يقدر يسجل حضور',
+                        style: GoogleFonts.cairo(fontSize: 12),
+                      ),
+                      onChanged: (v) =>
+                          setDialogState(() => canTakeAttendance = v),
                     ),
                     SwitchListTile.adaptive(
                       value: canViewReports,
                       contentPadding: EdgeInsets.zero,
-                      title: Text('يقدر يشوف التقارير والمتابعة', style: GoogleFonts.cairo(fontSize: 12)),
-                      onChanged: (v) => setDialogState(() => canViewReports = v),
+                      title: Text(
+                        'يقدر يشوف التقارير والمتابعة',
+                        style: GoogleFonts.cairo(fontSize: 12),
+                      ),
+                      onChanged: (v) =>
+                          setDialogState(() => canViewReports = v),
                     ),
                     const SizedBox(height: 12),
                     if (assignmentScope == 'class')
                       _buildDropdown(
-                        context, 'اختر الفصل', selectedTargetId,
-                        classes.map((c) => DropdownMenuItem(value: c.id, child: Text(c.nameAr))).toList(),
+                        context,
+                        'اختر الفصل',
+                        selectedTargetId,
+                        classes
+                            .map(
+                              (c) => DropdownMenuItem(
+                                value: c.id,
+                                child: Text(c.nameAr),
+                              ),
+                            )
+                            .toList(),
                         (v) => setDialogState(() => selectedTargetId = v),
                         classes.isEmpty ? 'لا توجد فصول متاحة.' : null,
                       )
                     else if (assignmentScope == 'meeting_classes')
                       _buildDropdown(
-                        context, 'اختر الاجتماع المتقسم', selectedTargetId,
-                        groupedMeetings.map((m) => DropdownMenuItem(value: m.id, child: Text(m.nameAr))).toList(),
+                        context,
+                        'اختر الاجتماع المتقسم',
+                        selectedTargetId,
+                        groupedMeetings
+                            .map(
+                              (m) => DropdownMenuItem(
+                                value: m.id,
+                                child: Text(m.nameAr),
+                              ),
+                            )
+                            .toList(),
                         (v) => setDialogState(() => selectedTargetId = v),
-                        groupedMeetings.isEmpty ? 'لا توجد اجتماعات متقسمة متاحة.' : null,
+                        groupedMeetings.isEmpty
+                            ? 'لا توجد اجتماعات متقسمة متاحة.'
+                            : null,
                       )
                     else
                       _buildDropdown(
-                        context, 'اختر الاجتماع', selectedTargetId,
-                        directMeetings.map((m) => DropdownMenuItem(value: m.id, child: Text(m.nameAr))).toList(),
+                        context,
+                        'اختر الاجتماع',
+                        selectedTargetId,
+                        directMeetings
+                            .map(
+                              (m) => DropdownMenuItem(
+                                value: m.id,
+                                child: Text(m.nameAr),
+                              ),
+                            )
+                            .toList(),
                         (v) => setDialogState(() => selectedTargetId = v),
-                        directMeetings.isEmpty ? 'لا توجد اجتماعات مباشرة متاحة.' : null,
+                        directMeetings.isEmpty
+                            ? 'لا توجد اجتماعات مباشرة متاحة.'
+                            : null,
                       ),
                   ],
                 ),
@@ -168,40 +266,81 @@ void showAddAssignmentDialog(
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(dialogContext),
-                child: Text('إلغاء', style: GoogleFonts.cairo(color: AppTheme.textLight, fontWeight: FontWeight.bold)),
+                child: Text(
+                  'إلغاء',
+                  style: GoogleFonts.cairo(
+                    color: AppTheme.textLight,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
               const SizedBox(width: 8),
               ElevatedButton(
-                onPressed: selectedTargetId == null ? null : () async {
-                  final repo = context.read<DatabaseRepository>();
-                  try {
-                    if (assignmentScope == 'class') {
-                      await repo.assignClassLeader(selectedTargetId!, servant.id,
-                          canTakeAttendance: canTakeAttendance, canViewReports: canViewReports);
-                    } else if (assignmentScope == 'meeting_classes') {
-                      await repo.assignAllMeetingClasses(selectedTargetId!, servant.id,
-                          canTakeAttendance: canTakeAttendance, canViewReports: canViewReports);
-                    } else {
-                      await repo.assignMeetingOfficer(selectedTargetId!, servant.id,
-                          canTakeAttendance: canTakeAttendance, canViewReports: canViewReports);
-                    }
-                    if (context.mounted) {
-                      Navigator.pop(dialogContext);
-                      onAssigned();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('تم إسناد المهمة بنجاح', style: GoogleFonts.cairo()), backgroundColor: Colors.green),
-                      );
-                    }
-                  } catch (e) {
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('فشل الإسناد: ${e.toString()}', style: GoogleFonts.cairo()), backgroundColor: AppTheme.accentRed),
-                      );
-                    }
-                  }
-                },
-                style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primary, elevation: 0),
-                child: Text('حفظ', style: GoogleFonts.cairo(color: Colors.white, fontWeight: FontWeight.bold)),
+                onPressed: selectedTargetId == null
+                    ? null
+                    : () async {
+                        final repo = context.read<DatabaseRepository>();
+                        try {
+                          if (assignmentScope == 'class') {
+                            await repo.assignClassLeader(
+                              selectedTargetId!,
+                              servant.id,
+                              canTakeAttendance: canTakeAttendance,
+                              canViewReports: canViewReports,
+                            );
+                          } else if (assignmentScope == 'meeting_classes') {
+                            await repo.assignAllMeetingClasses(
+                              selectedTargetId!,
+                              servant.id,
+                              canTakeAttendance: canTakeAttendance,
+                              canViewReports: canViewReports,
+                            );
+                          } else {
+                            await repo.assignMeetingOfficer(
+                              selectedTargetId!,
+                              servant.id,
+                              canTakeAttendance: canTakeAttendance,
+                              canViewReports: canViewReports,
+                            );
+                          }
+                          if (context.mounted) {
+                            Navigator.pop(dialogContext);
+                            onAssigned();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'تم إسناد المهمة بنجاح',
+                                  style: GoogleFonts.cairo(),
+                                ),
+                                backgroundColor: Colors.green,
+                              ),
+                            );
+                          }
+                        } catch (e) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'فشل الإسناد: ${e.toString()}',
+                                  style: GoogleFonts.cairo(),
+                                ),
+                                backgroundColor: AppTheme.accentRed,
+                              ),
+                            );
+                          }
+                        }
+                      },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primary,
+                  elevation: 0,
+                ),
+                child: Text(
+                  'حفظ',
+                  style: GoogleFonts.cairo(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
             ],
           );
@@ -220,10 +359,14 @@ Widget _buildDropdown(
   String? emptyMessage,
 ) {
   if (emptyMessage != null) {
-    return Text(emptyMessage, style: GoogleFonts.cairo(fontSize: 11, color: AppTheme.textLight));
+    return Text(
+      emptyMessage,
+      style: GoogleFonts.cairo(fontSize: 11, color: AppTheme.textLight),
+    );
   }
   return DropdownButtonFormField<String>(
-    value: value,
+    key: ValueKey(value),
+    initialValue: value,
     decoration: InputDecoration(labelText: label),
     style: GoogleFonts.cairo(color: AppTheme.textDark),
     items: items,
@@ -244,10 +387,12 @@ void showInviteHelperDialog(
   bool canTakeAttendance = true;
   bool canViewReports = true;
   String? generatedCode;
-  final directMeetings =
-      meetings.where((m) => m.kind != MeetingKind.sundaySchool && m.isActive).toList();
-  final groupedMeetings =
-      meetings.where((m) => m.kind == MeetingKind.sundaySchool && m.isActive).toList();
+  final directMeetings = meetings
+      .where((m) => m.kind != MeetingKind.sundaySchool && m.isActive)
+      .toList();
+  final groupedMeetings = meetings
+      .where((m) => m.kind == MeetingKind.sundaySchool && m.isActive)
+      .toList();
 
   showDialog(
     context: context,
@@ -259,7 +404,10 @@ void showInviteHelperDialog(
             child: AlertDialog(
               title: Text(
                 'دعوة خادم مساعد جديد',
-                style: GoogleFonts.cairo(fontWeight: FontWeight.bold, fontSize: 14),
+                style: GoogleFonts.cairo(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
               ),
               content: SizedBox(
                 width: 420,
@@ -270,31 +418,46 @@ void showInviteHelperDialog(
                       if (generatedCode == null) ...[
                         TextField(
                           controller: nameController,
-                          decoration: const InputDecoration(labelText: 'الاسم بالكامل*'),
+                          decoration: const InputDecoration(
+                            labelText: 'الاسم بالكامل*',
+                          ),
                           style: GoogleFonts.cairo(),
                         ),
                         const SizedBox(height: 8),
                         TextField(
                           controller: phoneController,
                           keyboardType: TextInputType.phone,
-                          decoration: const InputDecoration(labelText: 'رقم الهاتف (اختياري)'),
+                          decoration: const InputDecoration(
+                            labelText: 'رقم الهاتف (اختياري)',
+                          ),
                           style: GoogleFonts.cairo(),
                         ),
                         const SizedBox(height: 12),
                         DropdownButtonFormField<AppRole>(
-                          value: selectedRole,
-                          decoration: const InputDecoration(labelText: 'الدور المقترح'),
+                          key: ValueKey(selectedRole),
+                          initialValue: selectedRole,
+                          decoration: const InputDecoration(
+                            labelText: 'الدور المقترح',
+                          ),
                           style: GoogleFonts.cairo(color: AppTheme.textDark),
                           items: const [
-                            DropdownMenuItem(value: AppRole.classLeader, child: Text('أمين فصل (Class Leader)')),
-                            DropdownMenuItem(value: AppRole.attendanceOfficer, child: Text('مسؤول حضور (Attendance Officer)')),
+                            DropdownMenuItem(
+                              value: AppRole.classLeader,
+                              child: Text('أمين فصل (Class Leader)'),
+                            ),
+                            DropdownMenuItem(
+                              value: AppRole.attendanceOfficer,
+                              child: Text('مسؤول حضور (Attendance Officer)'),
+                            ),
                           ],
                           onChanged: (val) {
                             if (val != null) {
                               setDialogState(() {
                                 selectedRole = val;
                                 selectedTargetId = null;
-                                assignmentScope = val == AppRole.classLeader ? 'class' : 'meeting';
+                                assignmentScope = val == AppRole.classLeader
+                                    ? 'class'
+                                    : 'meeting';
                               });
                             }
                           },
@@ -303,54 +466,131 @@ void showInviteHelperDialog(
                         SwitchListTile.adaptive(
                           value: canTakeAttendance,
                           contentPadding: EdgeInsets.zero,
-                          title: Text('يقدر يسجل حضور', style: GoogleFonts.cairo(fontSize: 12)),
-                          onChanged: (v) => setDialogState(() => canTakeAttendance = v),
+                          title: Text(
+                            'يقدر يسجل حضور',
+                            style: GoogleFonts.cairo(fontSize: 12),
+                          ),
+                          onChanged: (v) =>
+                              setDialogState(() => canTakeAttendance = v),
                         ),
                         SwitchListTile.adaptive(
                           value: canViewReports,
                           contentPadding: EdgeInsets.zero,
-                          title: Text('يقدر يشوف التقارير والمتابعة', style: GoogleFonts.cairo(fontSize: 12)),
-                          onChanged: (v) => setDialogState(() => canViewReports = v),
+                          title: Text(
+                            'يقدر يشوف التقارير والمتابعة',
+                            style: GoogleFonts.cairo(fontSize: 12),
+                          ),
+                          onChanged: (v) =>
+                              setDialogState(() => canViewReports = v),
                         ),
                         const SizedBox(height: 12),
-                        if (selectedRole == AppRole.classLeader && assignmentScope == 'class')
-                          _buildDropdown(context, 'الفصل المستهدف', selectedTargetId,
-                            classes.map((c) => DropdownMenuItem(value: c.id, child: Text(c.nameAr))).toList(),
+                        if (selectedRole == AppRole.classLeader &&
+                            assignmentScope == 'class')
+                          _buildDropdown(
+                            context,
+                            'الفصل المستهدف',
+                            selectedTargetId,
+                            classes
+                                .map(
+                                  (c) => DropdownMenuItem(
+                                    value: c.id,
+                                    child: Text(c.nameAr),
+                                  ),
+                                )
+                                .toList(),
                             (v) => setDialogState(() => selectedTargetId = v),
-                            classes.isEmpty ? 'لا توجد فصول متاحة.' : null)
-                        else if (selectedRole == AppRole.classLeader && assignmentScope == 'meeting_classes')
-                          _buildDropdown(context, 'الاجتماع المتقسم المستهدف', selectedTargetId,
-                            groupedMeetings.map((m) => DropdownMenuItem(value: m.id, child: Text(m.nameAr))).toList(),
+                            classes.isEmpty ? 'لا توجد فصول متاحة.' : null,
+                          )
+                        else if (selectedRole == AppRole.classLeader &&
+                            assignmentScope == 'meeting_classes')
+                          _buildDropdown(
+                            context,
+                            'الاجتماع المتقسم المستهدف',
+                            selectedTargetId,
+                            groupedMeetings
+                                .map(
+                                  (m) => DropdownMenuItem(
+                                    value: m.id,
+                                    child: Text(m.nameAr),
+                                  ),
+                                )
+                                .toList(),
                             (v) => setDialogState(() => selectedTargetId = v),
-                            groupedMeetings.isEmpty ? 'لا توجد اجتماعات متقسمة.' : null)
+                            groupedMeetings.isEmpty
+                                ? 'لا توجد اجتماعات متقسمة.'
+                                : null,
+                          )
                         else
-                          _buildDropdown(context, 'الاجتماع المستهدف', selectedTargetId,
-                            directMeetings.map((m) => DropdownMenuItem(value: m.id, child: Text(m.nameAr))).toList(),
+                          _buildDropdown(
+                            context,
+                            'الاجتماع المستهدف',
+                            selectedTargetId,
+                            directMeetings
+                                .map(
+                                  (m) => DropdownMenuItem(
+                                    value: m.id,
+                                    child: Text(m.nameAr),
+                                  ),
+                                )
+                                .toList(),
                             (v) => setDialogState(() => selectedTargetId = v),
-                            directMeetings.isEmpty ? 'لا توجد اجتماعات مباشرة.' : null),
+                            directMeetings.isEmpty
+                                ? 'لا توجد اجتماعات مباشرة.'
+                                : null,
+                          ),
                       ] else ...[
                         Container(
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
-                            color: AppTheme.primary.withOpacity(0.08),
+                            color: AppTheme.primary.withValues(alpha: 0.08),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Column(
                             children: [
-                              Text('تم توليد كود التفعيل بنجاح!', style: GoogleFonts.cairo(fontWeight: FontWeight.bold, color: AppTheme.primary)),
+                              Text(
+                                'تم توليد كود التفعيل بنجاح!',
+                                style: GoogleFonts.cairo(
+                                  fontWeight: FontWeight.bold,
+                                  color: AppTheme.primary,
+                                ),
+                              ),
                               const SizedBox(height: 12),
-                              Text(generatedCode!, style: GoogleFonts.outfit(fontSize: 26, fontWeight: FontWeight.w900, color: AppTheme.textDark, letterSpacing: 2)),
+                              Text(
+                                generatedCode!,
+                                style: GoogleFonts.outfit(
+                                  fontSize: 26,
+                                  fontWeight: FontWeight.w900,
+                                  color: AppTheme.textDark,
+                                  letterSpacing: 2,
+                                ),
+                              ),
                               const SizedBox(height: 12),
                               ElevatedButton.icon(
                                 onPressed: () {
-                                  Clipboard.setData(ClipboardData(text: generatedCode!));
+                                  Clipboard.setData(
+                                    ClipboardData(text: generatedCode!),
+                                  );
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text('تم نسخ كود التفعيل', style: GoogleFonts.cairo())),
+                                    SnackBar(
+                                      content: Text(
+                                        'تم نسخ كود التفعيل',
+                                        style: GoogleFonts.cairo(),
+                                      ),
+                                    ),
                                   );
                                 },
-                                icon: const Icon(Icons.copy, size: 16, color: Colors.white),
-                                label: Text('نسخ كود التفعيل', style: GoogleFonts.cairo(color: Colors.white)),
-                                style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primary),
+                                icon: const Icon(
+                                  Icons.copy,
+                                  size: 16,
+                                  color: Colors.white,
+                                ),
+                                label: Text(
+                                  'نسخ كود التفعيل',
+                                  style: GoogleFonts.cairo(color: Colors.white),
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppTheme.primary,
+                                ),
                               ),
                             ],
                           ),
@@ -372,7 +612,10 @@ void showInviteHelperDialog(
                       if (name.isEmpty) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
-                            content: Text('الاسم الكامل مطلوب لتوليد كود التفعيل', style: GoogleFonts.cairo()),
+                            content: Text(
+                              'الاسم الكامل مطلوب لتوليد كود التفعيل',
+                              style: GoogleFonts.cairo(),
+                            ),
                             backgroundColor: AppTheme.accentRed,
                           ),
                         );
@@ -382,32 +625,47 @@ void showInviteHelperDialog(
                         final repo = context.read<DatabaseRepository>();
                         final result = await repo.createInvitation(
                           fullName: name,
-                          phone: phoneController.text.trim().isEmpty ? null : phoneController.text.trim(),
+                          phone: phoneController.text.trim().isEmpty
+                              ? null
+                              : phoneController.text.trim(),
                           role: selectedRole,
                           targetId: selectedTargetId,
                           assignmentScope: assignmentScope,
                           canTakeAttendance: canTakeAttendance,
                           canViewReports: canViewReports,
                         );
+                        if (!context.mounted || !dialogContext.mounted) return;
                         setDialogState(() => generatedCode = result.data.code);
-                        if (!result.syncedToServer && context.mounted) {
+                        if (!result.syncedToServer) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text(kOfflineSavedMessage, style: GoogleFonts.cairo()),
+                              content: Text(
+                                kOfflineSavedMessage,
+                                style: GoogleFonts.cairo(),
+                              ),
                             ),
                           );
                         }
                       } catch (e) {
+                        if (!context.mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
-                            content: Text('فشل توليد الكود: ${e.toString()}', style: GoogleFonts.cairo()),
+                            content: Text(
+                              'فشل توليد الكود: ${e.toString()}',
+                              style: GoogleFonts.cairo(),
+                            ),
                             backgroundColor: AppTheme.accentRed,
                           ),
                         );
                       }
                     },
-                    style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primary),
-                    child: Text('توليد كود التفعيل', style: GoogleFonts.cairo(color: Colors.white)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.primary,
+                    ),
+                    child: Text(
+                      'توليد كود التفعيل',
+                      style: GoogleFonts.cairo(color: Colors.white),
+                    ),
                   ),
               ],
             ),

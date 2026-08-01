@@ -464,7 +464,7 @@ class _ServantAssignmentsSection extends StatelessWidget {
                   final canView = a['can_view_reports'] as bool? ?? true;
                   return Chip(
                     label: Text('$className • ${canTake ? "حضور" : "بدون حضور"} • ${canView ? "تقارير" : "بدون تقارير"}', style: GoogleFonts.cairo(fontSize: 10)),
-                    backgroundColor: AppTheme.primary.withOpacity(0.08),
+                    backgroundColor: AppTheme.primary.withValues(alpha: 0.08),
                     deleteIcon: const Icon(Icons.close, size: 12, color: AppTheme.accentRed),
                     onDeleted: () async {
                       await dbRepo.removeClassAssignment(a['id'] as String);
@@ -480,7 +480,7 @@ class _ServantAssignmentsSection extends StatelessWidget {
                   final canView = a['can_view_reports'] as bool? ?? true;
                   return Chip(
                     label: Text('$meetingName • ${canTake ? "حضور" : "بدون حضور"} • ${canView ? "تقارير" : "بدون تقارير"}', style: GoogleFonts.cairo(fontSize: 10)),
-                    backgroundColor: Colors.teal.withOpacity(0.08),
+                    backgroundColor: Colors.teal.withValues(alpha: 0.08),
                     deleteIcon: const Icon(Icons.close, size: 12, color: AppTheme.accentRed),
                     onDeleted: () async {
                       await dbRepo.removeMeetingAssignment(a['id'] as String);

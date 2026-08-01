@@ -167,6 +167,9 @@ class DashboardScreen extends StatelessWidget {
                           ),
                           const SizedBox(height: 18),
                         ],
+
+                        if (homeState.upcomingBirthdays.isNotEmpty)
+                          _buildBirthdaysCard(homeState.upcomingBirthdays),
                       ],
                     ),
                   );
@@ -226,6 +229,188 @@ class DashboardScreen extends StatelessWidget {
     if (!context.mounted) return;
     context.read<HomeBloc>().add(LoadHomeData());
     context.read<ChurchBloc>().add(LoadChurchContext());
+  }
+
+  Widget _buildBirthdaysCard(List<BirthdayReminder> birthdays) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topRight,
+          end: Alignment.bottomLeft,
+          colors: [Color(0xFFFFF7E6), Colors.white],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: AppTheme.accentOrange.withValues(alpha: 0.22),
+        ),
+        boxShadow: AppTheme.softShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: AppTheme.accentOrange.withValues(alpha: 0.14),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.cake_rounded,
+                  color: AppTheme.accentOrange,
+                  size: 23,
+                ),
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'أعياد الميلاد القادمة',
+                      style: GoogleFonts.cairo(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                        color: AppTheme.textDark,
+                      ),
+                    ),
+                    Text(
+                      'خلال الثلاثين يومًا القادمة',
+                      style: GoogleFonts.cairo(
+                        fontSize: 11,
+                        color: AppTheme.textLight,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
+                decoration: BoxDecoration(
+                  color: AppTheme.accentOrange,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  '${birthdays.length}',
+                  style: GoogleFonts.cairo(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          ...birthdays.take(4).map((birthday) {
+            final dateLabel = intl.DateFormat(
+              'd MMMM',
+              'ar',
+            ).format(birthday.nextBirthday);
+            final timingLabel = birthday.daysUntil == 0
+                ? 'اليوم 🎉'
+                : birthday.daysUntil == 1
+                ? 'غدًا'
+                : 'بعد ${birthday.daysUntil} يوم';
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.82),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: AppTheme.accentOrange.withValues(alpha: 0.12),
+                ),
+              ),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 18,
+                    backgroundColor: AppTheme.accentOrange.withValues(
+                      alpha: 0.12,
+                    ),
+                    child: const Icon(
+                      Icons.celebration_rounded,
+                      color: AppTheme.accentOrange,
+                      size: 18,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          birthday.member.fullName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.cairo(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 13,
+                            color: AppTheme.textDark,
+                          ),
+                        ),
+                        Text(
+                          '$dateLabel • العمر القادم ${birthday.turningAge} سنة',
+                          style: GoogleFonts.cairo(
+                            fontSize: 10.5,
+                            color: AppTheme.textLight,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 9,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: birthday.daysUntil == 0
+                          ? AppTheme.secondary.withValues(alpha: 0.13)
+                          : AppTheme.accentOrange.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      timingLabel,
+                      style: GoogleFonts.cairo(
+                        color: birthday.daysUntil == 0
+                            ? AppTheme.secondary
+                            : AppTheme.accentOrange,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+          if (birthdays.length > 4)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Center(
+                child: Text(
+                  'و${birthdays.length - 4} أعياد ميلاد أخرى قريبًا',
+                  style: GoogleFonts.cairo(
+                    fontSize: 11,
+                    color: AppTheme.textLight,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 
   Future<void> _openMeetingsAndRefreshHome(BuildContext context) async {
