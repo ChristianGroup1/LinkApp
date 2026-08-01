@@ -217,9 +217,8 @@ Deno.serve(async (req) => {
     const logoUrl =
       Deno.env.get('INVITE_EMAIL_LOGO_URL') ??
       `${supabaseUrl}/storage/v1/object/public/app-assets/link_logo.png`
-    const fromAddress =
-      Deno.env.get('INVITE_EMAIL_FROM') ?? 'Link <onboarding@resend.dev>'
-    const inviteLink = `${supabaseUrl}/functions/v1/invite-redirect?t=${invite.invite_token}`
+    const webBaseUrl = Deno.env.get('INVITE_LINK_BASE_URL') ?? 'https://link-church-app.vercel.app/invite'
+    const inviteLink = `${webBaseUrl}?t=${invite.invite_token}`
 
     const isResendKey = !!resendApiKey && resendApiKey.trim().startsWith('re_')
 
