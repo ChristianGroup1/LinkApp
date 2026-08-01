@@ -4,11 +4,13 @@ import 'package:flutter/material.dart';
 class TabNavigator extends StatefulWidget {
   final Widget root;
   final int refreshToken;
+  final GlobalKey<NavigatorState>? navigatorKey;
 
   const TabNavigator({
     super.key,
     required this.root,
     required this.refreshToken,
+    this.navigatorKey,
   });
 
   @override
@@ -16,20 +18,23 @@ class TabNavigator extends StatefulWidget {
 }
 
 class _TabNavigatorState extends State<TabNavigator> {
-  final _navigatorKey = GlobalKey<NavigatorState>();
+  late final GlobalKey<NavigatorState> _localKey = GlobalKey<NavigatorState>();
+
+  GlobalKey<NavigatorState> get _effectiveKey =>
+      widget.navigatorKey ?? _localKey;
 
   @override
   void didUpdateWidget(covariant TabNavigator oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.refreshToken != oldWidget.refreshToken) {
-      _navigatorKey.currentState?.popUntil((route) => route.isFirst);
+      _effectiveKey.currentState?.popUntil((route) => route.isFirst);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Navigator(
-      key: _navigatorKey,
+      key: _effectiveKey,
       onGenerateRoute: (settings) {
         return MaterialPageRoute(
           settings: settings,

@@ -439,6 +439,7 @@ class _SundaySchoolTabState extends State<_SundaySchoolTab> {
                             final isSelected = _selectedWeekday == value;
 
                             return ChoiceChip(
+                              showCheckmark: false,
                               label: Text(
                                 label,
                                 style: GoogleFonts.cairo(

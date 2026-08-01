@@ -10,14 +10,29 @@ import '../../attendance/presentation/attendance_records_screen.dart';
 import '../../follow_up/presentation/follow_up_screen.dart';
 import '../../meetings/presentation/meetings_list_screen.dart';
 import '../../reports/presentation/reports_screen.dart';
+import '../../../presentation/widgets/in_app_spotlight_overlay.dart';
+import '../../../presentation/screens/app_tour_screen.dart';
 import 'servants_permissions_screen.dart';
 import '../../../logic/home/home_bloc.dart';
 import '../logic/church_bloc.dart';
 
 class DashboardScreen extends StatelessWidget {
   final VoidCallback onStartAttendance;
+  final GlobalKey? meetingsKey;
+  final GlobalKey? recordsKey;
+  final GlobalKey? followUpKey;
+  final GlobalKey? reportsKey;
+  final GlobalKey? servantsKey;
 
-  const DashboardScreen({super.key, required this.onStartAttendance});
+  const DashboardScreen({
+    super.key,
+    required this.onStartAttendance,
+    this.meetingsKey,
+    this.recordsKey,
+    this.followUpKey,
+    this.reportsKey,
+    this.servantsKey,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -115,44 +130,70 @@ class DashboardScreen extends StatelessWidget {
                           greeting: 'أهلاً بك، ${profile.fullName}',
                           subtitle: church?.nameAr ?? 'منصة لينك للخدمة',
                         ),
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 14),
 
                         // Quick Stats Grid
                         _buildStatsGrid(homeState),
                         const SizedBox(height: 14),
 
+                        // 1. الاجتماعات
                         _buildUpcomingMeetingsCard(homeState.upcomingMeetings),
                         const SizedBox(height: 18),
 
-                        // Role-aware ordering: attendance first, then reports.
                         if (homeState.canTakeAttendance) ...[
                           _buildQuickActionCard(context),
                           const SizedBox(height: 18),
                         ],
 
-                        if (homeState.canViewReports) ...[
-                          _buildReportsEntryCard(context),
-                          const SizedBox(height: 18),
-                          _buildFollowUpEntryCard(context),
-                          const SizedBox(height: 18),
-                        ],
-
-                        if (homeState.canTakeAttendance ||
-                            homeState.canViewReports) ...[
-                          _buildRecordsEntryCard(context),
-                          const SizedBox(height: 18),
-                        ],
-
                         if (homeState.canViewReports ||
                             homeState.canManageServants) ...[
-                          _buildMeetingsEntryCard(context),
+                          KeyedSubtree(
+                            key: meetingsKey,
+                            child: _buildMeetingsEntryCard(context),
+                          ),
                           const SizedBox(height: 18),
                         ],
 
-                        if (homeState.canManageServants) ...[
-                          _buildServantsRolesEntryCard(context),
+                        // 2. سجلات الحضور
+                        if (homeState.canTakeAttendance ||
+                            homeState.canViewReports) ...[
+                          KeyedSubtree(
+                            key: recordsKey,
+                            child: _buildRecordsEntryCard(context),
+                          ),
                           const SizedBox(height: 18),
                         ],
+
+                        // 3. متابعة الغياب
+                        if (homeState.canViewReports) ...[
+                          KeyedSubtree(
+                            key: followUpKey,
+                            child: _buildFollowUpEntryCard(context),
+                          ),
+                          const SizedBox(height: 18),
+                        ],
+
+                        // 4. التقارير والإحصائيات
+                        if (homeState.canViewReports) ...[
+                          KeyedSubtree(
+                            key: reportsKey,
+                            child: _buildReportsEntryCard(context),
+                          ),
+                          const SizedBox(height: 18),
+                        ],
+
+                        // 5. الخدام والصلاحيات
+                        if (homeState.canManageServants) ...[
+                          KeyedSubtree(
+                            key: servantsKey,
+                            child: _buildServantsRolesEntryCard(context),
+                          ),
+                          const SizedBox(height: 18),
+                        ],
+
+                        // 6. جولة في التطبيق 🚀
+                        _buildAppTourEntryTile(context),
+                        const SizedBox(height: 18),
 
                         if (!homeState.canTakeAttendance &&
                             !homeState.canViewReports &&
@@ -509,6 +550,24 @@ class DashboardScreen extends StatelessWidget {
       ),
     );
   }
+
+  Widget _buildAppTourEntryTile(BuildContext context) {
+    return AppActionTile(
+      icon: Icons.auto_awesome_rounded,
+      iconColor: const Color(0xFF2563EB),
+      title: 'جولة في التطبيق 🚀',
+      subtitle: 'الشرح التفاعلي والمباشر لكافة أقسام وأزرار الخدمة.',
+      onTap: () async {
+        await AppTourScreen.resetTourCompleted();
+        if (context.mounted) {
+          final tourNotifier = InAppTourNotifier.of(context);
+          tourNotifier?.startTour();
+        }
+      },
+    );
+  }
+
+
 
   Widget _buildReportsEntryCard(BuildContext context) {
     return AppActionTile(

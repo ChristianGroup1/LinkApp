@@ -140,168 +140,228 @@ class _LoginScreenState extends State<LoginScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               textDirection: TextDirection.rtl,
               children: [
-                const SizedBox(height: 16),
-                const Center(child: AuthLogoMark(size: 96)),
-                const SizedBox(height: 16),
-                Text(
-                  'Link',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.outfit(
-                    color: AppTheme.primary,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 3,
-                  ),
+                const SizedBox(height: 12),
+                // Top App Logo & Branding Header
+                Column(
+                  children: [
+                    const AuthLogoMark(size: 130),
+                    const SizedBox(height: 14),
+                   
+                    
+                  ],
                 ),
-                Text(
-                  'إدارة الكنيسة',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.cairo(
-                    color: AppTheme.textLight,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
+                const SizedBox(height: 24),
+                // Main Floating White Card
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(28),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.06),
+                        blurRadius: 30,
+                        offset: const Offset(0, 12),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(height: 36),
-                Text(
-                  'أهلاً بك',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.cairo(
-                    fontSize: 28,
-                    fontWeight: FontWeight.w900,
-                    color: AppTheme.textDark,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'سجل دخولك للوصول إلى لوحة إدارة الحضور والخدمة في لينك',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.cairo(
-                    color: AppTheme.textLight,
-                    height: 1.5,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    textDirection: TextDirection.rtl,
+                    children: [
+                      Text(
+                        'تسجيل الدخول',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.cairo(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w900,
+                          color: const Color(0xFF0F172A),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'أدخل البريد الإلكتروني وكلمة المرور للبدء',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.cairo(
+                          color: const Color(0xFF64748B),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      // Email Soft Grey Input
+                      const AuthFieldLabel('البريد الإلكتروني'),
+                      AuthSoftTextField(
+                        controller: _emailController,
+                        hint: 'البريد الإلكتروني أو اسم المستخدم',
+                        icon: Icons.alternate_email_rounded,
+                        latinInput: true,
+                        keyboardType: TextInputType.emailAddress,
+                      ),
+                      const SizedBox(height: 16),
+                      // Password Soft Grey Input
+                      Row(
+                        textDirection: TextDirection.rtl,
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          const Expanded(child: AuthFieldLabel('كلمة المرور')),
+                          TextButton(
+                            onPressed: isLoading
+                                ? null
+                                : () => Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          const ForgotPasswordScreen(),
+                                    ),
+                                  ),
+                            style: TextButton.styleFrom(
+                              padding: EdgeInsets.zero,
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            child: Text(
+                              'نسيت كلمة المرور؟',
+                              style: GoogleFonts.cairo(
+                                color: const Color(0xFF2563EB),
+                                fontWeight: FontWeight.w700,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      AuthSoftTextField(
+                        controller: _passwordController,
+                        hint: 'كلمة المرور',
+                        icon: Icons.lock_outline_rounded,
+                        obscureText: obscure,
+                        trailing: IconButton(
+                          onPressed: isLoading
+                              ? null
+                              : () => setState(() => obscure = !obscure),
+                          icon: Icon(
+                            obscure
+                                ? Icons.visibility_outlined
+                                : Icons.visibility_off_outlined,
+                            color: const Color(0xFF94A3B8),
+                            size: 20,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Row(
+                        textDirection: TextDirection.rtl,
+                        children: [
+                          SizedBox(
+                            height: 22,
+                            width: 22,
+                            child: Checkbox(
+                              value: remember,
+                              onChanged: isLoading
+                                  ? null
+                                  : (value) => setState(() => remember = value ?? false),
+                              activeColor: const Color(0xFF2563EB),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          GestureDetector(
+                            onTap: isLoading
+                                ? null
+                                : () => setState(() => remember = !remember),
+                            child: Text(
+                              'تذكرني',
+                              style: GoogleFonts.cairo(
+                                color: const Color(0xFF475569),
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+                      // Vibrant Blue Pill Button
+                      FilledButton(
+                        onPressed: isLoading ? null : _submitLogin,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFF2563EB),
+                          minimumSize: const Size.fromHeight(52),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(26),
+                          ),
+                          elevation: 4,
+                          shadowColor: const Color(0xFF2563EB).withValues(alpha: 0.35),
+                        ),
+                        child: isLoading
+                            ? const SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.5,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : Text(
+                                'تسجيل الدخول',
+                                style: GoogleFonts.cairo(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                      ),
+                      const SizedBox(height: 24),
+                      const Divider(color: Color(0xFFF1F5F9), height: 1),
+                      const SizedBox(height: 20),
+                      // Registration Link Prompt inside card
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        textDirection: TextDirection.rtl,
+                        children: [
+                          Text(
+                            'ليس لديك حساب؟ ',
+                            style: GoogleFonts.cairo(
+                              color: const Color(0xFF64748B),
+                              fontSize: 13,
+                            ),
+                          ),
+                          GestureDetector(
+                            onTap: isLoading
+                                ? null
+                                : () => Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) => const RegistrationScreen(),
+                                    ),
+                                  ),
+                            child: Text(
+                              'إنشاء حساب',
+                              style: GoogleFonts.cairo(
+                                color: const Color(0xFF2563EB),
+                                fontWeight: FontWeight.w900,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 28),
-                AuthFormSection(
-                  children: [
-                    const AuthFieldLabel('البريد الإلكتروني'),
-                    AuthSoftTextField(
-                      controller: _emailController,
-                      hint: 'example@link.org',
-                      icon: Icons.mail_outline,
-                      latinInput: true,
-                      keyboardType: TextInputType.emailAddress,
-                    ),
-                    const SizedBox(height: 18),
-                    Row(
-                      textDirection: TextDirection.rtl,
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        const Expanded(child: AuthFieldLabel('كلمة المرور')),
-                        TextButton(
-                          onPressed: isLoading
-                              ? null
-                              : () => Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        const ForgotPasswordScreen(),
-                                  ),
-                                ),
-                          child: Text(
-                            'نسيت كلمة السر؟',
-                            style: GoogleFonts.cairo(
-                              color: AppTheme.primary,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    AuthSoftTextField(
-                      controller: _passwordController,
-                      hint: '••••••••',
-                      icon: Icons.lock_outline,
-                      obscureText: obscure,
-                      trailing: IconButton(
-                        onPressed: isLoading
-                            ? null
-                            : () => setState(() => obscure = !obscure),
-                        icon: Icon(
-                          obscure
-                              ? Icons.visibility_outlined
-                              : Icons.visibility_off,
-                          color: AppTheme.textLight,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    Row(
-                      textDirection: TextDirection.rtl,
-                      children: [
-                        Switch(
-                          value: remember,
-                          onChanged: isLoading
-                              ? null
-                              : (value) => setState(() => remember = value),
-                          activeTrackColor: AppTheme.primary,
-                        ),
-                        Text(
-                          'تذكرني',
-                          style: GoogleFonts.cairo(color: AppTheme.textLight),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 18),
-                    AuthPrimaryButton(
-                      label: isLoading
-                          ? 'جاري تسجيل الدخول...'
-                          : 'تسجيل الدخول',
-                      icon: isLoading ? null : Icons.login,
-                      onTap: isLoading ? () {} : _submitLogin,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 26),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  textDirection: TextDirection.rtl,
-                  children: [
-                    Text(
-                      'ليس لديك حساب؟ ',
-                      style: GoogleFonts.cairo(color: AppTheme.textLight),
-                    ),
-                    GestureDetector(
-                      onTap: isLoading
-                          ? null
-                          : () => Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => const RegistrationScreen(),
-                              ),
-                            ),
-                      child: Text(
-                        'إنشاء حساب',
-                        style: GoogleFonts.cairo(
-                          color: AppTheme.primary,
-                          fontWeight: FontWeight.w800,
-                          height: 1.4,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 32),
                 Text(
-                  '© Link 2026 جميع الحقوق محفوظة\nالإصدار 1.0.0',
+                  'LinkApp © 2026 جميع الحقوق محفوظة',
                   textAlign: TextAlign.center,
                   style: GoogleFonts.cairo(
-                    color: const Color(0xFFA8B0C2),
-                    fontSize: 12,
-                    height: 1.5,
+                    color: const Color(0xFF94A3B8),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
               ],
             );
           },

@@ -882,6 +882,7 @@ class _AttendanceRecordingScreenState extends State<AttendanceRecordingScreen> {
   ) {
     final isSelected = state.statusFilter == statusValue;
     return ChoiceChip(
+      showCheckmark: false,
       label: Text(
         label,
         style: GoogleFonts.cairo(fontSize: 12, fontWeight: FontWeight.w800),

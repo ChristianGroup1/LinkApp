@@ -161,6 +161,14 @@ class MeetingEntity {
       attendanceReminderMinutes: json['attendance_reminder_minutes'] as int?,
     );
   }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is MeetingEntity && runtimeType == other.runtimeType && id == other.id;
+
+  @override
+  int get hashCode => id.hashCode;
 }
 
 class SundaySchoolClassEntity {
@@ -193,6 +201,16 @@ class SundaySchoolClassEntity {
       isActive: json['is_active'] as bool? ?? true,
     );
   }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SundaySchoolClassEntity &&
+          runtimeType == other.runtimeType &&
+          id == other.id;
+
+  @override
+  int get hashCode => id.hashCode;
 }
 
 class MemberEntity {

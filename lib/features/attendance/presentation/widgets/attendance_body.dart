@@ -89,7 +89,9 @@ class AttendanceBody extends StatelessWidget {
                 ),
                 const SizedBox(height: 10),
                 DropdownButtonFormField<MeetingEntity>(
-                  initialValue: selectedMeeting,
+                  initialValue: meetings.contains(selectedMeeting)
+                      ? selectedMeeting
+                      : (meetings.isNotEmpty ? meetings.first : null),
                   decoration: InputDecoration(
                     labelText: 'الاجتماع',
                     filled: true,

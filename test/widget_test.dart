@@ -552,6 +552,9 @@ class TestRepository implements DatabaseRepository {
   Future<void> acceptInvitationLink(String inviteToken) async {}
 
   @override
+  Future<List<Map<String, dynamic>>> getUserReceivedInvitations() async => [];
+
+  @override
   Future<AppProfile?> signUpWithInvitationToken({
     required String name,
     required String email,

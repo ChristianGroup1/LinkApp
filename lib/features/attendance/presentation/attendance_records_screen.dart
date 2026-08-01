@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart' as intl;
 
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/models.dart';
@@ -8,6 +9,7 @@ import '../../../data/offline/offline_messages.dart';
 import '../../../data/repositories/database_repository.dart';
 import '../../../shared/ui/app_states.dart';
 import '../logic/attendance_bloc.dart';
+import '../logic/auto_attendance_session_service.dart';
 import 'attendance_recording_screen.dart';
 import 'widgets/attendance_date_picker.dart';
 import 'widgets/attendance_sessions_list.dart';
@@ -56,6 +58,7 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
   Future<void> _loadInitialData() async {
     final repo = context.read<DatabaseRepository>();
     try {
+      await AutoAttendanceSessionService.instance.autoCreateSessionsOneDayInAdvance(repo);
       final profile = await repo.getCurrentProfile();
       final results = await Future.wait([
         repo.getMeetings(),
@@ -145,6 +148,299 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
     }
   }
 
+  bool get _canCreateSession =>
+      _isAdmin ||
+      _attendanceClassIds.isNotEmpty ||
+      _attendanceMeetingIds.isNotEmpty;
+
+  Future<void> _showCreateSessionDialog() async {
+    MeetingEntity? dialogMeeting = _selectedMeeting ?? _meetings.firstOrNull;
+    SundaySchoolClassEntity? dialogClass = _selectedClass ??
+        (_classes.where((c) => c.meetingId == dialogMeeting?.id).firstOrNull);
+    DateTime dialogDate = DateTime.now();
+    bool isSubmitting = false;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final meetingClasses = dialogMeeting == null
+                ? <SundaySchoolClassEntity>[]
+                : _classes.where((c) => c.meetingId == dialogMeeting!.id).toList();
+
+            final dateStr = intl.DateFormat('yyyy-MM-dd', 'ar').format(dialogDate);
+            final dayAr = intl.DateFormat('EEEE', 'ar').format(dialogDate);
+
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 20,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                textDirection: TextDirection.rtl,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    textDirection: TextDirection.rtl,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEFF6FF),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Icons.post_add_rounded,
+                          color: AppTheme.primary,
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        textDirection: TextDirection.rtl,
+                        children: [
+                          Text(
+                            'إنشاء كشف حضور جديد',
+                            style: GoogleFonts.cairo(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w900,
+                              color: AppTheme.textDark,
+                            ),
+                          ),
+                          Text(
+                            'اختر الاجتماع والتاريخ لإنشاء كشف مستقل جديد',
+                            style: GoogleFonts.cairo(
+                              fontSize: 12,
+                              color: AppTheme.textLight,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Dropdown Meeting
+                  DropdownButtonFormField<MeetingEntity>(
+                    initialValue: _meetings.contains(dialogMeeting)
+                        ? dialogMeeting
+                        : _meetings.firstOrNull,
+                    decoration: const InputDecoration(labelText: 'الاجتماع'),
+                    items: _meetings.map((m) {
+                      return DropdownMenuItem(value: m, child: Text(m.nameAr));
+                    }).toList(),
+                    onChanged: (meeting) {
+                      setModalState(() {
+                        dialogMeeting = meeting;
+                        dialogClass = meeting?.kind == MeetingKind.sundaySchool
+                            ? _classes.where((c) => c.meetingId == meeting!.id).firstOrNull
+                            : null;
+                      });
+                    },
+                  ),
+
+                  // Dropdown Class (if Sunday School)
+                  if (dialogMeeting?.kind == MeetingKind.sundaySchool &&
+                      meetingClasses.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<SundaySchoolClassEntity>(
+                      initialValue: meetingClasses.contains(dialogClass)
+                          ? dialogClass
+                          : meetingClasses.firstOrNull,
+                      decoration: const InputDecoration(labelText: 'الفصل'),
+                      items: meetingClasses.map((cls) {
+                        return DropdownMenuItem(value: cls, child: Text(cls.nameAr));
+                      }).toList(),
+                      onChanged: (cls) {
+                        setModalState(() => dialogClass = cls);
+                      },
+                    ),
+                  ],
+
+                  const SizedBox(height: 16),
+
+                  // Session Date Picker
+                  Text(
+                    'تاريخ الكشف:',
+                    style: GoogleFonts.cairo(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 13,
+                      color: AppTheme.textDark,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  InkWell(
+                    onTap: () async {
+                      final picked = await pickAttendanceDate(
+                        context,
+                        meetingWeekday: dialogMeeting?.weekday,
+                        existingSessions: _sessions,
+                      );
+                      if (picked != null) {
+                        setModalState(() => dialogDate = picked);
+                      }
+                    },
+                    borderRadius: BorderRadius.circular(14),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: Colors.grey.shade300),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        textDirection: TextDirection.rtl,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.calendar_month_rounded, color: AppTheme.primary, size: 20),
+                              const SizedBox(width: 10),
+                              Text(
+                                '$dayAr ($dateStr)',
+                                style: GoogleFonts.cairo(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13,
+                                  color: AppTheme.textDark,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const Icon(Icons.edit_calendar_rounded, color: AppTheme.textLight, size: 18),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // Create Action Button
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: (isSubmitting || dialogMeeting == null)
+                          ? null
+                          : () async {
+                              setModalState(() => isSubmitting = true);
+                              final messenger = ScaffoldMessenger.of(this.context);
+                              final rootNavigator = Navigator.of(this.context);
+                              final bloc = _attendanceBloc;
+                              try {
+                                final repo = this.context.read<DatabaseRepository>();
+                                final weekNum = (dialogDate.day / 7).ceil();
+                                final saveResult = await repo.createWeeklySession(
+                                  meetingId: dialogMeeting!.id,
+                                  classId: dialogMeeting!.kind == MeetingKind.sundaySchool
+                                      ? dialogClass?.id
+                                      : null,
+                                  sessionDate: dialogDate,
+                                  weekNumber: weekNum,
+                                );
+
+                                if (mounted) {
+                                  Navigator.pop(sheetContext); // Close bottom sheet
+                                  await _loadSessions(); // Reload sessions list
+
+                                  final newSession = saveResult.data;
+                                  if (mounted) {
+                                    messenger.showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          'تم إنشاء كشف الحضور بنجاح! 🎉',
+                                          style: GoogleFonts.cairo(),
+                                        ),
+                                        backgroundColor: const Color(0xFF10B981),
+                                      ),
+                                    );
+
+                                    if (newSession != null && bloc != null) {
+                                      rootNavigator.push(
+                                        MaterialPageRoute(
+                                          builder: (_) => BlocProvider.value(
+                                            value: bloc,
+                                            child: AttendanceRecordingScreen(
+                                              session: newSession,
+                                            ),
+                                          ),
+                                        ),
+                                      ).then((_) {
+                                        if (mounted) _loadSessions();
+                                      });
+                                    }
+                                  }
+                                }
+                              } catch (e) {
+                                setModalState(() => isSubmitting = false);
+                                if (mounted) {
+                                  messenger.showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        'فشل إنشاء الكشف: ${e.toString()}',
+                                        style: GoogleFonts.cairo(),
+                                      ),
+                                      backgroundColor: AppTheme.accentRed,
+                                    ),
+                                  );
+                                }
+                              }
+                            },
+                      icon: isSubmitting
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2,
+                              ),
+                            )
+                          : const Icon(Icons.check_circle_rounded, size: 20),
+                      label: Text(
+                        isSubmitting ? 'جاري إنشاء الكشف...' : 'إنشاء الكشف 🚀',
+                        style: GoogleFonts.cairo(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 15,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   bool _canDeleteSession(AttendanceSessionEntity session) {
     if (_isAdmin) return true;
     if (session.classId != null) {
@@ -212,6 +508,7 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
             ),
           ),
           centerTitle: true,
+          actions: [],
         ),
         body: BlocConsumer<AttendanceBloc, AttendanceState>(
             listenWhen: (previous, current) => current is AttendanceError,
@@ -269,6 +566,8 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
                                   },
                                   onDelete: canDelete
                                       ? () async {
+                                          final messenger =
+                                              ScaffoldMessenger.of(context);
                                           try {
                                             final synced =
                                                 await repo.deleteWeeklySession(
@@ -279,8 +578,7 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
                                             if (!mounted) return;
                                             _loadSessions();
                                             if (!synced && mounted) {
-                                              ScaffoldMessenger.of(context)
-                                                  .showSnackBar(
+                                              messenger.showSnackBar(
                                                 SnackBar(
                                                   content: Text(
                                                     kOfflineSavedMessage,
@@ -291,8 +589,7 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
                                             }
                                           } catch (e) {
                                             if (!mounted) return;
-                                            ScaffoldMessenger.of(context)
-                                                .showSnackBar(
+                                            messenger.showSnackBar(
                                               SnackBar(
                                                 content: Text(
                                                   'فشل حذف السجل: ${e.toString()}',
@@ -314,6 +611,22 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
               );
             },
           ),
+          floatingActionButton: _canCreateSession
+              ? FloatingActionButton.extended(
+                  onPressed: _showCreateSessionDialog,
+                  backgroundColor: AppTheme.primary,
+                  foregroundColor: Colors.white,
+                  elevation: 4,
+                  icon: const Icon(Icons.add_rounded, size: 22),
+                  label: Text(
+                    'كشف جديد ',
+                    style: GoogleFonts.cairo(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 14,
+                    ),
+                  ),
+                )
+              : null,
         ),
     );
   }
@@ -331,7 +644,9 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
       child: Column(
         children: [
           DropdownButtonFormField<MeetingEntity>(
-            value: _selectedMeeting,
+            value: _meetings.contains(_selectedMeeting)
+                ? _selectedMeeting
+                : null,
             decoration: const InputDecoration(labelText: 'فلتر الاجتماع'),
             items: _meetings.map((m) {
               return DropdownMenuItem(value: m, child: Text(m.nameAr));
@@ -354,7 +669,9 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
               meetingClasses.isNotEmpty) ...[
             const SizedBox(height: 8),
             DropdownButtonFormField<SundaySchoolClassEntity>(
-              value: _selectedClass,
+              value: meetingClasses.contains(_selectedClass)
+                  ? _selectedClass
+                  : null,
               decoration: const InputDecoration(labelText: 'فلتر الفصل'),
               items: meetingClasses.map((cls) {
                 return DropdownMenuItem(
@@ -373,7 +690,9 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
           ],
           const SizedBox(height: 10),
           DropdownButtonFormField<String>(
-            value: _selectedSessionId,
+            value: _sessions.any((s) => s.id == _selectedSessionId)
+                ? _selectedSessionId
+                : null,
             decoration:
                 const InputDecoration(labelText: 'فلتر كشف الحضور'),
             items: _sessions.map((s) {

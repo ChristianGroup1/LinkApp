@@ -45,6 +45,8 @@ class _WeeklyAttendanceScreenState extends State<WeeklyAttendanceScreen> {
   }
 
   Future<void> _loadAvailableScopes(ChurchContextLoaded churchState) async {
+    if (_hasLoadedScopes) return;
+    _hasLoadedScopes = true;
     try {
       setState(() => _isLoadingDropdowns = true);
       final repo = context.read<DatabaseRepository>();
@@ -99,6 +101,7 @@ class _WeeklyAttendanceScreenState extends State<WeeklyAttendanceScreen> {
         );
       }
 
+      if (!mounted) return;
       setState(() {
         _meetings = filteredMeetings;
         _classes = filteredClasses;
@@ -109,13 +112,21 @@ class _WeeklyAttendanceScreenState extends State<WeeklyAttendanceScreen> {
           if (_selectedMeeting!.kind == MeetingKind.sundaySchool) {
             _selectedClass = _classesForMeeting(_selectedMeeting).firstOrNull;
           }
+          _attendanceBloc?.add(
+            LoadAttendanceSessions(
+              meetingId: _selectedMeeting!.id,
+              classId: _selectedClass?.id,
+            ),
+          );
         }
       });
     } catch (_) {
-      setState(() {
-        _isLoadingDropdowns = false;
-        _hasLoadedScopes = true;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoadingDropdowns = false;
+          _hasLoadedScopes = true;
+        });
+      }
     }
   }
 

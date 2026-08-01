@@ -312,6 +312,7 @@ class ServantsFilterChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ChoiceChip(
+      showCheckmark: false,
       avatar: Icon(
         icon,
         size: 15,
@@ -722,12 +723,12 @@ class _RoleTag extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final displayRole = role == AppRole.superAdmin ? AppRole.churchAdmin : role;
-    final color = switch (displayRole) {
-      AppRole.churchAdmin => const Color(0xFF0EA5E9),
-      AppRole.classLeader => const Color(0xFF10B981),
-      _ => AppTheme.accentOrange,
-    };
+    final bool isAdminRole =
+        role == AppRole.superAdmin || role == AppRole.churchAdmin;
+    final displayRole =
+        isAdminRole ? AppRole.churchAdmin : AppRole.attendanceOfficer;
+    final color =
+        isAdminRole ? const Color(0xFF0EA5E9) : AppTheme.primary;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
@@ -750,12 +751,8 @@ class _RoleTag extends StatelessWidget {
           items: const [
             DropdownMenuItem(value: AppRole.churchAdmin, child: Text('مدير')),
             DropdownMenuItem(
-              value: AppRole.classLeader,
-              child: Text('أمين فصل'),
-            ),
-            DropdownMenuItem(
               value: AppRole.attendanceOfficer,
-              child: Text('مسؤول حضور'),
+              child: Text('مسئول غياب'),
             ),
           ],
           onChanged: (value) {

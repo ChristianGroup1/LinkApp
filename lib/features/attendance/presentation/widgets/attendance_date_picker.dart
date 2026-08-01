@@ -53,9 +53,10 @@ Future<DateTime?> pickAttendanceDate(
               ),
               content: SizedBox(
                 width: 340,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -64,11 +65,11 @@ Future<DateTime?> pickAttendanceDate(
                             setDialogState(() {
                               visibleMonth = DateTime(
                                 visibleMonth.year,
-                                visibleMonth.month - 1,
+                                visibleMonth.month -1,
                               );
                             });
                           },
-                          icon: const Icon(Icons.chevron_right),
+                          icon: const Icon(Icons.chevron_left),
                         ),
                         Text(
                           '${monthNames[visibleMonth.month - 1]} ${visibleMonth.year}',
@@ -86,7 +87,7 @@ Future<DateTime?> pickAttendanceDate(
                               );
                             });
                           },
-                          icon: const Icon(Icons.chevron_left),
+                          icon: const Icon(Icons.chevron_right),
                         ),
                       ],
                     ),
@@ -262,6 +263,7 @@ Future<DateTime?> pickAttendanceDate(
                   ],
                 ),
               ),
+            ),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(dialogContext),

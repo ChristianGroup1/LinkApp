@@ -82,26 +82,22 @@ begin
     raise exception 'اسم المستخدم مطلوب';
   end if;
 
-  if exists (select 1 from public.profiles where id = profile_id) then
-    raise exception 'الحساب مربوط بكنيسة بالفعل';
-  end if;
+  -- Find existing church by name or create a new one smoothly for stats
+  select id into target_church_id
+  from public.churches
+  where lower(btrim(name_ar)) = lower(normalized_name)
+     or lower(btrim(name)) = lower(normalized_name)
+  limit 1;
 
-  if exists (
-    select 1
-    from public.churches
-    where lower(btrim(name_ar)) = lower(normalized_name)
-       or lower(btrim(name)) = lower(normalized_name)
-  ) then
-    raise exception 'اسم الكنيسة مستخدم بالفعل. اطلب كود دعوة من مسؤول الكنيسة.';
+  if target_church_id is null then
+    insert into public.churches (name, name_ar, slug)
+    values (
+      normalized_name,
+      normalized_name,
+      'church-' || substr(md5(lower(normalized_name) || random()::text), 1, 12)
+    )
+    returning id into target_church_id;
   end if;
-
-  insert into public.churches (name, name_ar, slug)
-  values (
-    normalized_name,
-    normalized_name,
-    'church-' || substr(md5(lower(normalized_name) || random()::text), 1, 12)
-  )
-  returning id into target_church_id;
 
   insert into public.profiles (id, church_id, full_name, role, email, phone)
   values (
@@ -111,7 +107,12 @@ begin
     'church_admin',
     nullif(btrim(profile_email), ''),
     nullif(btrim(profile_phone), '')
-  );
+  )
+  on conflict (id) do update set
+    church_id = excluded.church_id,
+    full_name = excluded.full_name,
+    email = excluded.email,
+    phone = excluded.phone;
 
   return target_church_id;
 end;
@@ -404,6 +405,207 @@ begin
     'church_id', inv.church_id,
     'role', inv.role
   );
+-- RPC to fetch all invitations received by the currently authenticated user's email
+create or replace function public.get_my_received_invitations()
+returns jsonb
+language plpgsql
+security definer
+stable
+set search_path = public, auth
+as $$
+declare
+  user_email text;
+  result jsonb;
+begin
+  user_email := lower(btrim(auth.jwt() ->> 'email'));
+  if user_email is null or user_email = '' then
+    return '[]'::jsonb;
+  end if;
+
+  select coalesce(
+    jsonb_agg(
+      jsonb_build_object(
+        'id', i.id,
+        'church_id', i.church_id,
+        'full_name', i.full_name,
+        'email', i.email,
+        'role', i.role,
+        'assignment_scope', i.assignment_scope,
+        'can_take_attendance', i.can_take_attendance,
+        'can_view_reports', i.can_view_reports,
+        'invite_token', i.invite_token,
+        'is_used', i.is_used,
+        'declined_at', i.declined_at,
+        'created_at', i.created_at,
+        'churches', jsonb_build_object(
+          'name', c.name,
+          'name_ar', c.name_ar
+        )
+      ) order by i.created_at desc
+    ),
+    '[]'::jsonb
+  )
+  into result
+  from public.invitations i
+  join public.churches c on c.id = i.church_id
+  where lower(btrim(i.email)) = user_email;
+
+  return result;
 end;
 $$;
+
+grant execute on function public.get_my_received_invitations() to authenticated;
+
+-- RLS policy allowing users to read invitations sent to their email
+drop policy if exists "invitations_read_own_email" on public.invitations;
+create policy "invitations_read_own_email" on public.invitations
+for select to authenticated using (
+  lower(btrim(email)) = lower(btrim(auth.jwt() ->> 'email'))
+);
+
+-- Updated accept_invitation_assignment (removes same church check and syncs user's church_id)
+create or replace function public.accept_invitation_assignment(
+  invitation_id uuid,
+  new_user_id uuid
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  invite record;
+  class_row record;
+begin
+  select *
+  into invite
+  from public.invitations
+  where id = invitation_id
+    and is_used = false
+    and declined_at is null;
+
+  if not found then
+    raise exception 'كود التفعيل غير صالح أو تم استخدامه مسبقاً.';
+  end if;
+
+  -- Sync user's church_id to match the invitation's church
+  update public.profiles
+  set church_id = invite.church_id,
+      updated_at = now()
+  where id = new_user_id;
+
+  if invite.target_id is not null then
+    if invite.role = 'class_leader' and invite.assignment_scope = 'meeting_classes' then
+      for class_row in
+        select id
+        from public.sunday_school_classes
+        where meeting_id = invite.target_id
+          and is_active = true
+      loop
+        insert into public.class_assignments (
+          church_id,
+          class_id,
+          user_id,
+          can_take_attendance,
+          can_view_reports
+        )
+        values (
+          invite.church_id,
+          class_row.id,
+          new_user_id,
+          coalesce(invite.can_take_attendance, true),
+          coalesce(invite.can_view_reports, true)
+        )
+        on conflict (class_id, user_id) do update set
+          can_take_attendance = excluded.can_take_attendance,
+          can_view_reports = excluded.can_view_reports;
+      end loop;
+    elsif invite.role = 'class_leader' then
+      insert into public.class_assignments (
+        church_id,
+        class_id,
+        user_id,
+        can_take_attendance,
+        can_view_reports
+      )
+      values (
+        invite.church_id,
+        invite.target_id,
+        new_user_id,
+        coalesce(invite.can_take_attendance, true),
+        coalesce(invite.can_view_reports, true)
+      )
+      on conflict (class_id, user_id) do update set
+        can_take_attendance = excluded.can_take_attendance,
+        can_view_reports = excluded.can_view_reports;
+    elsif invite.role = 'attendance_officer' then
+      insert into public.meeting_assignments (
+        church_id,
+        meeting_id,
+        user_id,
+        can_take_attendance,
+        can_view_reports
+      )
+      values (
+        invite.church_id,
+        invite.target_id,
+        new_user_id,
+        coalesce(invite.can_take_attendance, true),
+        coalesce(invite.can_view_reports, true)
+      )
+      on conflict (meeting_id, user_id) do update set
+        can_take_attendance = excluded.can_take_attendance,
+        can_view_reports = excluded.can_view_reports;
+    end if;
+  end if;
+
+  update public.invitations
+  set is_used = true
+  where id = invitation_id;
+end;
+$$;
+
+grant execute on function public.accept_invitation_assignment(uuid, uuid) to anon, authenticated;
+
+-- Updated accept_invitation_link (removes same church check)
+create or replace function public.accept_invitation_link(p_token text)
+returns uuid
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+declare
+  inv record;
+begin
+  if auth.uid() is null then
+    raise exception 'يجب تسجيل الدخول أولاً';
+  end if;
+
+  select *
+  into inv
+  from public.invitations
+  where invite_token = btrim(p_token)
+    and is_used = false
+    and declined_at is null
+  limit 1;
+
+  if not found then
+    raise exception 'الدعوة غير صالحة أو انتهت صلاحيتها.';
+  end if;
+
+  -- Join/Sync profile's church to match the invitation
+  update public.profiles
+  set church_id = inv.church_id,
+      updated_at = now()
+  where id = auth.uid();
+
+  perform public.accept_invitation_assignment(inv.id, auth.uid());
+
+  return inv.church_id;
+end;
+$$;
+
+grant execute on function public.accept_invitation_link(text) to authenticated;
+
+
 

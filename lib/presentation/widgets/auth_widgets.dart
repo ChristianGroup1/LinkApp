@@ -109,20 +109,12 @@ class AuthLogoMark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return SizedBox(
       width: size,
       height: size,
-      padding: EdgeInsets.all(size * .16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(size * .26),
-        border: Border.all(
-          color: AppTheme.primary.withValues(alpha: 0.08),
-          width: 1.5,
-        ),
-        boxShadow: AppTheme.softShadow,
+      child: ClipOval(
+        child: Image.asset(kLogoAsset, fit: BoxFit.cover),
       ),
-      child: Image.asset(kLogoAsset, fit: BoxFit.contain),
     );
   }
 }

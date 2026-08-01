@@ -251,11 +251,13 @@ class AppActionTile extends StatelessWidget {
 class AppWelcomeHeader extends StatelessWidget {
   final String greeting;
   final String subtitle;
+  final VoidCallback? onStartTour;
 
   const AppWelcomeHeader({
     super.key,
     required this.greeting,
     required this.subtitle,
+    this.onStartTour,
   });
 
   @override
@@ -327,6 +329,41 @@ class AppWelcomeHeader extends StatelessWidget {
               ],
             ),
           ),
+          if (onStartTour != null) ...[
+            const SizedBox(width: 8),
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: onStartTour,
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.4),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 15),
+                      const SizedBox(width: 4),
+                      Text(
+                        'الجولة 🚀',
+                        style: GoogleFonts.cairo(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );

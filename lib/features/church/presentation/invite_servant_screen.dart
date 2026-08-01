@@ -33,6 +33,7 @@ class _InviteServantScreenState extends State<InviteServantScreen> {
   List<MeetingEntity> _groupedMeetings = [];
   List<SundaySchoolClassEntity> _classes = [];
 
+  AppRole _selectedRole = AppRole.attendanceOfficer;
   String _assignmentScope = 'meeting_classes';
   String? _selectedTargetId;
   bool _canTakeAttendance = true;
@@ -99,12 +100,6 @@ class _InviteServantScreenState extends State<InviteServantScreen> {
     }
   }
 
-  AppRole _roleForScope(String scope) {
-    return scope == 'meeting'
-        ? AppRole.attendanceOfficer
-        : AppRole.classLeader;
-  }
-
   Future<void> _generateCode() async {
     if (!_formKey.currentState!.validate()) return;
     if (_selectedTargetId == null) {
@@ -127,7 +122,7 @@ class _InviteServantScreenState extends State<InviteServantScreen> {
         phone: _phoneController.text.trim().isEmpty
             ? null
             : _phoneController.text.trim(),
-        role: _roleForScope(_assignmentScope),
+        role: _selectedRole,
         targetId: _selectedTargetId,
         assignmentScope: _assignmentScope,
         canTakeAttendance: _canTakeAttendance,
@@ -395,6 +390,126 @@ class _InviteServantScreenState extends State<InviteServantScreen> {
                     'رقم الهاتف (اختياري)',
                     Icons.phone_outlined,
                   ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _SectionCard(
+              title: 'دور الخادم بالخدمة',
+              icon: Icons.admin_panel_settings_outlined,
+              children: [
+                Text(
+                  'حدد دور الخادم في الخدمة (إما مدير أو مسئول غياب):',
+                  style: GoogleFonts.cairo(
+                    fontSize: 12,
+                    color: AppTheme.textLight,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => setState(() => _selectedRole = AppRole.attendanceOfficer),
+                        borderRadius: BorderRadius.circular(14),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+                          decoration: BoxDecoration(
+                            color: _selectedRole == AppRole.attendanceOfficer
+                                ? AppTheme.primaryLight
+                                : Colors.grey.shade50,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: _selectedRole == AppRole.attendanceOfficer
+                                  ? AppTheme.primary
+                                  : Colors.grey.shade300,
+                              width: _selectedRole == AppRole.attendanceOfficer ? 2 : 1,
+                            ),
+                          ),
+                          child: Column(
+                            children: [
+                              Icon(
+                                Icons.checklist_rtl_rounded,
+                                color: _selectedRole == AppRole.attendanceOfficer
+                                    ? AppTheme.primary
+                                    : AppTheme.textLight,
+                                size: 24,
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                'مسئول غياب',
+                                style: GoogleFonts.cairo(
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 13,
+                                  color: _selectedRole == AppRole.attendanceOfficer
+                                      ? AppTheme.primary
+                                      : AppTheme.textDark,
+                                ),
+                              ),
+                              Text(
+                                'خادم / تحضير غياب',
+                                style: GoogleFonts.cairo(
+                                  fontSize: 10,
+                                  color: AppTheme.textLight,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => setState(() => _selectedRole = AppRole.churchAdmin),
+                        borderRadius: BorderRadius.circular(14),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+                          decoration: BoxDecoration(
+                            color: _selectedRole == AppRole.churchAdmin
+                                ? const Color(0xFFEFF6FF)
+                                : Colors.grey.shade50,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: _selectedRole == AppRole.churchAdmin
+                                  ? const Color(0xFF0EA5E9)
+                                  : Colors.grey.shade300,
+                              width: _selectedRole == AppRole.churchAdmin ? 2 : 1,
+                            ),
+                          ),
+                          child: Column(
+                            children: [
+                              Icon(
+                                Icons.shield_outlined,
+                                color: _selectedRole == AppRole.churchAdmin
+                                    ? const Color(0xFF0EA5E9)
+                                    : AppTheme.textLight,
+                                size: 24,
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                'مدير',
+                                style: GoogleFonts.cairo(
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 13,
+                                  color: _selectedRole == AppRole.churchAdmin
+                                      ? const Color(0xFF0EA5E9)
+                                      : AppTheme.textDark,
+                                ),
+                              ),
+                              Text(
+                                'مدير خدمة / كنيسة',
+                                style: GoogleFonts.cairo(
+                                  fontSize: 10,
+                                  color: AppTheme.textLight,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),

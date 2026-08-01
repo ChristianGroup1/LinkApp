@@ -1048,15 +1048,6 @@ begin
     raise exception 'الحساب مربوط بكنيسة بالفعل';
   end if;
 
-  if exists (
-    select 1
-    from public.churches
-    where lower(btrim(name_ar)) = lower(normalized_name)
-       or lower(btrim(name)) = lower(normalized_name)
-  ) then
-    raise exception 'اسم الكنيسة مستخدم بالفعل. اطلب كود دعوة من مسؤول الكنيسة.';
-  end if;
-
   insert into public.churches (name, name_ar, slug)
   values (
     normalized_name,

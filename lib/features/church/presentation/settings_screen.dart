@@ -7,6 +7,9 @@ import '../../../data/repositories/database_repository.dart';
 import '../../../logic/auth/auth_bloc.dart';
 import '../../../shared/ui/app_widgets.dart';
 import '../logic/church_bloc.dart';
+import '../../../presentation/widgets/in_app_spotlight_overlay.dart';
+import '../../../presentation/screens/app_tour_screen.dart';
+import '../../../presentation/screens/my_invitations_screen.dart';
 import 'servants_permissions_screen.dart';
 import 'widgets/compact_settings_dialog.dart';
 import 'widgets/settings_cards.dart';
@@ -128,6 +131,18 @@ class _ProfileActionsCard extends StatelessWidget {
     child: Column(
       children: [
         _ProfileActionRow(
+          icon: Icons.mark_email_unread_outlined,
+          title: 'الدعوات الواردة',
+          subtitle: 'مراجعة وقبول أو رفض دعوات الخدمة',
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const MyInvitationsScreen(),
+            ),
+          ),
+        ),
+        Divider(height: 1, color: AppTheme.border.withValues(alpha: 0.7)),
+        _ProfileActionRow(
           icon: Icons.edit_outlined,
           title: 'تعديل البيانات الشخصية',
           subtitle: 'الاسم ورقم الهاتف',
@@ -139,6 +154,29 @@ class _ProfileActionsCard extends StatelessWidget {
           title: 'تغيير كلمة المرور',
           subtitle: 'اختر كلمة مرور جديدة لحسابك',
           onTap: () => _showChangePasswordDialog(context),
+        ),
+        Divider(height: 1, color: AppTheme.border.withValues(alpha: 0.7)),
+        _ProfileActionRow(
+          icon: Icons.auto_awesome_rounded,
+          title: 'جولة في التطبيق 🚀',
+          subtitle: 'عرض الجولة التعريفية المباشرة لميزات التطبيق',
+          onTap: () async {
+            await AppTourScreen.resetTourCompleted();
+            if (context.mounted) {
+              final tourNotifier = InAppTourNotifier.of(context);
+              if (tourNotifier != null) {
+                tourNotifier.startTour();
+              } else {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const AppTourScreen(),
+                    fullscreenDialog: true,
+                  ),
+                );
+              }
+            }
+          },
         ),
       ],
     ),

@@ -551,6 +551,7 @@ class _MembersListScreenState extends State<MembersListScreen> {
     };
 
     return ChoiceChip(
+      showCheckmark: false,
       avatar: Icon(
         icon,
         size: 15,

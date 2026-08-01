@@ -42,6 +42,7 @@ abstract class DatabaseRepository {
   Future<InvitationPreview> getInvitationPreview(String inviteToken);
   Future<void> declineInvitationByToken(String inviteToken);
   Future<void> acceptInvitationLink(String inviteToken);
+  Future<List<Map<String, dynamic>>> getUserReceivedInvitations();
   Future<void> sendPasswordResetEmail(String email);
   Future<void> updatePassword(String password);
   Future<AppProfile> updateCurrentProfile({
@@ -661,6 +662,33 @@ class SupabaseRepository implements DatabaseRepository {
       'accept_invitation_link',
       params: {'p_token': inviteToken.trim()},
     );
+  }
+
+  Future<List<Map<String, dynamic>>> getUserReceivedInvitations() async {
+    try {
+      final res = await _client.rpc('get_my_received_invitations');
+      if (res is List) {
+        return List<Map<String, dynamic>>.from(res);
+      }
+    } catch (_) {}
+
+    final profile = await getCurrentProfile();
+    if (profile?.email == null || profile!.email!.trim().isEmpty) {
+      return [];
+    }
+
+    final email = profile.email!.trim().toLowerCase();
+    try {
+      final rows = await _client
+          .from('invitations')
+          .select('*, churches(name_ar, name)')
+          .ilike('email', email)
+          .order('created_at', ascending: false);
+
+      return List<Map<String, dynamic>>.from(rows as List);
+    } catch (_) {
+      return [];
+    }
   }
 
   @override
