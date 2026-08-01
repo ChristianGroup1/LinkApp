@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import React from 'react';
 
 export const metadata: Metadata = {
-  title: 'Privacy Policy | Honara7ty',
-  description: 'Privacy Policy for the Honara7ty mobile application provided by fady khayrat.',
+  title: 'Privacy Policy | LinkApp — Church Management',
+  description: 'Privacy Policy for the LinkApp mobile application provided by fady khayrat.',
 };
 
 export default function PrivacyPolicyPage() {
@@ -13,14 +13,15 @@ export default function PrivacyPolicyPage() {
         <div style={styles.badge}>Official Document</div>
         <h1 style={styles.title}>Privacy Policy</h1>
         <p style={styles.subtitle}>
-          <strong>Effective date:</strong> April 24, 2026
+          <strong>Effective date:</strong> August 2, 2026
         </p>
       </div>
 
       <div style={styles.card}>
         <p style={styles.intro}>
-          This Privacy Policy applies to the <strong>Honara7ty</strong> mobile application (&quot;Application&quot;), 
+          This Privacy Policy applies to the <strong>LinkApp</strong> mobile application (&quot;Application&quot;), 
           provided by <strong>fady khayrat</strong> (&quot;Service Provider&quot;) as a free service. 
+          LinkApp is a comprehensive church management, attendance tracking, and Sunday School service management system. 
           The Application is provided for use as is.
         </p>
 
@@ -29,18 +30,18 @@ export default function PrivacyPolicyPage() {
         <section style={styles.section}>
           <h2 style={styles.sectionTitle}>1. Information We Collect</h2>
           <p style={styles.paragraph}>
-            When you use the Application, we may collect and process the following categories of information:
+            When you use the Application to manage church services, attendance, or servant duties, we may collect and process the following categories of information:
           </p>
           <ul style={styles.list}>
-            <li><strong>Account information:</strong> such as your name, email address, and profile details</li>
-            <li><strong>Authentication data:</strong> used to sign you in securely</li>
-            <li><strong>Devotional data:</strong> such as reminder settings, reading plans, reading activity, devotional tracking data, prayer notes, and reflections</li>
-            <li><strong>Device and app information:</strong> such as device type, operating system, app version, country/region, and general diagnostic information</li>
-            <li><strong>Usage information:</strong> such as screens viewed, features used, interactions within the app, and time spent using the Application</li>
-            <li><strong>Crash, error, and performance data:</strong> to help diagnose issues and improve reliability</li>
+            <li><strong>Account &amp; Profile Information:</strong> your full name, email address, assigned church ID, and service role (such as Church Admin or Attendance Officer).</li>
+            <li><strong>Authentication Data:</strong> credentials and security tokens used to sign you into your church workspace securely via Supabase Auth.</li>
+            <li><strong>Church &amp; Service Data:</strong> attendance records, member directories, Sunday School class assignments, meeting schedules, and visitation logs.</li>
+            <li><strong>Invitation Data:</strong> deep-link tokens and invitation records used to invite servants or members to join your church organization.</li>
+            <li><strong>Device &amp; App Information:</strong> device type, operating system version, app version, and general diagnostic logs to ensure reliable synchronization.</li>
+            <li><strong>Local Notification Preferences:</strong> reminder settings and scheduled meeting alert preferences for taking attendance.</li>
           </ul>
           <div style={styles.highlightBox}>
-            <strong>Note:</strong> The Application does not collect precise location information from your mobile device for its core functionality.
+            <strong>Location Notice:</strong> LinkApp does not collect precise GPS or real-time location data from your mobile device.
           </div>
         </section>
 
@@ -48,81 +49,62 @@ export default function PrivacyPolicyPage() {
 
         <section style={styles.section}>
           <h2 style={styles.sectionTitle}>2. How We Use Information</h2>
-          <p style={styles.paragraph}>We use information collected through the Application to:</p>
+          <p style={styles.paragraph}>We use the information collected through LinkApp to:</p>
           <ul style={styles.list}>
-            <li>Create and manage your account</li>
-            <li>Authenticate you securely</li>
-            <li>Save your devotional preferences, reminders, and reading plans</li>
-            <li>Store prayer notes, reflections, and devotional activity</li>
-            <li>Send reminders and notifications when enabled by you</li>
-            <li>Monitor app performance, diagnose crashes and errors, and improve reliability</li>
-            <li>Understand how users interact with the Application and improve the user experience</li>
-            <li>Maintain security and prevent abuse</li>
+            <li>Create and manage user accounts and church organizational structures</li>
+            <li>Authenticate servants and church administrators securely</li>
+            <li>Record, manage, and calculate weekly attendance statistics for Sunday School classes and meetings</li>
+            <li>Deliver scheduled local meeting notifications and attendance reminders on your mobile device</li>
+            <li>Enable offline data synchronization so attendance can be recorded even without internet connectivity</li>
+            <li>Manage servant permissions, member directories, and invitation links</li>
+            <li>Monitor app performance, diagnose system errors, and maintain data security</li>
           </ul>
         </section>
 
         <hr style={styles.divider} />
 
         <section style={styles.section}>
-          <h2 style={styles.sectionTitle}>3. Analytics, Diagnostics, and Session Replay</h2>
+          <h2 style={styles.sectionTitle}>3. Third-Party Services</h2>
           <p style={styles.paragraph}>
-            The Application uses analytics, diagnostics, and session replay tools to understand app reliability and user experience. These tools may collect information such as:
-          </p>
-          <ul style={styles.list}>
-            <li>App usage and interaction data</li>
-            <li>Screen navigation and feature usage</li>
-            <li>Device and app diagnostics</li>
-            <li>Crash logs, error details, and performance data</li>
-            <li>Session-related data to help replay and understand app behavior</li>
-          </ul>
-          <p style={styles.paragraph}>
-            The Application currently uses services such as <strong>Sentry</strong> and <strong>Microsoft Clarity</strong> for error monitoring, diagnostics, analytics, and session replay. These services may receive device, usage, and diagnostic data in order to provide their services.
-          </p>
-          <div style={styles.warningBox}>
-            <strong>Privacy Safeguard:</strong> Where supported by these services, sensitive content is intended to be masked or sanitized. However, no system can guarantee perfect masking in every situation, so users should avoid entering unnecessary highly sensitive personal information into free-text fields.
-          </div>
-        </section>
-
-        <hr style={styles.divider} />
-
-        <section style={styles.section}>
-          <h2 style={styles.sectionTitle}>4. Third-Party Services</h2>
-          <p style={styles.paragraph}>
-            The Application may use third-party services, including:
+            The Application uses trusted third-party infrastructure and services to operate securely:
           </p>
           <div style={styles.grid}>
             <div style={styles.gridItem}>Google Play Services</div>
-            <div style={styles.gridItem}>Supabase</div>
-            <div style={styles.gridItem}>Google Sign-In</div>
-            <div style={styles.gridItem}>Sentry</div>
-            <div style={styles.gridItem}>Microsoft Clarity</div>
+            <div style={styles.gridItem}>Supabase (Database &amp; Authentication)</div>
+            <div style={styles.gridItem}>Flutter Local Notifications</div>
           </div>
           <p style={styles.paragraphSmall}>
-            These third parties may process information in accordance with their own privacy policies.
+            These third-party service providers process data in accordance with their strict privacy and security standards.
           </p>
         </section>
 
         <hr style={styles.divider} />
 
         <section style={styles.section}>
-          <h2 style={styles.sectionTitle}>5. Notifications</h2>
+          <h2 style={styles.sectionTitle}>4. Notifications &amp; Reminders</h2>
           <p style={styles.paragraph}>
-            If you enable notifications, the Application may use your notification preferences and reminder settings to send devotional reminders and other relevant app notifications.
+            If enabled by you, LinkApp uses local device notification services to deliver recurring weekly reminders for upcoming meeting times, ensuring attendance taking is never missed. You can manage or disable notification permissions at any time through your device settings.
           </p>
         </section>
 
         <hr style={styles.divider} />
 
         <section style={styles.section}>
-          <h2 style={styles.sectionTitle}>6. Data Retention</h2>
+          <h2 style={styles.sectionTitle}>5. Data Security</h2>
           <p style={styles.paragraph}>
-            The Service Provider retains user-provided account and app data for as long as needed to provide the Application and for a reasonable period afterward, unless a longer retention period is required by law or needed for legitimate operational purposes.
+            We take data security very seriously. All communication between LinkApp and server infrastructure is encrypted in transit using industry-standard TLS/SSL encryption. Access to church data is strictly controlled via role-based access policies (Row Level Security).
           </p>
+        </section>
+
+        <hr style={styles.divider} />
+
+        <section style={styles.section}>
+          <h2 style={styles.sectionTitle}>6. Data Retention &amp; Account Deletion</h2>
           <p style={styles.paragraph}>
-            Analytics, diagnostics, and session replay data may be retained by third-party providers according to their own retention policies.
+            We retain church, attendance, and account data for as long as necessary to provide the service to your church organization. Church administrators or servants may request deletion of their account or church records at any time.
           </p>
           <div style={styles.contactBox}>
-            To request deletion of your account or personal data, contact:{' '}
+            To request account deletion or data removal, please contact us at:{' '}
             <a href="mailto:fadykhayrat@gmail.com" style={styles.link}>
               fadykhayrat@gmail.com
             </a>
@@ -132,49 +114,27 @@ export default function PrivacyPolicyPage() {
         <hr style={styles.divider} />
 
         <section style={styles.section}>
-          <h2 style={styles.sectionTitle}>7. Data Security</h2>
+          <h2 style={styles.sectionTitle}>7. Children&apos;s Privacy</h2>
           <p style={styles.paragraph}>
-            The Service Provider uses reasonable administrative, technical, and organizational safeguards to protect information processed through the Application. Data transmitted through third-party services is expected to be encrypted in transit where supported by those providers.
+            LinkApp is designed for church servants and administrators. Member attendance records entered by servants (including Sunday School children) are stored strictly for church administrative purposes and are not shared with third-party marketers or advertisers.
           </p>
         </section>
 
         <hr style={styles.divider} />
 
         <section style={styles.section}>
-          <h2 style={styles.sectionTitle}>8. Children&apos;s Privacy</h2>
+          <h2 style={styles.sectionTitle}>8. Changes to This Privacy Policy</h2>
           <p style={styles.paragraph}>
-            The Application is not intended for children under 13, and the Service Provider does not knowingly collect personal information from children under 13. If you believe a child under 13 has provided personal information, contact{' '}
-            <a href="mailto:fadykhayrat@gmail.com" style={styles.link}>
-              fadykhayrat@gmail.com
-            </a>{' '}
-            so appropriate action can be taken.
+            This Privacy Policy may be updated periodically. The effective date above will reflect the latest revision. Continued use of LinkApp indicates your acceptance of the updated policy.
           </p>
         </section>
 
         <hr style={styles.divider} />
 
         <section style={styles.section}>
-          <h2 style={styles.sectionTitle}>9. Your Choices</h2>
+          <h2 style={styles.sectionTitle}>9. Contact Us</h2>
           <p style={styles.paragraph}>
-            You may choose whether to enable notifications in your device settings and within the Application where applicable. You may also stop all collection of information by uninstalling the Application.
-          </p>
-        </section>
-
-        <hr style={styles.divider} />
-
-        <section style={styles.section}>
-          <h2 style={styles.sectionTitle}>10. Changes to This Privacy Policy</h2>
-          <p style={styles.paragraph}>
-            This Privacy Policy may be updated from time to time. The Service Provider will update the effective date above when changes are made. Continued use of the Application after changes become effective means you accept the updated Privacy Policy.
-          </p>
-        </section>
-
-        <hr style={styles.divider} />
-
-        <section style={styles.section}>
-          <h2 style={styles.sectionTitle}>11. Contact</h2>
-          <p style={styles.paragraph}>
-            If you have questions about this Privacy Policy or data practices related to the Application, contact:
+            If you have any questions or concerns regarding this Privacy Policy or data privacy in LinkApp, please contact:
           </p>
           <p style={styles.contactEmail}>
             <a href="mailto:fadykhayrat@gmail.com" style={styles.linkBold}>
@@ -185,7 +145,7 @@ export default function PrivacyPolicyPage() {
       </div>
 
       <footer style={styles.footer}>
-        &copy; {new Date().getFullYear()} Honara7ty by fady khayrat. All rights reserved.
+        &copy; {new Date().getFullYear()} LinkApp by fady khayrat. All rights reserved.
       </footer>
     </div>
   );
@@ -285,15 +245,6 @@ const styles: { [key: string]: React.CSSProperties } = {
     padding: '14px 18px',
     borderRadius: '8px',
     color: '#15803d',
-    fontSize: '14px',
-    marginTop: '16px',
-  },
-  warningBox: {
-    backgroundColor: '#fffbeb',
-    borderLeft: '4px solid #f59e0b',
-    padding: '14px 18px',
-    borderRadius: '8px',
-    color: '#b45309',
     fontSize: '14px',
     marginTop: '16px',
   },
