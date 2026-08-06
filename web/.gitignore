@@ -1,0 +1,6 @@
+# next-agents-md
+.next-docs/
+
+# dependencies and generated Next.js output
+node_modules/
+.next/

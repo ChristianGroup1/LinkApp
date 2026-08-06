@@ -21,7 +21,7 @@ function InviteContent() {
       const targetLink = isAndroid ? androidIntentLink : customSchemeLink;
 
       const timer = setTimeout(() => {
-        window.location.href = customSchemeLink;
+        window.location.href = targetLink;
       }, 100);
       return () => clearTimeout(timer);
     }

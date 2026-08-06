@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
+import 'core/analytics/app_analytics_service.dart';
 import 'core/navigation/app_route_observer.dart';
 import 'core/invitations/invitation_deep_link_listener.dart';
 import 'core/theme/app_theme.dart';
@@ -55,7 +56,10 @@ void main() async {
   }
 
   try {
-    await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
+    await Supabase.initialize(
+      url: supabaseUrl,
+      publishableKey: supabaseAnonKey,
+    );
   } catch (e) {
     runApp(
       SupabaseConfigurationErrorApp(
@@ -71,6 +75,7 @@ void main() async {
 
   if (Supabase.instance.client.auth.currentSession != null) {
     unawaited(repository.warmOfflineCache());
+    unawaited(AppAnalyticsService.trackAppOpen());
   }
 
   runApp(
@@ -215,6 +220,8 @@ class _AuthRecoveryListenerState extends State<AuthRecoveryListener> {
       }
 
       if (data.event == AuthChangeEvent.signedIn) {
+        unawaited(AppAnalyticsService.trackSignIn());
+        unawaited(AppAnalyticsService.trackAppOpen());
         WidgetsBinding.instance.addPostFrameCallback((_) {
           final context = MyApp.navigatorKey.currentContext;
           if (context == null) return;

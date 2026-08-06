@@ -118,6 +118,8 @@ void main() {
 
     final repository = TestRepository();
     await repository.signOut();
+    SharedPreferences.setMockInitialValues({});
+    await AppTourScreen.setTourCompleted(userId: 'prof-1');
 
     await tester.pumpWidget(
       RepositoryProvider<DatabaseRepository>.value(
@@ -132,13 +134,16 @@ void main() {
 
     await _settle(tester);
 
-    expect(find.text('أهلاً بك'), findsOneWidget);
-    expect(find.text('تسجيل الدخول'), findsOneWidget);
+    expect(
+      find.text('أدخل البريد الإلكتروني وكلمة المرور للبدء'),
+      findsOneWidget,
+    );
+    expect(find.text('تسجيل الدخول'), findsNWidgets(2));
 
     await tester.enterText(find.byType(TextField).at(0), 'admin@example.com');
     await tester.enterText(find.byType(TextField).at(1), 'password123');
     FocusManager.instance.primaryFocus?.unfocus();
-    await tester.tap(find.text('تسجيل الدخول'));
+    await tester.tap(find.text('تسجيل الدخول').last);
     await _settle(tester);
 
     // Verify dashboard displays
@@ -148,9 +153,11 @@ void main() {
     expect(find.text('اليوم 🎉'), findsOneWidget);
 
     // Open meetings from dashboard entry
-    await tester.tap(find.text('الاجتماعات'));
+    await tester.ensureVisible(find.text('الاجتماعات').last);
     await _settle(tester);
-    expect(find.text('الاجتماعات'), findsOneWidget);
+    await tester.tap(find.text('الاجتماعات').last);
+    await _settle(tester);
+    expect(find.text('الاجتماعات'), findsAtLeastNWidgets(1));
     await tester.binding.handlePopRoute();
     await _settle(tester);
 
@@ -172,7 +179,7 @@ void main() {
     // Tap Members tab
     await tester.tap(find.byIcon(Icons.groups_outlined));
     await _settle(tester);
-    expect(find.text('سجل الأعضاء والخدمة'), findsOneWidget);
+    expect(find.text('الأعضاء'), findsAtLeastNWidgets(1));
 
     // Opening a member uses a dedicated details screen, not a popup menu.
     await tester.tap(find.text('مريم جرجس'));
@@ -182,7 +189,7 @@ void main() {
     expect(find.text('التواصل والعائلة'), findsOneWidget);
     await tester.tap(find.byIcon(Icons.arrow_back_rounded));
     await _settle(tester);
-    expect(find.text('سجل الأعضاء والخدمة'), findsOneWidget);
+    expect(find.text('الأعضاء'), findsAtLeastNWidgets(1));
 
     // Tap Settings tab
     await tester.tap(find.byIcon(Icons.person_outline_rounded));

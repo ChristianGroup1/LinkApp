@@ -20,7 +20,8 @@ class InvitationDeepLinkListener extends StatefulWidget {
       _InvitationDeepLinkListenerState();
 }
 
-class _InvitationDeepLinkListenerState extends State<InvitationDeepLinkListener> {
+class _InvitationDeepLinkListenerState
+    extends State<InvitationDeepLinkListener> {
   final AppLinks _appLinks = AppLinks();
   StreamSubscription<Uri>? _linkSubscription;
   String? _lastOpenedToken;
@@ -64,7 +65,10 @@ class _InvitationDeepLinkListenerState extends State<InvitationDeepLinkListener>
 
       final navigator = MyApp.navigatorKey.currentState;
       final hostContext = MyApp.navigatorKey.currentContext;
-      if (navigator == null || hostContext == null || !navigator.mounted) {
+      if (navigator == null ||
+          hostContext == null ||
+          !navigator.mounted ||
+          !hostContext.mounted) {
         continue;
       }
 

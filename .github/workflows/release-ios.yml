@@ -1,0 +1,67 @@
+name: Build iOS release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_label:
+        description: Version shown on the iOS build artifact
+        required: true
+        default: "1.0.2"
+
+permissions:
+  contents: read
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Create production environment file
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          printf 'SUPABASE_URL=%s\nSUPABASE_ANON_KEY=%s\n' \
+            "$SUPABASE_URL" "$SUPABASE_ANON_KEY" > .env
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze lib/ test/
+
+      - name: Test
+        run: flutter test
+
+      - name: Build unsigned iOS release archive
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          flutter build ios --release --no-codesign \
+            --dart-define=SUPABASE_URL="$SUPABASE_URL" \
+            --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
+
+      - name: Package iOS archive
+        env:
+          VERSION_LABEL: ${{ inputs.version_label }}
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent \
+            build/ios/iphoneos/Runner.app \
+            "LinkApp-iOS-${VERSION_LABEL}-unsigned.zip"
+
+      - name: Upload iOS build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: LinkApp-iOS-${{ inputs.version_label }}-unsigned
+          path: LinkApp-iOS-${{ inputs.version_label }}-unsigned.zip
+          if-no-files-found: error
+

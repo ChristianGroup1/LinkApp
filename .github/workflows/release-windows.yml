@@ -1,0 +1,85 @@
+name: Release Windows desktop app
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_label:
+        description: Version shown on the Windows release
+        required: true
+        default: "1.0.2"
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Enable Windows desktop
+        run: flutter config --enable-windows-desktop
+
+      - name: Create production environment file
+        shell: pwsh
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          @"
+          SUPABASE_URL=$env:SUPABASE_URL
+          SUPABASE_ANON_KEY=$env:SUPABASE_ANON_KEY
+          "@ | Set-Content -Path .env -Encoding utf8
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build Windows release
+        shell: pwsh
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          flutter build windows --release `
+            --dart-define=SUPABASE_URL="$env:SUPABASE_URL" `
+            --dart-define=SUPABASE_ANON_KEY="$env:SUPABASE_ANON_KEY"
+
+      - name: Package Windows application
+        shell: pwsh
+        run: |
+          Compress-Archive `
+            -Path build/windows/x64/runner/Release/* `
+            -DestinationPath LinkApp-Windows-x64.zip `
+            -CompressionLevel Optimal
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: LinkApp-Windows-x64
+          path: LinkApp-Windows-x64.zip
+
+      - name: Publish stable Windows download
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION_LABEL: ${{ inputs.version_label }}
+        run: |
+          gh release view desktop-latest *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create desktop-latest `
+              --target "$env:GITHUB_SHA" `
+              --title "Link for Windows $env:VERSION_LABEL" `
+              --notes "نسخة Link لنظام Windows 10 و11. قم بفك الضغط ثم شغّل Link.exe."
+          } else {
+            gh release edit desktop-latest `
+              --title "Link for Windows $env:VERSION_LABEL" `
+              --notes "نسخة Link لنظام Windows 10 و11. قم بفك الضغط ثم شغّل Link.exe."
+          }
+          gh release upload desktop-latest LinkApp-Windows-x64.zip --clobber

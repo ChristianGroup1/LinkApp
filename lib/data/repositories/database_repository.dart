@@ -664,6 +664,7 @@ class SupabaseRepository implements DatabaseRepository {
     );
   }
 
+  @override
   Future<List<Map<String, dynamic>>> getUserReceivedInvitations() async {
     try {
       final res = await _client.rpc('get_my_received_invitations');

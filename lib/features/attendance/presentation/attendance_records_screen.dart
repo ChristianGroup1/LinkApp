@@ -58,7 +58,8 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
   Future<void> _loadInitialData() async {
     final repo = context.read<DatabaseRepository>();
     try {
-      await AutoAttendanceSessionService.instance.autoCreateSessionsOneDayInAdvance(repo);
+      await AutoAttendanceSessionService.instance
+          .autoCreateSessionsOneDayInAdvance(repo);
       final profile = await repo.getCurrentProfile();
       final results = await Future.wait([
         repo.getMeetings(),
@@ -125,8 +126,7 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
             .where(
               (m) =>
                   m.isActive &&
-                  (meetingIds.contains(m.id) ||
-                      classMeetingIds.contains(m.id)),
+                  (meetingIds.contains(m.id) || classMeetingIds.contains(m.id)),
             )
             .toList();
       }
@@ -155,7 +155,8 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
 
   Future<void> _showCreateSessionDialog() async {
     MeetingEntity? dialogMeeting = _selectedMeeting ?? _meetings.firstOrNull;
-    SundaySchoolClassEntity? dialogClass = _selectedClass ??
+    SundaySchoolClassEntity? dialogClass =
+        _selectedClass ??
         (_classes.where((c) => c.meetingId == dialogMeeting?.id).firstOrNull);
     DateTime dialogDate = DateTime.now();
     bool isSubmitting = false;
@@ -172,9 +173,14 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
           builder: (context, setModalState) {
             final meetingClasses = dialogMeeting == null
                 ? <SundaySchoolClassEntity>[]
-                : _classes.where((c) => c.meetingId == dialogMeeting!.id).toList();
+                : _classes
+                      .where((c) => c.meetingId == dialogMeeting!.id)
+                      .toList();
 
-            final dateStr = intl.DateFormat('yyyy-MM-dd', 'ar').format(dialogDate);
+            final dateStr = intl.DateFormat(
+              'yyyy-MM-dd',
+              'ar',
+            ).format(dialogDate);
             final dayAr = intl.DateFormat('EEEE', 'ar').format(dialogDate);
 
             return Padding(
@@ -254,7 +260,9 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
                       setModalState(() {
                         dialogMeeting = meeting;
                         dialogClass = meeting?.kind == MeetingKind.sundaySchool
-                            ? _classes.where((c) => c.meetingId == meeting!.id).firstOrNull
+                            ? _classes
+                                  .where((c) => c.meetingId == meeting!.id)
+                                  .firstOrNull
                             : null;
                       });
                     },
@@ -270,7 +278,10 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
                           : meetingClasses.firstOrNull,
                       decoration: const InputDecoration(labelText: 'الفصل'),
                       items: meetingClasses.map((cls) {
-                        return DropdownMenuItem(value: cls, child: Text(cls.nameAr));
+                        return DropdownMenuItem(
+                          value: cls,
+                          child: Text(cls.nameAr),
+                        );
                       }).toList(),
                       onChanged: (cls) {
                         setModalState(() => dialogClass = cls);
@@ -303,7 +314,10 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
                     },
                     borderRadius: BorderRadius.circular(14),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.grey.shade50,
                         borderRadius: BorderRadius.circular(14),
@@ -315,7 +329,11 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
                         children: [
                           Row(
                             children: [
-                              const Icon(Icons.calendar_month_rounded, color: AppTheme.primary, size: 20),
+                              const Icon(
+                                Icons.calendar_month_rounded,
+                                color: AppTheme.primary,
+                                size: 20,
+                              ),
                               const SizedBox(width: 10),
                               Text(
                                 '$dayAr ($dateStr)',
@@ -327,7 +345,11 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
                               ),
                             ],
                           ),
-                          const Icon(Icons.edit_calendar_rounded, color: AppTheme.textLight, size: 18),
+                          const Icon(
+                            Icons.edit_calendar_rounded,
+                            color: AppTheme.textLight,
+                            size: 18,
+                          ),
                         ],
                       ),
                     ),
@@ -343,39 +365,48 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
                           ? null
                           : () async {
                               setModalState(() => isSubmitting = true);
-                              final messenger = ScaffoldMessenger.of(this.context);
+                              final messenger = ScaffoldMessenger.of(
+                                this.context,
+                              );
                               final rootNavigator = Navigator.of(this.context);
                               final bloc = _attendanceBloc;
                               try {
-                                final repo = this.context.read<DatabaseRepository>();
+                                final repo = this.context
+                                    .read<DatabaseRepository>();
                                 final weekNum = (dialogDate.day / 7).ceil();
-                                final saveResult = await repo.createWeeklySession(
-                                  meetingId: dialogMeeting!.id,
-                                  classId: dialogMeeting!.kind == MeetingKind.sundaySchool
-                                      ? dialogClass?.id
-                                      : null,
-                                  sessionDate: dialogDate,
-                                  weekNumber: weekNum,
-                                );
-
-                                if (mounted) {
-                                  Navigator.pop(sheetContext); // Close bottom sheet
-                                  await _loadSessions(); // Reload sessions list
-
-                                  final newSession = saveResult.data;
-                                  if (mounted) {
-                                    messenger.showSnackBar(
-                                      SnackBar(
-                                        content: Text(
-                                          'تم إنشاء كشف الحضور بنجاح! 🎉',
-                                          style: GoogleFonts.cairo(),
-                                        ),
-                                        backgroundColor: const Color(0xFF10B981),
-                                      ),
+                                final saveResult = await repo
+                                    .createWeeklySession(
+                                      meetingId: dialogMeeting!.id,
+                                      classId:
+                                          dialogMeeting!.kind ==
+                                              MeetingKind.sundaySchool
+                                          ? dialogClass?.id
+                                          : null,
+                                      sessionDate: dialogDate,
+                                      weekNumber: weekNum,
                                     );
 
-                                    if (newSession != null && bloc != null) {
-                                      rootNavigator.push(
+                                if (!mounted || !sheetContext.mounted) return;
+                                Navigator.pop(
+                                  sheetContext,
+                                ); // Close bottom sheet
+                                await _loadSessions(); // Reload sessions list
+                                if (!mounted) return;
+
+                                final newSession = saveResult.data;
+                                messenger.showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      'تم إنشاء كشف الحضور بنجاح! 🎉',
+                                      style: GoogleFonts.cairo(),
+                                    ),
+                                    backgroundColor: const Color(0xFF10B981),
+                                  ),
+                                );
+
+                                if (bloc != null) {
+                                  rootNavigator
+                                      .push(
                                         MaterialPageRoute(
                                           builder: (_) => BlocProvider.value(
                                             value: bloc,
@@ -384,11 +415,10 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
                                             ),
                                           ),
                                         ),
-                                      ).then((_) {
+                                      )
+                                      .then((_) {
                                         if (mounted) _loadSessions();
                                       });
-                                    }
-                                  }
                                 }
                               } catch (e) {
                                 setModalState(() => isSubmitting = false);
@@ -481,9 +511,7 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
     final attendanceBloc = _attendanceBloc;
     if (attendanceBloc == null) {
       return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(color: AppTheme.primary),
-        ),
+        body: Center(child: CircularProgressIndicator(color: AppTheme.primary)),
       );
     }
 
@@ -511,132 +539,130 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
           actions: [],
         ),
         body: BlocConsumer<AttendanceBloc, AttendanceState>(
-            listenWhen: (previous, current) => current is AttendanceError,
-            listener: (context, state) {
-              if (state is AttendanceError) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(state.message, style: GoogleFonts.cairo()),
-                    backgroundColor: AppTheme.accentRed,
-                  ),
-                );
-              }
-            },
-            builder: (context, state) {
-              return Column(
-                children: [
-                  _buildFilters(),
-                  Expanded(
-                    child: _isLoading
-                        ? const Center(
-                            child: CircularProgressIndicator(
-                              color: AppTheme.primary,
-                            ),
-                          )
-                        : filteredSessions.isEmpty
-                        ? const AppEmptyState(
-                            icon: Icons.event_note_outlined,
-                            message: 'لا توجد سجلات مطابقة للفلتر',
-                          )
-                        : RefreshIndicator(
-                            onRefresh: _loadSessions,
-                            child: ListView.builder(
-                              padding: const EdgeInsets.all(16),
-                              itemCount: filteredSessions.length,
-                              itemBuilder: (context, index) {
-                                final session = filteredSessions[index];
-                                final canDelete = _canDeleteSession(session);
-                                return AttendanceSessionCard(
-                                  session: session,
-                                  repository: repo,
-                                  canDelete: canDelete,
-                                  onOpen: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => BlocProvider.value(
-                                          value: context
-                                              .read<AttendanceBloc>(),
-                                          child: AttendanceRecordingScreen(
-                                            session: session,
-                                          ),
+          listenWhen: (previous, current) => current is AttendanceError,
+          listener: (context, state) {
+            if (state is AttendanceError) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(state.message, style: GoogleFonts.cairo()),
+                  backgroundColor: AppTheme.accentRed,
+                ),
+              );
+            }
+          },
+          builder: (context, state) {
+            return Column(
+              children: [
+                _buildFilters(),
+                Expanded(
+                  child: _isLoading
+                      ? const Center(
+                          child: CircularProgressIndicator(
+                            color: AppTheme.primary,
+                          ),
+                        )
+                      : filteredSessions.isEmpty
+                      ? const AppEmptyState(
+                          icon: Icons.event_note_outlined,
+                          message: 'لا توجد سجلات مطابقة للفلتر',
+                        )
+                      : RefreshIndicator(
+                          onRefresh: _loadSessions,
+                          child: ListView.builder(
+                            padding: const EdgeInsets.all(16),
+                            itemCount: filteredSessions.length,
+                            itemBuilder: (context, index) {
+                              final session = filteredSessions[index];
+                              final canDelete = _canDeleteSession(session);
+                              return AttendanceSessionCard(
+                                session: session,
+                                repository: repo,
+                                canDelete: canDelete,
+                                onOpen: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => BlocProvider.value(
+                                        value: context.read<AttendanceBloc>(),
+                                        child: AttendanceRecordingScreen(
+                                          session: session,
                                         ),
                                       ),
-                                    ).then((_) => _loadSessions());
-                                  },
-                                  onDelete: canDelete
-                                      ? () async {
-                                          final messenger =
-                                              ScaffoldMessenger.of(context);
-                                          try {
-                                            final synced =
-                                                await repo.deleteWeeklySession(
-                                              session.id,
-                                              meetingId: session.meetingId,
-                                              classId: session.classId,
-                                            );
-                                            if (!mounted) return;
-                                            _loadSessions();
-                                            if (!synced && mounted) {
-                                              messenger.showSnackBar(
-                                                SnackBar(
-                                                  content: Text(
-                                                    kOfflineSavedMessage,
-                                                    style: GoogleFonts.cairo(),
-                                                  ),
-                                                ),
+                                    ),
+                                  ).then((_) => _loadSessions());
+                                },
+                                onDelete: canDelete
+                                    ? () async {
+                                        final messenger = ScaffoldMessenger.of(
+                                          context,
+                                        );
+                                        try {
+                                          final synced = await repo
+                                              .deleteWeeklySession(
+                                                session.id,
+                                                meetingId: session.meetingId,
+                                                classId: session.classId,
                                               );
-                                            }
-                                          } catch (e) {
-                                            if (!mounted) return;
+                                          if (!mounted) return;
+                                          _loadSessions();
+                                          if (!synced && mounted) {
                                             messenger.showSnackBar(
                                               SnackBar(
                                                 content: Text(
-                                                  'فشل حذف السجل: ${e.toString()}',
+                                                  kOfflineSavedMessage,
                                                   style: GoogleFonts.cairo(),
                                                 ),
-                                                backgroundColor:
-                                                    AppTheme.accentRed,
                                               ),
                                             );
                                           }
+                                        } catch (e) {
+                                          if (!mounted) return;
+                                          messenger.showSnackBar(
+                                            SnackBar(
+                                              content: Text(
+                                                'فشل حذف السجل: ${e.toString()}',
+                                                style: GoogleFonts.cairo(),
+                                              ),
+                                              backgroundColor:
+                                                  AppTheme.accentRed,
+                                            ),
+                                          );
                                         }
-                                      : null,
-                                );
-                              },
-                            ),
+                                      }
+                                    : null,
+                              );
+                            },
                           ),
-                  ),
-                ],
-              );
-            },
-          ),
-          floatingActionButton: _canCreateSession
-              ? FloatingActionButton.extended(
-                  onPressed: _showCreateSessionDialog,
-                  backgroundColor: AppTheme.primary,
-                  foregroundColor: Colors.white,
-                  elevation: 4,
-                  icon: const Icon(Icons.add_rounded, size: 22),
-                  label: Text(
-                    'كشف جديد ',
-                    style: GoogleFonts.cairo(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 14,
-                    ),
-                  ),
-                )
-              : null,
+                        ),
+                ),
+              ],
+            );
+          },
         ),
+        floatingActionButton: _canCreateSession
+            ? FloatingActionButton.extended(
+                onPressed: _showCreateSessionDialog,
+                backgroundColor: AppTheme.primary,
+                foregroundColor: Colors.white,
+                elevation: 4,
+                icon: const Icon(Icons.add_rounded, size: 22),
+                label: Text(
+                  'كشف جديد ',
+                  style: GoogleFonts.cairo(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14,
+                  ),
+                ),
+              )
+            : null,
+      ),
     );
   }
 
   Widget _buildFilters() {
     final meetingClasses = _selectedMeeting == null
         ? <SundaySchoolClassEntity>[]
-        : _classes
-              .where((c) => c.meetingId == _selectedMeeting!.id)
-              .toList();
+        : _classes.where((c) => c.meetingId == _selectedMeeting!.id).toList();
 
     return Container(
       color: Colors.white,
@@ -644,7 +670,7 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
       child: Column(
         children: [
           DropdownButtonFormField<MeetingEntity>(
-            value: _meetings.contains(_selectedMeeting)
+            initialValue: _meetings.contains(_selectedMeeting)
                 ? _selectedMeeting
                 : null,
             decoration: const InputDecoration(labelText: 'فلتر الاجتماع'),
@@ -654,8 +680,7 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
             onChanged: (meeting) {
               setState(() {
                 _selectedMeeting = meeting;
-                _selectedClass =
-                    meeting?.kind == MeetingKind.sundaySchool
+                _selectedClass = meeting?.kind == MeetingKind.sundaySchool
                     ? _classes
                           .where((c) => c.meetingId == meeting!.id)
                           .firstOrNull
@@ -669,15 +694,12 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
               meetingClasses.isNotEmpty) ...[
             const SizedBox(height: 8),
             DropdownButtonFormField<SundaySchoolClassEntity>(
-              value: meetingClasses.contains(_selectedClass)
+              initialValue: meetingClasses.contains(_selectedClass)
                   ? _selectedClass
                   : null,
               decoration: const InputDecoration(labelText: 'فلتر الفصل'),
               items: meetingClasses.map((cls) {
-                return DropdownMenuItem(
-                  value: cls,
-                  child: Text(cls.nameAr),
-                );
+                return DropdownMenuItem(value: cls, child: Text(cls.nameAr));
               }).toList(),
               onChanged: (cls) {
                 setState(() {
@@ -690,11 +712,10 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
           ],
           const SizedBox(height: 10),
           DropdownButtonFormField<String>(
-            value: _sessions.any((s) => s.id == _selectedSessionId)
+            initialValue: _sessions.any((s) => s.id == _selectedSessionId)
                 ? _selectedSessionId
                 : null,
-            decoration:
-                const InputDecoration(labelText: 'فلتر كشف الحضور'),
+            decoration: const InputDecoration(labelText: 'فلتر كشف الحضور'),
             items: _sessions.map((s) {
               return DropdownMenuItem(
                 value: s.id,

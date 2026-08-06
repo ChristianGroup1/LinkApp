@@ -254,7 +254,7 @@ class _AttendanceSessionCardState extends State<AttendanceSessionCard> {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: AppTheme.primary.withOpacity(0.08),
+                  color: AppTheme.primary.withValues(alpha: 0.08),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
@@ -405,7 +405,11 @@ class _AttendanceSessionCardState extends State<AttendanceSessionCard> {
                   ),
                   const SizedBox(height: 14),
                   _buildNamesSection('حاضر', summary.present, Colors.green),
-                  _buildNamesSection('غائب', summary.absent, AppTheme.accentRed),
+                  _buildNamesSection(
+                    'غائب',
+                    summary.absent,
+                    AppTheme.accentRed,
+                  ),
                   _buildNamesSection('مستأذن', summary.excused, Colors.orange),
                 ],
               );
@@ -421,7 +425,7 @@ class _AttendanceSessionCardState extends State<AttendanceSessionCard> {
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.06),
+        color: color.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -429,8 +433,7 @@ class _AttendanceSessionCardState extends State<AttendanceSessionCard> {
         children: [
           Text(
             '$title (${names.length})',
-            style:
-                GoogleFonts.cairo(color: color, fontWeight: FontWeight.w900),
+            style: GoogleFonts.cairo(color: color, fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 8),
           if (names.isEmpty)
@@ -473,7 +476,8 @@ Widget buildSessionsListUi({
     required String meetingId,
     String? classId,
     int? meetingWeekday,
-  }) onCreateSession,
+  })
+  onCreateSession,
   required Future<void> Function() onReloadSessions,
   bool canDeleteSessions = false,
 }) {
@@ -821,7 +825,9 @@ class _SessionTileState extends State<_SessionTile> {
           TextButton(
             onPressed: () {
               invalidateSessionSummaryCache(widget.session.id);
-              context.read<AttendanceBloc>().add(DeleteSession(widget.session.id));
+              context.read<AttendanceBloc>().add(
+                DeleteSession(widget.session.id),
+              );
               Navigator.pop(dialogContext);
             },
             child: Text('حذف', style: GoogleFonts.cairo(color: Colors.red)),

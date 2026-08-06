@@ -1,9 +1,20 @@
 import type { Metadata } from 'next';
 import React from 'react';
+import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'LinkApp — نظام خدمة وإدارة الاجتماعات',
-  description: 'منظومة إلكترونية متكاملة لمتابعة الخدمات، الافتقاد، والاجتماعات.',
+  metadataBase: new URL('https://link-church-app.vercel.app'),
+  title: 'Link — إدارة الخدمة والحضور والافتقاد',
+  description:
+    'منظومة عربية متكاملة لإدارة الاجتماعات والحضور والأعضاء ومتابعة الافتقاد على Android وWindows.',
+  icons: { icon: '/link-logo.png', apple: '/link-logo.png' },
+  openGraph: {
+    title: 'Link — ركّز في الخدمة واترك التنظيم علينا',
+    description: 'إدارة الحضور والاجتماعات والأعضاء والافتقاد في مكان واحد.',
+    images: ['/link-logo.png'],
+    locale: 'ar_EG',
+    type: 'website',
+  },
 };
 
 export default function RootLayout({
@@ -16,18 +27,7 @@ export default function RootLayout({
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       </head>
-      <body
-        style={{
-          margin: 0,
-          padding: 0,
-          fontFamily:
-            "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
-          backgroundColor: '#f8fafc',
-          color: '#1e293b',
-        }}
-      >
-        {children}
-      </body>
+      <body>{children}</body>
     </html>
   );
 }
