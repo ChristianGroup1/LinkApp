@@ -11,19 +11,27 @@ class AppTourScreen extends StatefulWidget {
 
   static const String tourCompletedKey = 'has_completed_app_tour';
 
-  static Future<bool> isTourCompleted() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool(tourCompletedKey) ?? false;
+  static String _completionKey(String? userId) {
+    final normalizedUserId = userId?.trim();
+    if (normalizedUserId == null || normalizedUserId.isEmpty) {
+      return tourCompletedKey;
+    }
+    return '${tourCompletedKey}_$normalizedUserId';
   }
 
-  static Future<void> setTourCompleted() async {
+  static Future<bool> isTourCompleted({String? userId}) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(tourCompletedKey, true);
+    return prefs.getBool(_completionKey(userId)) ?? false;
   }
 
-  static Future<void> resetTourCompleted() async {
+  static Future<void> setTourCompleted({String? userId}) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(tourCompletedKey, false);
+    await prefs.setBool(_completionKey(userId), true);
+  }
+
+  static Future<void> resetTourCompleted({String? userId}) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_completionKey(userId), false);
   }
 
   @override
@@ -117,7 +125,10 @@ class _AppTourScreenState extends State<AppTourScreen> {
             children: [
               // Top Header with Skip button & Logo
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 12,
+                ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -144,7 +155,8 @@ class _AppTourScreenState extends State<AppTourScreen> {
               Expanded(
                 child: PageView.builder(
                   controller: _pageController,
-                  onPageChanged: (index) => setState(() => _currentPage = index),
+                  onPageChanged: (index) =>
+                      setState(() => _currentPage = index),
                   itemCount: _steps.length,
                   itemBuilder: (context, index) {
                     final step = _steps[index];
@@ -263,7 +275,9 @@ class _AppTourScreenState extends State<AppTourScreen> {
                             borderRadius: BorderRadius.circular(26),
                           ),
                           elevation: 4,
-                          shadowColor: const Color(0xFF2563EB).withValues(alpha: 0.35),
+                          shadowColor: const Color(
+                            0xFF2563EB,
+                          ).withValues(alpha: 0.35),
                         ),
                         child: Text(
                           _currentPage == _steps.length - 1

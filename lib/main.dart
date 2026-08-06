@@ -249,6 +249,7 @@ class AuthenticationGate extends StatelessWidget {
         if (state is AuthAuthenticated) {
           return MainNavigationWrapper(key: MainNavigationWrapper.wrapperKey);
         } else if (state is AuthUnauthenticated ||
+            state is AuthLoginLoading ||
             state is AuthError ||
             state is AuthPasswordResetEmailSent ||
             state is AuthPasswordResetError ||

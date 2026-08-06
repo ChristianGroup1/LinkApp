@@ -82,7 +82,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _submitLogin() {
     final email = _emailController.text.trim();
-    final password = _passwordController.text;
+    // Copying a password from messages or email can include an invisible
+    // trailing space/newline. Remove only trailing whitespace so intentional
+    // leading characters are preserved.
+    final password = _passwordController.text.trimRight();
 
     if (email.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -113,16 +116,23 @@ class _LoginScreenState extends State<LoginScreen> {
             if (state is AuthAuthenticated) {
               final inviteToken = widget.invitationToken;
               if (inviteToken != null && inviteToken.isNotEmpty) {
-                context.read<DatabaseRepository>().acceptInvitationLink(inviteToken).then((_) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('تم تسجيل الدخول وتفعيل الدعوة بنجاح 🎉', style: GoogleFonts.cairo()),
-                        backgroundColor: Colors.green,
-                      ),
-                    );
-                  }
-                }).catchError((_) {});
+                context
+                    .read<DatabaseRepository>()
+                    .acceptInvitationLink(inviteToken)
+                    .then((_) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              'تم تسجيل الدخول وتفعيل الدعوة بنجاح 🎉',
+                              style: GoogleFonts.cairo(),
+                            ),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                      }
+                    })
+                    .catchError((_) {});
               }
             } else if (state is AuthError) {
               ScaffoldMessenger.of(context).showSnackBar(
@@ -146,8 +156,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   children: [
                     const AuthLogoMark(size: 130),
                     const SizedBox(height: 14),
-                   
-                    
                   ],
                 ),
                 const SizedBox(height: 24),
@@ -260,7 +268,9 @@ class _LoginScreenState extends State<LoginScreen> {
                               value: remember,
                               onChanged: isLoading
                                   ? null
-                                  : (value) => setState(() => remember = value ?? false),
+                                  : (value) => setState(
+                                      () => remember = value ?? false,
+                                    ),
                               activeColor: const Color(0xFF2563EB),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(6),
@@ -294,7 +304,9 @@ class _LoginScreenState extends State<LoginScreen> {
                             borderRadius: BorderRadius.circular(26),
                           ),
                           elevation: 4,
-                          shadowColor: const Color(0xFF2563EB).withValues(alpha: 0.35),
+                          shadowColor: const Color(
+                            0xFF2563EB,
+                          ).withValues(alpha: 0.35),
                         ),
                         child: isLoading
                             ? const SizedBox(
@@ -334,7 +346,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ? null
                                 : () => Navigator.of(context).push(
                                     MaterialPageRoute(
-                                      builder: (_) => const RegistrationScreen(),
+                                      builder: (_) =>
+                                          const RegistrationScreen(),
                                     ),
                                   ),
                             child: Text(

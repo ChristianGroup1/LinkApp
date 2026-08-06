@@ -83,6 +83,12 @@ class AuthInitial extends AuthState {}
 
 class AuthLoading extends AuthState {}
 
+/// Keeps the login form mounted while a sign-in request is in progress.
+///
+/// This extends [AuthLoading] so app-wide listeners still treat an active
+/// login like any other authentication operation.
+class AuthLoginLoading extends AuthLoading {}
+
 class AuthAuthenticated extends AuthState {
   final AppProfile profile;
   AuthAuthenticated(this.profile);
@@ -163,7 +169,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     }, transformer: restartable());
 
     on<LoginRequested>((event, emit) async {
-      emit(AuthLoading());
+      emit(AuthLoginLoading());
       try {
         final profile = await repository.signInWithEmailAndPassword(
           event.email,
@@ -175,7 +181,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           emit(AuthError('بيانات الدخول غير صحيحة'));
         }
       } catch (e) {
-        emit(AuthError(e.toString().replaceAll('Exception: ', '')));
+        emit(AuthError(_loginErrorMessage(e)));
       }
     });
 
@@ -274,4 +280,17 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       emit(AuthUnauthenticated());
     });
   }
+}
+
+String _loginErrorMessage(Object error) {
+  final message = error.toString().replaceAll('Exception: ', '');
+  final normalized = message.toLowerCase();
+
+  if (normalized.contains('certificate is not yet valid') ||
+      (normalized.contains('certificate_verify_failed') &&
+          normalized.contains('not yet valid'))) {
+    return 'تعذر إنشاء اتصال آمن لأن تاريخ أو وقت الجهاز غير صحيح. فعّل التاريخ والوقت التلقائيين ثم حاول مرة أخرى.';
+  }
+
+  return message;
 }

@@ -11,6 +11,13 @@ import '../../data/repositories/database_repository.dart';
 import '../../main.dart';
 import '../../presentation/screens/main_navigation_wrapper.dart';
 
+enum MeetingReminderDeliveryResult {
+  sent,
+  permissionDenied,
+  unsupported,
+  failed,
+}
+
 class MeetingReminderService {
   static final MeetingReminderService instance = MeetingReminderService._();
 
@@ -70,7 +77,7 @@ class MeetingReminderService {
     }
 
     const settings = InitializationSettings(
-      android: AndroidInitializationSettings('ic_notification'),
+      android: AndroidInitializationSettings('ic_notification_logo'),
       iOS: DarwinInitializationSettings(),
       macOS: DarwinInitializationSettings(),
     );
@@ -171,66 +178,125 @@ class MeetingReminderService {
     }
   }
 
-  Future<void> _requestPermissionsOnce() async {
-    if (_permissionsRequested) return;
-
+  Future<bool> _ensureNotificationPermission({
+    required bool requestIfNeeded,
+  }) async {
     if (defaultTargetPlatform == TargetPlatform.android) {
       final android = _notifications
           .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin
           >();
-      final granted = await android?.requestNotificationsPermission();
-      debugPrint(
-        '[MeetingReminderService] Android notification permission: $granted',
-      );
-    } else if (defaultTargetPlatform == TargetPlatform.iOS ||
-        defaultTargetPlatform == TargetPlatform.macOS) {
-      await _notifications
-          .resolvePlatformSpecificImplementation<
-            MacOSFlutterLocalNotificationsPlugin
-          >()
-          ?.requestPermissions(alert: true, badge: true, sound: true);
-      await _notifications
+      if (android == null) return false;
+
+      final enabled = await android.areNotificationsEnabled() ?? false;
+      if (enabled || !requestIfNeeded) return enabled;
+
+      final granted = await android.requestNotificationsPermission();
+      if (granted == true) return true;
+      return await android.areNotificationsEnabled() ?? false;
+    }
+
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      final ios = _notifications
           .resolvePlatformSpecificImplementation<
             IOSFlutterLocalNotificationsPlugin
-          >()
-          ?.requestPermissions(alert: true, badge: true, sound: true);
+          >();
+      if (ios == null) return false;
+
+      final status = await ios.checkPermissions();
+      if (status?.isEnabled == true || !requestIfNeeded) {
+        return status?.isEnabled ?? false;
+      }
+      return await ios.requestPermissions(
+            alert: true,
+            badge: true,
+            sound: true,
+          ) ??
+          false;
     }
+
+    if (defaultTargetPlatform == TargetPlatform.macOS) {
+      final macOS = _notifications
+          .resolvePlatformSpecificImplementation<
+            MacOSFlutterLocalNotificationsPlugin
+          >();
+      if (macOS == null) return false;
+
+      final status = await macOS.checkPermissions();
+      if (status?.isEnabled == true || !requestIfNeeded) {
+        return status?.isEnabled ?? false;
+      }
+      return await macOS.requestPermissions(
+            alert: true,
+            badge: true,
+            sound: true,
+          ) ??
+          false;
+    }
+
+    return false;
+  }
+
+  Future<void> _requestPermissionsOnce() async {
+    if (_permissionsRequested) return;
+
+    final granted = await _ensureNotificationPermission(requestIfNeeded: true);
+    debugPrint(
+      '[MeetingReminderService] Notification permission granted: $granted',
+    );
 
     _permissionsRequested = true;
   }
 
-  Future<void> showInstantReminder({
+  Future<MeetingReminderDeliveryResult> showInstantReminder({
     required String meetingName,
     required String meetingId,
   }) async {
-    if (!_isSupportedPlatform) return;
-    await initialize();
-    await _requestPermissionsOnce();
+    if (!_isSupportedPlatform) {
+      return MeetingReminderDeliveryResult.unsupported;
+    }
 
-    await _notifications.show(
-      _notificationIdForMeeting(meetingId),
-      'تذكير تسجيل الحضور 🔔',
-      'حان موعد تسجيل الحضور والغياب لاجتماع $meetingName',
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          _channelId,
-          _channelName,
-          channelDescription: _channelDescription,
-          importance: Importance.high,
-          priority: Priority.high,
-          category: AndroidNotificationCategory.reminder,
-          color: AppThemeNotificationColor.primary,
+    try {
+      await initialize();
+      final permissionGranted = await _ensureNotificationPermission(
+        requestIfNeeded: true,
+      );
+      _permissionsRequested = true;
+      if (!permissionGranted) {
+        return MeetingReminderDeliveryResult.permissionDenied;
+      }
+
+      await _notifications.show(
+        _notificationIdForMeeting(meetingId),
+        'تذكير تسجيل الحضور 🔔',
+        'حان موعد تسجيل الحضور والغياب لاجتماع $meetingName',
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            _channelId,
+            _channelName,
+            channelDescription: _channelDescription,
+            importance: Importance.high,
+            priority: Priority.high,
+            category: AndroidNotificationCategory.reminder,
+            color: AppThemeNotificationColor.primary,
+          ),
+          iOS: DarwinNotificationDetails(
+            interruptionLevel: InterruptionLevel.active,
+          ),
+          macOS: DarwinNotificationDetails(
+            interruptionLevel: InterruptionLevel.active,
+          ),
         ),
-        iOS: DarwinNotificationDetails(
-          interruptionLevel: InterruptionLevel.active,
-        ),
-        macOS: DarwinNotificationDetails(
-          interruptionLevel: InterruptionLevel.active,
-        ),
-      ),
-      payload: 'meeting:$meetingId',
-    );
+        payload: 'meeting:$meetingId',
+      );
+      return MeetingReminderDeliveryResult.sent;
+    } catch (error, stackTrace) {
+      debugPrint(
+        '[MeetingReminderService] Could not show instant reminder: $error',
+      );
+      debugPrintStack(stackTrace: stackTrace);
+      return MeetingReminderDeliveryResult.failed;
+    }
   }
 
   Future<void> _replaceScheduledMeetings(List<MeetingEntity> meetings) async {

@@ -28,6 +28,7 @@ class _AddEditMeetingScreenState extends State<AddEditMeetingScreen> {
   bool _reminderEnabled = true;
   TimeOfDay _reminderTime = const TimeOfDay(hour: 18, minute: 0);
   bool _isSaving = false;
+  bool _isTestingNotification = false;
 
   bool get _isEdit => widget.meeting != null;
 
@@ -83,6 +84,42 @@ class _AddEditMeetingScreenState extends State<AddEditMeetingScreen> {
     if (selected != null && mounted) {
       setState(() => _reminderTime = selected);
     }
+  }
+
+  Future<void> _testNotification() async {
+    setState(() => _isTestingNotification = true);
+    final name = _nameController.text.trim();
+    final result = await MeetingReminderService.instance.showInstantReminder(
+      meetingName: name.isNotEmpty ? name : 'الاجتماع',
+      meetingId: widget.meeting?.id ?? 'test_id',
+    );
+    if (!mounted) return;
+
+    setState(() => _isTestingNotification = false);
+    final (message, color) = switch (result) {
+      MeetingReminderDeliveryResult.sent => (
+        'تم إرسال الإشعار التجريبي 🔔',
+        Colors.green,
+      ),
+      MeetingReminderDeliveryResult.permissionDenied => (
+        'الإشعارات مغلقة. فعّل إشعارات Link من إعدادات الهاتف ثم جرّب مرة أخرى.',
+        AppTheme.accentRed,
+      ),
+      MeetingReminderDeliveryResult.unsupported => (
+        'الإشعارات التجريبية غير مدعومة على هذا الجهاز.',
+        AppTheme.accentRed,
+      ),
+      MeetingReminderDeliveryResult.failed => (
+        'تعذّر إرسال الإشعار. حاول مرة أخرى.',
+        AppTheme.accentRed,
+      ),
+    };
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message, style: GoogleFonts.cairo()),
+        backgroundColor: color,
+      ),
+    );
   }
 
   void _submit() {
@@ -336,30 +373,20 @@ class _AddEditMeetingScreenState extends State<AddEditMeetingScreen> {
                             ),
                             const SizedBox(height: 8),
                             OutlinedButton.icon(
-                              onPressed: () async {
-                                final name = _nameController.text.trim();
-                                await MeetingReminderService.instance
-                                    .showInstantReminder(
-                                  meetingName:
-                                      name.isNotEmpty ? name : 'الاجتماع',
-                                  meetingId: widget.meeting?.id ?? 'test_id',
-                                );
-                                if (mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                        'تم إرسال الإشعار التجريبي 🔔',
-                                        style: GoogleFonts.cairo(),
+                              onPressed: _isTestingNotification
+                                  ? null
+                                  : _testNotification,
+                              icon: _isTestingNotification
+                                  ? const SizedBox.square(
+                                      dimension: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
                                       ),
-                                      backgroundColor: Colors.green,
+                                    )
+                                  : const Icon(
+                                      Icons.notifications_active_rounded,
+                                      size: 18,
                                     ),
-                                  );
-                                }
-                              },
-                              icon: const Icon(
-                                Icons.notifications_active_rounded,
-                                size: 18,
-                              ),
                               label: Text(
                                 'اختبار الإشعار التجريبي الآن 🔔',
                                 style: GoogleFonts.cairo(
@@ -369,9 +396,7 @@ class _AddEditMeetingScreenState extends State<AddEditMeetingScreen> {
                               ),
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: AppTheme.primary,
-                                side: const BorderSide(
-                                  color: AppTheme.primary,
-                                ),
+                                side: const BorderSide(color: AppTheme.primary),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12),
                                 ),

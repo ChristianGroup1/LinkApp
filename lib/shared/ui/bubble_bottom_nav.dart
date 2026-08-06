@@ -52,70 +52,71 @@ class AppBubbleBottomBar extends StatelessWidget {
           width: double.infinity,
           height: 58,
           child: Row(
-              children: List.generate(items.length, (index) {
-                final item = items[index];
-                final selected = currentIndex == index;
-                final accent = item.bubbleColor;
+            children: List.generate(items.length, (index) {
+              final item = items[index];
+              final selected = currentIndex == index;
+              final accent = item.bubbleColor;
 
-                return Expanded(
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: () => onTap(index),
-                      child: Center(
-                        child: AnimatedContainer(
-                          duration: _duration,
-                          curve: _curve,
-                          padding: EdgeInsets.symmetric(
-                            horizontal: selected ? 10 : 6,
-                            vertical: 8,
-                          ),
-                          decoration: BoxDecoration(
-                            color: selected
-                                ? accent.withValues(alpha: 0.14)
-                                : Colors.transparent,
-                            borderRadius: BorderRadius.circular(26),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                selected ? item.activeIcon : item.icon,
-                                size: 20,
-                                color: selected ? accent : _inactiveColor,
-                              ),
-                              AnimatedSize(
+              return Expanded(
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () => onTap(index),
+                    child: Center(
+                      child: AnimatedContainer(
+                        duration: _duration,
+                        curve: _curve,
+                        padding: EdgeInsets.symmetric(
+                          horizontal: selected ? 10 : 6,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: selected
+                              ? accent.withValues(alpha: 0.14)
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(26),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              selected ? item.activeIcon : item.icon,
+                              size: 20,
+                              color: selected ? accent : _inactiveColor,
+                            ),
+                            Flexible(
+                              child: AnimatedSize(
                                 duration: _duration,
                                 curve: _curve,
                                 alignment: Alignment.centerRight,
                                 child: selected
                                     ? Padding(
-                                        padding: const EdgeInsetsDirectional.only(
-                                          start: 5,
-                                        ),
-                                        child: Flexible(
-                                          child: Text(
-                                            item.label,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: GoogleFonts.cairo(
-                                              fontSize: 11.5,
-                                              fontWeight: FontWeight.w700,
-                                              color: accent,
+                                        padding:
+                                            const EdgeInsetsDirectional.only(
+                                              start: 5,
                                             ),
+                                        child: Text(
+                                          item.label,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: GoogleFonts.cairo(
+                                            fontSize: 11.5,
+                                            fontWeight: FontWeight.w700,
+                                            color: accent,
                                           ),
                                         ),
                                       )
                                     : const SizedBox.shrink(),
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
                   ),
-                );
+                ),
+              );
             }),
           ),
         ),

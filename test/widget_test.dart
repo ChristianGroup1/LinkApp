@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:link/core/invitations/invitation_preview.dart';
 import 'package:link/data/offline/invitation_create_result.dart';
@@ -9,6 +10,7 @@ import 'package:link/data/models/models.dart';
 import 'package:link/data/repositories/database_repository.dart';
 import 'package:link/logic/auth/auth_bloc.dart';
 import 'package:link/main.dart';
+import 'package:link/presentation/screens/app_tour_screen.dart';
 
 Future<void> _settle(WidgetTester tester) async {
   for (int i = 0; i < 15; i++) {
@@ -17,6 +19,97 @@ Future<void> _settle(WidgetTester tester) async {
 }
 
 void main() {
+  test('shows a useful message when the device clock breaks TLS', () async {
+    final repository = LoginFailureRepository(
+      errorMessage:
+          'AuthRetryableFetchException: CERTIFICATE_VERIFY_FAILED: certificate is not yet valid',
+    );
+    final bloc = AuthBloc(repository: repository);
+    addTearDown(bloc.close);
+
+    final states = expectLater(
+      bloc.stream,
+      emitsInOrder([
+        isA<AuthLoginLoading>(),
+        isA<AuthError>().having(
+          (state) => state.message,
+          'message',
+          contains('فعّل التاريخ والوقت التلقائيين'),
+        ),
+      ]),
+    );
+
+    bloc.add(LoginRequested(email: 'admin@example.com', password: 'secret'));
+    await states;
+  });
+
+  test(
+    'tracks spotlight tour completion separately for each account',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+
+      await AppTourScreen.setTourCompleted(userId: 'user-a');
+
+      expect(await AppTourScreen.isTourCompleted(userId: 'user-a'), isTrue);
+      expect(await AppTourScreen.isTourCompleted(userId: 'user-b'), isFalse);
+    },
+  );
+
+  testWidgets('keeps login credentials while a failed login is processed', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 1920);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final repository = LoginFailureRepository();
+    await repository.signOut();
+
+    await tester.pumpWidget(
+      RepositoryProvider<DatabaseRepository>.value(
+        value: repository,
+        child: BlocProvider<AuthBloc>(
+          create: (_) =>
+              AuthBloc(repository: repository)..add(AuthCheckRequested()),
+          child: const MyApp(),
+        ),
+      ),
+    );
+    await _settle(tester);
+
+    final emailField = find.byType(TextField).at(0);
+    final passwordField = find.byType(TextField).at(1);
+    await tester.enterText(emailField, 'admin@example.com');
+    await tester.enterText(passwordField, 'password123  ');
+    await tester.tap(find.widgetWithText(FilledButton, 'تسجيل الدخول'));
+    await tester.pump();
+
+    expect(repository.submittedPassword, 'password123');
+
+    expect(
+      tester.widget<TextField>(emailField).controller!.text,
+      'admin@example.com',
+    );
+    expect(
+      tester.widget<TextField>(passwordField).controller!.text,
+      'password123  ',
+    );
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+    await _settle(tester);
+
+    expect(
+      tester.widget<TextField>(emailField).controller!.text,
+      'admin@example.com',
+    );
+    expect(
+      tester.widget<TextField>(passwordField).controller!.text,
+      'password123  ',
+    );
+    expect(find.text('بيانات الدخول غير صحيحة'), findsOneWidget);
+  });
+
   testWidgets('renders login and navigates to dashboard', (tester) async {
     tester.view.physicalSize = const Size(1200, 1920);
     tester.view.devicePixelRatio = 1.0;
@@ -96,6 +189,23 @@ void main() {
     await _settle(tester);
     expect(find.text('إعدادات الحساب والخدمة'), findsOneWidget);
   });
+}
+
+class LoginFailureRepository extends TestRepository {
+  final String errorMessage;
+  String? submittedPassword;
+
+  LoginFailureRepository({this.errorMessage = 'بيانات الدخول غير صحيحة'});
+
+  @override
+  Future<AppProfile?> signInWithEmailAndPassword(
+    String email,
+    String password,
+  ) async {
+    submittedPassword = password;
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    throw Exception(errorMessage);
+  }
 }
 
 class TestRepository implements DatabaseRepository {
