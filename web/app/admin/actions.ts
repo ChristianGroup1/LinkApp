@@ -17,7 +17,21 @@ export async function loginAction(formData: FormData) {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
-  if (error || !data.user) redirect('/admin/login?error=invalid-login');
+  if (error || !data.user) {
+    const errorCode = error?.code ?? 'missing-user';
+    console.warn('[admin/login] Supabase sign-in rejected', {
+      code: errorCode,
+      status: error?.status,
+    });
+
+    if (errorCode === 'email_not_confirmed') {
+      redirect('/admin/login?error=email-not-confirmed');
+    }
+    if (errorCode === 'over_request_rate_limit') {
+      redirect('/admin/login?error=rate-limited');
+    }
+    redirect('/admin/login?error=invalid-login');
+  }
 
   const { data: profile } = await supabase
     .from('profiles')

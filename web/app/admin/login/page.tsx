@@ -6,6 +6,8 @@ import { loginAction } from '../actions';
 
 const errors: Record<string, string> = {
   'invalid-login': 'البريد الإلكتروني أو كلمة المرور غير صحيحة.',
+  'email-not-confirmed': 'البريد الإلكتروني غير مؤكد. فعّل الحساب من Supabase أو من رسالة التأكيد ثم حاول مرة أخرى.',
+  'rate-limited': 'تم إجراء محاولات كثيرة. انتظر قليلًا ثم حاول مرة أخرى.',
   'not-authorized': 'هذه اللوحة متاحة لحساب مالك النظام فقط.',
 };
 
