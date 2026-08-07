@@ -1,7 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
+  static bool get isNativeDesktop =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.windows ||
+          defaultTargetPlatform == TargetPlatform.macOS ||
+          defaultTargetPlatform == TargetPlatform.linux);
+
   // Brand Colors
   static const Color primary = Color(0xFF4F46E5);
   static const Color primaryLight = Color(0xFFEEF2FF);
@@ -131,7 +138,10 @@ class AppTheme {
       chipTheme: ChipThemeData(
         backgroundColor: surfaceMuted,
         selectedColor: primaryLight,
-        labelStyle: GoogleFonts.cairo(fontSize: 12, fontWeight: FontWeight.bold),
+        labelStyle: GoogleFonts.cairo(
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
+        ),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         side: BorderSide.none,
         padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -218,4 +228,56 @@ class AppTheme {
       ),
     );
   }
+
+  /// A roomier theme for mouse-and-keyboard layouts. Explicit widget styles
+  /// still inherit the desktop text scaling applied by the app builder.
+  static ThemeData get desktopTheme {
+    final base = lightTheme;
+    return base.copyWith(
+      appBarTheme: base.appBarTheme.copyWith(
+        toolbarHeight: 72,
+        iconTheme: const IconThemeData(color: primary, size: 28),
+        titleTextStyle: GoogleFonts.cairo(
+          fontSize: 20,
+          fontWeight: FontWeight.w900,
+          color: textDark,
+        ),
+      ),
+      iconTheme: const IconThemeData(size: 26, color: textDark),
+      inputDecorationTheme: base.inputDecorationTheme.copyWith(
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 20,
+          vertical: 18,
+        ),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: primary,
+          foregroundColor: Colors.white,
+          elevation: 0,
+          minimumSize: const Size(150, 56),
+          padding: const EdgeInsets.symmetric(vertical: 17, horizontal: 28),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          textStyle: GoogleFonts.cairo(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+      dialogTheme: base.dialogTheme.copyWith(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 64, vertical: 40),
+        titleTextStyle: GoogleFonts.cairo(
+          fontSize: 22,
+          fontWeight: FontWeight.w700,
+          color: textDark,
+        ),
+        contentTextStyle: GoogleFonts.cairo(fontSize: 16, color: textLight),
+      ),
+    );
+  }
+
+  static ThemeData get platformTheme =>
+      isNativeDesktop ? desktopTheme : lightTheme;
 }

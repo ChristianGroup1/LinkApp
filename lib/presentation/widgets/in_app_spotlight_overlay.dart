@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../core/theme/app_theme.dart';
+
 class InAppTourNotifier extends InheritedWidget {
   final VoidCallback startTour;
 
@@ -71,15 +73,36 @@ class _InAppSpotlightOverlayState extends State<InAppSpotlightOverlay> {
 
   void _updateTargetRect() async {
     if (!mounted) return;
-    final step = widget.steps[widget.currentStep.clamp(0, widget.steps.length - 1)];
+    final step =
+        widget.steps[widget.currentStep.clamp(0, widget.steps.length - 1)];
 
     if (step.navIndex != null) {
       final size = MediaQuery.of(context).size;
       final bottomPadding = MediaQuery.of(context).padding.bottom;
+      final isDesktopLayout = AppTheme.isNativeDesktop && size.width >= 900;
+
+      if (isDesktopLayout) {
+        const sidebarWidth = 280.0;
+        const firstItemCenterY = 153.0;
+        const itemStride = 68.0;
+        setState(() {
+          _targetRect = Rect.fromCenter(
+            center: Offset(
+              size.width - (sidebarWidth / 2),
+              firstItemCenterY + (itemStride * step.navIndex!),
+            ),
+            width: sidebarWidth - 40,
+            height: 58,
+          );
+        });
+        return;
+      }
+
       final tabWidth = size.width / 4;
       // RTL: index 0 is rightmost, 3 is leftmost
       final targetX = size.width - (tabWidth * step.navIndex!) - (tabWidth / 2);
-      final targetY = size.height - (bottomPadding > 0 ? bottomPadding + 28.0 : 34.0);
+      final targetY =
+          size.height - (bottomPadding > 0 ? bottomPadding + 28.0 : 34.0);
 
       setState(() {
         _targetRect = Rect.fromCenter(
@@ -142,7 +165,8 @@ class _InAppSpotlightOverlayState extends State<InAppSpotlightOverlay> {
 
   @override
   Widget build(BuildContext context) {
-    final step = widget.steps[widget.currentStep.clamp(0, widget.steps.length - 1)];
+    final step =
+        widget.steps[widget.currentStep.clamp(0, widget.steps.length - 1)];
     final screenSize = MediaQuery.of(context).size;
     final rect = _targetRect;
 
@@ -156,9 +180,7 @@ class _InAppSpotlightOverlayState extends State<InAppSpotlightOverlay> {
           Positioned.fill(
             child: GestureDetector(
               onTap: _nextStep,
-              child: CustomPaint(
-                painter: SpotlightPainter(targetRect: rect),
-              ),
+              child: CustomPaint(painter: SpotlightPainter(targetRect: rect)),
             ),
           ),
 
@@ -197,7 +219,10 @@ class _InAppSpotlightOverlayState extends State<InAppSpotlightOverlay> {
             right: 20,
             top: (rect != null && !isBottomTarget) ? rect.bottom + 16 : null,
             bottom: (rect != null && isBottomTarget)
-                ? (screenSize.height - rect.top + 16).clamp(90.0, screenSize.height - 250.0)
+                ? (screenSize.height - rect.top + 16).clamp(
+                    90.0,
+                    screenSize.height - 250.0,
+                  )
                 : (rect == null ? 120.0 : null),
             child: Material(
               color: Colors.transparent,
@@ -228,7 +253,11 @@ class _InAppSpotlightOverlayState extends State<InAppSpotlightOverlay> {
                             color: const Color(0xFFEFF6FF),
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          child: Icon(step.icon, color: const Color(0xFF2563EB), size: 24),
+                          child: Icon(
+                            step.icon,
+                            color: const Color(0xFF2563EB),
+                            size: 24,
+                          ),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
@@ -292,7 +321,9 @@ class _InAppSpotlightOverlayState extends State<InAppSpotlightOverlay> {
                                 onPressed: _prevStep,
                                 style: OutlinedButton.styleFrom(
                                   foregroundColor: const Color(0xFF64748B),
-                                  side: const BorderSide(color: Color(0xFFCBD5E1)),
+                                  side: const BorderSide(
+                                    color: Color(0xFFCBD5E1),
+                                  ),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(20),
                                   ),

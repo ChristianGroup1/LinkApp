@@ -110,7 +110,7 @@ class SupabaseConfigurationErrorApp extends StatelessWidget {
     return MaterialApp(
       title: 'Link Church Management',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme,
+      theme: AppTheme.platformTheme,
       builder: _compactTextBuilder,
       home: Directionality(
         textDirection: TextDirection.rtl,
@@ -146,7 +146,7 @@ class MyApp extends StatelessWidget {
       navigatorObservers: [appRouteObserver],
       title: 'Link Church Management',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme,
+      theme: AppTheme.platformTheme,
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
@@ -174,10 +174,13 @@ class MyApp extends StatelessWidget {
 }
 
 Widget _compactTextBuilder(BuildContext context, Widget? child) {
+  // Mobile keeps the intentionally compact layout, while native desktop gets
+  // comfortable reading sizes without changing individual feature screens.
+  final textScale = AppTheme.isNativeDesktop ? 1.12 : 0.95;
   return MediaQuery(
     data: MediaQuery.of(
       context,
-    ).copyWith(textScaler: const TextScaler.linear(0.95)),
+    ).copyWith(textScaler: TextScaler.linear(textScale)),
     child: Directionality(
       textDirection: TextDirection.rtl,
       child: child ?? const SizedBox.shrink(),

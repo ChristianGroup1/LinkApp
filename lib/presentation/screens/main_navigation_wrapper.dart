@@ -547,6 +547,22 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
 
   @override
   Widget build(BuildContext context) {
+    final useDesktopNavigation =
+        AppTheme.isNativeDesktop && MediaQuery.sizeOf(context).width >= 900;
+
+    final tabContent = Column(
+      children: [
+        ValueListenableBuilder<bool>(
+          valueListenable: ConnectivityService.instance.isOnline,
+          builder: (context, online, _) {
+            if (online) return const SizedBox.shrink();
+            return OfflineBanner(hasPendingSync: _hasPendingSync);
+          },
+        ),
+        Expanded(child: _tabBodies[_currentIndex] ?? const SizedBox.shrink()),
+      ],
+    );
+
     return InAppTourNotifier(
       startTour: _startInAppTour,
       child: MultiBlocProvider(
@@ -566,27 +582,27 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
                 },
                 child: Scaffold(
                   backgroundColor: AppTheme.background,
-                  body: Column(
-                    children: [
-                      ValueListenableBuilder<bool>(
-                        valueListenable: ConnectivityService.instance.isOnline,
-                        builder: (context, online, _) {
-                          if (online) return const SizedBox.shrink();
-                          return OfflineBanner(hasPendingSync: _hasPendingSync);
-                        },
-                      ),
-                      Expanded(
-                        child:
-                            _tabBodies[_currentIndex] ??
-                            const SizedBox.shrink(),
-                      ),
-                    ],
-                  ),
-                  bottomNavigationBar: AppBubbleBottomBar(
-                    currentIndex: _currentIndex,
-                    onTap: _selectTab,
-                    items: _navItems,
-                  ),
+                  body: useDesktopNavigation
+                      ? Row(
+                          textDirection: TextDirection.rtl,
+                          children: [
+                            _DesktopNavigationPanel(
+                              currentIndex: _currentIndex,
+                              onTap: _selectTab,
+                              items: _navItems,
+                            ),
+                            const VerticalDivider(width: 1, thickness: 1),
+                            Expanded(child: tabContent),
+                          ],
+                        )
+                      : tabContent,
+                  bottomNavigationBar: useDesktopNavigation
+                      ? null
+                      : AppBubbleBottomBar(
+                          currentIndex: _currentIndex,
+                          onTap: _selectTab,
+                          items: _navItems,
+                        ),
                 ),
               ),
               if (_showInAppTour)
@@ -616,6 +632,166 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
                       });
                     }
                   },
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DesktopNavigationPanel extends StatelessWidget {
+  final int currentIndex;
+  final ValueChanged<int> onTap;
+  final List<BubbleNavItem> items;
+
+  const _DesktopNavigationPanel({
+    required this.currentIndex,
+    required this.onTap,
+    required this.items,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 280,
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+      child: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(18),
+                  child: Image.asset(
+                    'assets/images/link_logo.png',
+                    width: 64,
+                    height: 64,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'لينك',
+                        style: AppTheme.cairo(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
+                          color: AppTheme.primary,
+                        ),
+                      ),
+                      Text(
+                        'إدارة الخدمة',
+                        style: AppTheme.cairo(
+                          fontSize: 13,
+                          color: AppTheme.textLight,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 32),
+            for (var index = 0; index < items.length; index++) ...[
+              _DesktopNavigationItem(
+                item: items[index],
+                selected: currentIndex == index,
+                onTap: () => onTap(index),
+              ),
+              const SizedBox(height: 10),
+            ],
+            const Spacer(),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppTheme.primaryLight,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.desktop_windows_rounded,
+                    color: AppTheme.primary,
+                    size: 24,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'نسخة سطح المكتب',
+                      style: AppTheme.cairo(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.primary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DesktopNavigationItem extends StatelessWidget {
+  final BubbleNavItem item;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _DesktopNavigationItem({
+    required this.item,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = selected ? item.bubbleColor : AppTheme.textLight;
+    return Material(
+      color: selected
+          ? item.bubbleColor.withValues(alpha: 0.12)
+          : Colors.transparent,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+          child: Row(
+            children: [
+              Icon(
+                selected ? item.activeIcon : item.icon,
+                size: 28,
+                color: color,
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  item.label,
+                  style: AppTheme.cairo(
+                    fontSize: 16,
+                    fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                    color: color,
+                  ),
+                ),
+              ),
+              if (selected)
+                Container(
+                  width: 4,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: item.bubbleColor,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
                 ),
             ],
           ),

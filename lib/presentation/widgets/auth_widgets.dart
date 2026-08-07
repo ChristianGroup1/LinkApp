@@ -12,6 +12,7 @@ class AuthShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final desktop = AppTheme.isNativeDesktop;
     return Scaffold(
       body: Stack(
         clipBehavior: Clip.none,
@@ -47,18 +48,25 @@ class AuthShell extends StatelessWidget {
           ),
           SafeArea(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(22, 12, 22, 28),
-              child: compact
-                  ? child
-                  : ConstrainedBox(
-                      constraints: BoxConstraints(
-                        minHeight:
-                            MediaQuery.of(context).size.height -
-                            MediaQuery.of(context).padding.vertical -
-                            24,
-                      ),
-                      child: child,
-                    ),
+              padding: EdgeInsets.fromLTRB(
+                desktop ? 48 : 22,
+                desktop ? 32 : 12,
+                desktop ? 48 : 22,
+                desktop ? 48 : 28,
+              ),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: desktop ? 640 : double.infinity,
+                    minHeight: compact
+                        ? 0
+                        : MediaQuery.of(context).size.height -
+                              MediaQuery.of(context).padding.vertical -
+                              (desktop ? 80 : 24),
+                  ),
+                  child: child,
+                ),
+              ),
             ),
           ),
         ],
@@ -112,9 +120,7 @@ class AuthLogoMark extends StatelessWidget {
     return SizedBox(
       width: size,
       height: size,
-      child: ClipOval(
-        child: Image.asset(kLogoAsset, fit: BoxFit.cover),
-      ),
+      child: ClipOval(child: Image.asset(kLogoAsset, fit: BoxFit.cover)),
     );
   }
 }
