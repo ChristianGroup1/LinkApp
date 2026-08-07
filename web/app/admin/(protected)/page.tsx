@@ -35,6 +35,21 @@ export default async function AdminDashboardPage() {
         <div className="updatedAt">آخر تحديث {new Date(data.generatedAt).toLocaleString('ar-EG')}</div>
       </div>
 
+      <section className="todayPanel">
+        <header>
+          <div><span>مباشر</span><h2>ملخص اليوم</h2></div>
+          <p>الأرقام محسوبة بتوقيت القاهرة، والمستخدم النشط هو حساب فتح التطبيق أو سجل الدخول اليوم.</p>
+        </header>
+        <div className="todayGrid">
+          <article><span className="todayIcon purple">●</span><small>نشطون اليوم</small><strong>{data.analyticsReady ? formatNumber(metrics.activeUsersToday) : '—'}</strong><em>مستخدم فريد</em></article>
+          <article><span className="todayIcon green">＋</span><small>حسابات جديدة</small><strong>{formatNumber(metrics.newProfilesToday)}</strong><em>تم تسجيلها اليوم</em></article>
+          <article><span className="todayIcon blue">↗</span><small>مرات فتح التطبيق</small><strong>{data.analyticsReady ? formatNumber(metrics.appOpensToday) : '—'}</strong><em>من كل المنصات</em></article>
+          <article><span className="todayIcon amber">✓</span><small>تسجيلات الدخول</small><strong>{data.analyticsReady ? formatNumber(metrics.signInsToday) : '—'}</strong><em>محاولات ناجحة مسجلة</em></article>
+          <article><span className="todayIcon rose">◆</span><small>كنائس جديدة</small><strong>{formatNumber(metrics.newChurchesToday)}</strong><em>أضيفت اليوم</em></article>
+          <article><span className="todayIcon teal">▣</span><small>جلسات حضور</small><strong>{formatNumber(metrics.sessionsToday)}</strong><em>جلسات اليوم</em></article>
+        </div>
+      </section>
+
       <section className="scorePanel">
         <div className="scoreRing" style={{ '--score': `${metrics.successScore * 3.6}deg` } as CSSProperties}>
           <span><strong>{metrics.successScore}</strong><small>/ 100</small></span>

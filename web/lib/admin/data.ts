@@ -2,9 +2,22 @@ import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { adminTables, type AdminTableConfig, type AdminTableKey } from '@/lib/admin/schema';
 
 const DAY = 86_400_000;
+const DASHBOARD_TIME_ZONE = 'Africa/Cairo';
 
 function isoDate(date: Date) {
   return date.toISOString().slice(0, 10);
+}
+
+function dateKeyInDashboardTimeZone(value: string | Date) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: DASHBOARD_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(typeof value === 'string' ? new Date(value) : value);
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((item) => item.type === type)?.value ?? '';
+  return `${part('year')}-${part('month')}-${part('day')}`;
 }
 
 function percentChange(current: number, previous: number) {
@@ -53,6 +66,7 @@ export async function getDashboardData() {
   const previousIso = previousStart.toISOString();
   const currentDate = isoDate(currentStart);
   const previousDate = isoDate(previousStart);
+  const todayKey = dateKeyInDashboardTimeZone(now);
 
   const [
     churchesTotal,
@@ -123,6 +137,21 @@ export async function getDashboardData() {
   const activeUsers30 = new Set(
     usage.filter((row) => String(row.occurred_at) >= currentIso).map((row) => String(row.user_id)),
   ).size;
+  const todayUsage = usage.filter(
+    (row) => dateKeyInDashboardTimeZone(String(row.occurred_at)) === todayKey,
+  );
+  const activeUsersToday = new Set(todayUsage.map((row) => String(row.user_id))).size;
+  const appOpensToday = todayUsage.filter((row) => row.event_name === 'app_open').length;
+  const signInsToday = todayUsage.filter((row) => row.event_name === 'sign_in').length;
+  const newProfilesToday = profiles.filter(
+    (row) => dateKeyInDashboardTimeZone(String(row.created_at)) === todayKey,
+  ).length;
+  const newChurchesToday = churches.filter(
+    (row) => dateKeyInDashboardTimeZone(String(row.created_at)) === todayKey,
+  ).length;
+  const sessionsToday = sessions.filter(
+    (row) => String(row.session_date).slice(0, 10) === todayKey,
+  ).length;
   const activationRate = churchesTotal ? Math.round((activeChurchIds.size / churchesTotal) * 100) : 0;
   const retentionRate = previousChurchIds.size
     ? Math.round((retainedChurches / previousChurchIds.size) * 100)
@@ -161,7 +190,8 @@ export async function getDashboardData() {
       churchesTotal, profilesActive, membersActive, meetingsActive,
       sessionsCurrent, pendingInvitations, pendingFollowUps, attendanceRate,
       activeUsers7, activeUsers30, activationRate, retentionRate,
-      engagementChange, userGrowth, successScore,
+      activeUsersToday, appOpensToday, signInsToday, newProfilesToday,
+      newChurchesToday, sessionsToday, engagementChange, userGrowth, successScore,
     },
     sessionTrend: dayBuckets(currentSessions, 'session_date'),
     userTrend: dayBuckets(profiles.filter((row) => String(row.created_at) >= currentIso), 'created_at'),
