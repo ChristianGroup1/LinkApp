@@ -247,6 +247,7 @@ export default async function HomePage() {
           <span><strong>Link</strong><small>متصلين بمحبة، ننمو معًا</small></span>
         </div>
         <p>© 2026 Link. جميع الحقوق محفوظة.</p>
+        <a href="/support">الدعم</a>
         <a href="/privacy-policy">سياسة الخصوصية</a>
       </footer>
     </main>

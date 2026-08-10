@@ -263,6 +263,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       emit(AuthPasswordUpdateLoading());
       try {
         await repository.updatePassword(event.password);
+        // Password recovery creates a temporary authenticated session. End it
+        // after the update so the following login starts from a clean state.
+        // A sign-out failure must not report that the password update failed.
+        try {
+          await repository.signOut();
+        } catch (_) {}
         emit(AuthPasswordUpdated());
       } catch (e) {
         emit(AuthPasswordResetError('تعذر تحديث كلمة المرور. حاول مرة أخرى.'));

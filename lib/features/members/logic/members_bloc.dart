@@ -35,6 +35,7 @@ class CreateMember extends MembersEvent {
   final String? parentPhone;
   final String? code;
   final DateTime? birthDate;
+  final String? notes;
 
   CreateMember({
     required this.fullName,
@@ -46,6 +47,7 @@ class CreateMember extends MembersEvent {
     this.parentPhone,
     this.code,
     this.birthDate,
+    this.notes,
   });
 }
 
@@ -61,6 +63,7 @@ class UpdateMemberEvent extends MembersEvent {
   final String? code;
   final DateTime? birthDate;
   final bool isActive;
+  final String? notes;
 
   UpdateMemberEvent({
     required this.id,
@@ -74,6 +77,7 @@ class UpdateMemberEvent extends MembersEvent {
     this.code,
     this.birthDate,
     required this.isActive,
+    this.notes,
   });
 }
 
@@ -278,6 +282,7 @@ class MembersBloc extends Bloc<MembersEvent, MembersState> {
           parentPhone: event.parentPhone,
           code: event.code,
           birthDate: event.birthDate,
+          notes: event.notes,
         );
         add(
           LoadMembers(
@@ -310,6 +315,7 @@ class MembersBloc extends Bloc<MembersEvent, MembersState> {
           code: event.code,
           birthDate: event.birthDate,
           isActive: event.isActive,
+          notes: event.notes,
         );
         add(
           LoadMembers(

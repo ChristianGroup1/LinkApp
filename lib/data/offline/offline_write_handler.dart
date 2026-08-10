@@ -120,6 +120,7 @@ class OfflineWriteHandler {
     String? parentPhone,
     String? code,
     DateTime? birthDate,
+    String? notes,
   }) async {
     final profile = await _requireProfile();
     final churchId = profile.churchId!;
@@ -145,6 +146,7 @@ class OfflineWriteHandler {
             'parent_phone': emptyToNull(parentPhone),
             'code': emptyToNull(code),
             'birth_date': _dateOnly(birthDate),
+            'notes': emptyToNull(notes),
             'is_active': true,
             'joined_on': DateTime.now().toIso8601String().split('T').first,
           })
@@ -169,6 +171,7 @@ class OfflineWriteHandler {
         parentPhone: emptyToNull(parentPhone),
         code: emptyToNull(code),
         birthDate: birthDate,
+        notes: emptyToNull(notes),
         isActive: true,
       );
       await cache.upsertMember(churchId, member);
@@ -188,6 +191,7 @@ class OfflineWriteHandler {
             'parent_phone': emptyToNull(parentPhone),
             'code': emptyToNull(code),
             'birth_date': _dateOnly(birthDate),
+            'notes': emptyToNull(notes),
             'is_active': true,
           },
           queuedAt: DateTime.now(),
@@ -209,6 +213,7 @@ class OfflineWriteHandler {
     String? code,
     DateTime? birthDate,
     required bool isActive,
+    String? notes,
   }) async {
     final profile = await _requireProfile();
     final churchId = profile.churchId!;
@@ -233,6 +238,7 @@ class OfflineWriteHandler {
         parentPhone: emptyToNull(parentPhone),
         code: emptyToNull(code),
         birthDate: birthDate,
+        notes: emptyToNull(notes),
         isActive: isActive,
       );
       await cache.upsertMember(churchId, member);
@@ -253,6 +259,7 @@ class OfflineWriteHandler {
             'parent_phone': emptyToNull(parentPhone),
             'code': emptyToNull(code),
             'birth_date': _dateOnly(birthDate),
+            'notes': emptyToNull(notes),
             'is_active': isActive,
           },
           queuedAt: DateTime.now(),
@@ -279,6 +286,7 @@ class OfflineWriteHandler {
             'parent_phone': emptyToNull(parentPhone),
             'code': emptyToNull(code),
             'birth_date': _dateOnly(birthDate),
+            'notes': emptyToNull(notes),
             'is_active': isActive,
           })
           .eq('id', resolvedId)
@@ -303,6 +311,7 @@ class OfflineWriteHandler {
         parentPhone: emptyToNull(parentPhone),
         code: emptyToNull(code),
         birthDate: birthDate,
+        notes: emptyToNull(notes),
         isActive: isActive,
       );
       if (resolvedId != id) await cache.removeMember(churchId, id);
@@ -322,6 +331,7 @@ class OfflineWriteHandler {
             'parent_phone': emptyToNull(parentPhone),
             'code': emptyToNull(code),
             'birth_date': _dateOnly(birthDate),
+            'notes': emptyToNull(notes),
             'is_active': isActive,
           },
           queuedAt: DateTime.now(),

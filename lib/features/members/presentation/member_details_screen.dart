@@ -5,8 +5,10 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/models.dart';
+import '../../../data/repositories/database_repository.dart';
 import '../logic/members_bloc.dart';
 import 'add_edit_member_screen.dart';
+import 'member_attendance_history_screen.dart';
 
 class MemberDetailsScreen extends StatelessWidget {
   final MemberEntity member;
@@ -128,23 +130,43 @@ class _MemberDetailsView extends StatelessWidget {
               color: AppTheme.primary,
               title: 'البيانات الأساسية',
               children: [
+                // 1. الاسم الكامل
                 _DetailRow(
                   icon: Icons.person_outline_rounded,
                   label: 'الاسم الكامل',
                   value: member.fullName,
                 ),
+                // 2. رقم هاتف العضو
                 _DetailRow(
-                  icon: Icons.qr_code_2_rounded,
-                  label: 'الكود التعريفي',
-                  value: member.code,
+                  icon: Icons.phone_outlined,
+                  label: 'رقم هاتف العضو',
+                  value: member.phone,
+                  onTap: member.phone == null
+                      ? null
+                      : () => _callNumber(member.phone!),
                 ),
+                // 3. تاريخ الميلاد
                 _DetailRow(
                   icon: Icons.cake_outlined,
                   label: 'تاريخ الميلاد',
                   value: _birthDateLabel(member.birthDate),
                   supportingValue: _ageLabel(member.birthDate),
-                  isLast: true,
                 ),
+                // 4. الكود التعريفي
+                _DetailRow(
+                  icon: Icons.qr_code_2_rounded,
+                  label: 'الكود التعريفي',
+                  value: member.code,
+                  isLast: member.notes == null || member.notes!.isEmpty,
+                ),
+                // 5. السنة الدراسية / المرحلة
+                if (member.notes != null && member.notes!.isNotEmpty)
+                  _DetailRow(
+                    icon: Icons.school_outlined,
+                    label: 'السنة الدراسية / المرحلة',
+                    value: member.notes,
+                    isLast: true,
+                  ),
               ],
             ),
             const SizedBox(height: 14),
@@ -176,19 +198,18 @@ class _MemberDetailsView extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 14),
+            _MemberAttendanceSection(
+              memberId: member.id,
+              member: member,
+              classes: classes,
+              meetings: meetings,
+            ),
+            const SizedBox(height: 14),
             _DetailsSection(
               icon: Icons.contact_phone_outlined,
               color: AppTheme.accentOrange,
               title: 'التواصل والعائلة',
               children: [
-                _DetailRow(
-                  icon: Icons.phone_outlined,
-                  label: 'هاتف العضو',
-                  value: member.phone,
-                  onTap: member.phone == null
-                      ? null
-                      : () => _callNumber(member.phone!),
-                ),
                 _DetailRow(
                   icon: Icons.family_restroom_rounded,
                   label: 'اسم ولي الأمر',
@@ -336,21 +357,546 @@ class _MemberDetailsView extends StatelessWidget {
   }
 
   Future<void> _callNumber(String number) async {
-    final uri = Uri(scheme: 'tel', path: number);
-    if (await canLaunchUrl(uri)) {
+    final cleanNumber = number.replaceAll(RegExp(r'[^0-9+]'), '');
+    if (cleanNumber.isEmpty) return;
+
+    final uri = Uri.parse('tel:$cleanNumber');
+    try {
+      if (await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+        return;
+      }
+    } catch (_) {}
+
+    try {
       await launchUrl(uri);
-    }
+    } catch (_) {}
   }
 
   Future<void> _openWhatsApp(String number) async {
     var cleanNumber = number.replaceAll(RegExp(r'[^0-9]'), '');
-    if (cleanNumber.startsWith('01')) {
+    if (cleanNumber.isEmpty) return;
+
+    if (cleanNumber.startsWith('01') && cleanNumber.length == 11) {
       cleanNumber = '2$cleanNumber';
     }
-    final uri = Uri.parse('https://wa.me/$cleanNumber');
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
+
+    final urls = [
+      'whatsapp://send?phone=$cleanNumber',
+      'https://wa.me/$cleanNumber',
+      'https://api.whatsapp.com/send?phone=$cleanNumber',
+    ];
+
+    for (final urlStr in urls) {
+      try {
+        final uri = Uri.parse(urlStr);
+        if (await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+          return;
+        }
+      } catch (_) {}
     }
+  }
+}
+
+class _MemberAttendanceSection extends StatefulWidget {
+  final String memberId;
+  final MemberEntity member;
+  final List<SundaySchoolClassEntity> classes;
+  final List<MeetingEntity> meetings;
+
+  const _MemberAttendanceSection({
+    required this.memberId,
+    required this.member,
+    required this.classes,
+    required this.meetings,
+  });
+
+  @override
+  State<_MemberAttendanceSection> createState() =>
+      _MemberAttendanceSectionState();
+}
+
+class _MemberAttendanceSectionState extends State<_MemberAttendanceSection> {
+  late Future<List<MemberAttendanceHistoryEntry>> _historyFuture;
+  bool _showAll = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadHistory();
+  }
+
+  @override
+  void didUpdateWidget(covariant _MemberAttendanceSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.memberId != widget.memberId) {
+      _showAll = false;
+      _loadHistory();
+    }
+  }
+
+  void _loadHistory() {
+    _historyFuture = context
+        .read<DatabaseRepository>()
+        .getMemberAttendanceHistory(widget.memberId);
+  }
+
+  void _retry() {
+    setState(_loadHistory);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppTheme.border.withValues(alpha: 0.8)),
+        boxShadow: AppTheme.softShadow,
+      ),
+      child: FutureBuilder<List<MemberAttendanceHistoryEntry>>(
+        future: _historyFuture,
+        builder: (context, snapshot) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 39,
+                    height: 39,
+                    decoration: BoxDecoration(
+                      color: AppTheme.secondary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.insights_rounded,
+                      color: AppTheme.secondary,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    'الحضور والغياب',
+                    style: GoogleFonts.cairo(
+                      color: AppTheme.textDark,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              if (snapshot.connectionState == ConnectionState.waiting)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 28),
+                  child: Center(
+                    child: CircularProgressIndicator(
+                      color: AppTheme.primary,
+                      strokeWidth: 2.5,
+                    ),
+                  ),
+                )
+              else if (snapshot.hasError)
+                _AttendanceLoadError(onRetry: _retry)
+              else
+                _buildHistory(snapshot.data ?? const []),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildHistory(List<MemberAttendanceHistoryEntry> history) {
+    if (history.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 20),
+        child: Column(
+          children: [
+            Icon(
+              Icons.event_available_outlined,
+              color: AppTheme.textLight.withValues(alpha: 0.65),
+              size: 38,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'لا توجد سجلات حضور لهذا العضو حتى الآن',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.cairo(
+                color: AppTheme.textLight,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final present = history
+        .where((entry) => entry.status == AttendanceStatus.present)
+        .length;
+    final absent = history
+        .where((entry) => entry.status == AttendanceStatus.absent)
+        .length;
+    final excused = history
+        .where((entry) => entry.status == AttendanceStatus.excused)
+        .length;
+    final percentage = history.isEmpty ? 0 : (present * 100 / history.length);
+    final previewHistory = history.take(4).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: _AttendanceStatCard(
+                label: 'حضر',
+                value: present,
+                color: AppTheme.secondary,
+                icon: Icons.check_circle_outline_rounded,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _AttendanceStatCard(
+                label: 'غاب',
+                value: absent,
+                color: AppTheme.accentRed,
+                icon: Icons.cancel_outlined,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _AttendanceStatCard(
+                label: 'معتذر',
+                value: excused,
+                color: AppTheme.accentOrange,
+                icon: Icons.info_outline_rounded,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AppTheme.primary.withValues(alpha: 0.055),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'نسبة الحضور',
+                    style: GoogleFonts.cairo(
+                      color: AppTheme.textDark,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  Text(
+                    '${percentage.round()}٪',
+                    style: GoogleFonts.cairo(
+                      color: AppTheme.primary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: LinearProgressIndicator(
+                  value: percentage / 100,
+                  minHeight: 7,
+                  color: AppTheme.secondary,
+                  backgroundColor: AppTheme.border,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // Section Header with Full Screen Navigation
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'سجل الحضور الأخير',
+              style: GoogleFonts.cairo(
+                color: AppTheme.textDark,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            InkWell(
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => MemberAttendanceHistoryScreen(
+                      member: widget.member,
+                      history: history,
+                      classes: widget.classes,
+                      meetings: widget.meetings,
+                    ),
+                  ),
+                );
+              },
+              borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                child: Row(
+                  children: [
+                    Text(
+                      'التفاصيل والفلترة (${history.length})',
+                      style: GoogleFonts.cairo(
+                        color: AppTheme.primary,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(width: 2),
+                    const Icon(
+                      Icons.chevron_left_rounded,
+                      size: 18,
+                      color: AppTheme.primary,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        ...previewHistory.map(_buildHistoryRow),
+        if (history.length > 4) ...[
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => MemberAttendanceHistoryScreen(
+                    member: widget.member,
+                    history: history,
+                    classes: widget.classes,
+                    meetings: widget.meetings,
+                  ),
+                ),
+              );
+            },
+            icon: const Icon(Icons.filter_list_rounded, size: 16),
+            label: Text(
+              'فتح كامل سجلات الحضور (${history.length}) والفلترة',
+              style: GoogleFonts.cairo(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppTheme.primary,
+              side: BorderSide(
+                color: AppTheme.primary.withValues(alpha: 0.3),
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: const EdgeInsets.symmetric(vertical: 10),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildHistoryRow(MemberAttendanceHistoryEntry entry) {
+    final statusDetails = switch (entry.status) {
+      AttendanceStatus.present => (
+        label: 'حاضر',
+        icon: Icons.check_rounded,
+        color: AppTheme.secondary,
+      ),
+      AttendanceStatus.absent => (
+        label: 'غائب',
+        icon: Icons.close_rounded,
+        color: AppTheme.accentRed,
+      ),
+      AttendanceStatus.excused => (
+        label: 'معتذر',
+        icon: Icons.info_outline_rounded,
+        color: AppTheme.accentOrange,
+      ),
+    };
+    final meeting = widget.meetings
+        .where((item) => item.id == entry.meetingId)
+        .firstOrNull;
+    final classEntity = widget.classes
+        .where((item) => item.id == entry.classId)
+        .firstOrNull;
+    final destination = classEntity?.nameAr ?? meeting?.nameAr ?? 'اجتماع';
+
+    // Register Name (اسم السجل)
+    final registerName = entry.sessionTitle?.trim().isNotEmpty == true
+        ? entry.sessionTitle!
+        : 'سجل $destination';
+
+    final day = entry.sessionDate.day.toString().padLeft(2, '0');
+    final month = entry.sessionDate.month.toString().padLeft(2, '0');
+    final date = '$day/$month/${entry.sessionDate.year}';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: AppTheme.border.withValues(alpha: 0.65)),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: statusDetails.color.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              statusDetails.icon,
+              size: 18,
+              color: statusDetails.color,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Register Name (اسم السجل)
+                Text(
+                  registerName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.cairo(
+                    color: AppTheme.textDark,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                // Meeting / Class & Date Subtitle
+                Text(
+                  '$destination · $date',
+                  style: GoogleFonts.cairo(
+                    color: AppTheme.textLight,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: statusDetails.color.withValues(alpha: 0.09),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              statusDetails.label,
+              style: GoogleFonts.cairo(
+                color: statusDetails.color,
+                fontSize: 10,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AttendanceStatCard extends StatelessWidget {
+  final String label;
+  final int value;
+  final Color color;
+  final IconData icon;
+
+  const _AttendanceStatCard({
+    required this.label,
+    required this.value,
+    required this.color,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.075),
+        borderRadius: BorderRadius.circular(13),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: 19),
+          const SizedBox(height: 4),
+          Text(
+            '$value',
+            style: GoogleFonts.cairo(
+              color: color,
+              fontSize: 17,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          Text(
+            label,
+            style: GoogleFonts.cairo(
+              color: AppTheme.textLight,
+              fontSize: 9.5,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AttendanceLoadError extends StatelessWidget {
+  final VoidCallback onRetry;
+
+  const _AttendanceLoadError({required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      child: Column(
+        children: [
+          const Icon(
+            Icons.error_outline_rounded,
+            color: AppTheme.accentRed,
+            size: 32,
+          ),
+          const SizedBox(height: 7),
+          Text(
+            'تعذر تحميل سجل الحضور',
+            style: GoogleFonts.cairo(
+              color: AppTheme.textLight,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          TextButton(onPressed: onRetry, child: const Text('إعادة المحاولة')),
+        ],
+      ),
+    );
   }
 }
 

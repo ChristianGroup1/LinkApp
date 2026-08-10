@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:app_links/app_links.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'package:flutter/material.dart';
@@ -6,6 +7,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
 import 'core/analytics/app_analytics_service.dart';
+import 'core/auth/password_recovery_link.dart';
 import 'core/navigation/app_route_observer.dart';
 import 'core/invitations/invitation_deep_link_listener.dart';
 import 'core/theme/app_theme.dart';
@@ -15,6 +17,7 @@ import 'data/repositories/database_repository.dart';
 import 'logic/auth/auth_bloc.dart';
 import 'presentation/screens/login_screen.dart';
 import 'presentation/screens/main_navigation_wrapper.dart';
+import 'presentation/screens/password_recovery_error_screen.dart';
 import 'presentation/widgets/auth_widgets.dart';
 
 void main() async {
@@ -203,14 +206,18 @@ class AuthRecoveryListener extends StatefulWidget {
 }
 
 class _AuthRecoveryListenerState extends State<AuthRecoveryListener> {
-  StreamSubscription? _subscription;
+  final AppLinks _appLinks = AppLinks();
+  StreamSubscription? _authSubscription;
+  StreamSubscription<Uri>? _linkSubscription;
+  String? _lastHandledRecoveryError;
 
   @override
   void initState() {
     super.initState();
     if (!widget.enabled) return;
 
-    _subscription = Supabase.instance.client.auth.onAuthStateChange.listen((
+    unawaited(_initializeRecoveryLinks());
+    _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((
       data,
     ) {
       if (data.event == AuthChangeEvent.passwordRecovery) {
@@ -239,9 +246,41 @@ class _AuthRecoveryListenerState extends State<AuthRecoveryListener> {
     });
   }
 
+  Future<void> _initializeRecoveryLinks() async {
+    try {
+      final initialUri = await _appLinks.getInitialLink();
+      if (initialUri != null) _handleRecoveryLink(initialUri);
+    } catch (_) {}
+
+    _linkSubscription = _appLinks.uriLinkStream.listen(
+      _handleRecoveryLink,
+      onError: (_) {},
+    );
+  }
+
+  void _handleRecoveryLink(Uri uri) {
+    final error = extractPasswordRecoveryLinkError(uri);
+    if (error == null) return;
+
+    final signature = uri.toString();
+    if (_lastHandledRecoveryError == signature) return;
+    _lastHandledRecoveryError = signature;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final navigator = MyApp.navigatorKey.currentState;
+      if (navigator == null || !navigator.mounted) return;
+      navigator.push(
+        MaterialPageRoute(
+          builder: (_) => PasswordRecoveryErrorScreen(error: error),
+        ),
+      );
+    });
+  }
+
   @override
   void dispose() {
-    _subscription?.cancel();
+    _authSubscription?.cancel();
+    _linkSubscription?.cancel();
     super.dispose();
   }
 

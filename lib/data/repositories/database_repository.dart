@@ -49,6 +49,7 @@ abstract class DatabaseRepository {
     required String fullName,
     String? phone,
   });
+  Future<void> deleteCurrentAccount();
   Future<void> signOut();
   bool hasActiveSession();
   Future<AppProfile?> getCurrentProfile();
@@ -119,6 +120,7 @@ abstract class DatabaseRepository {
     String? parentPhone,
     String? code,
     DateTime? birthDate,
+    String? notes,
   });
   Future<OfflineSaveResult<MemberEntity>> updateMember({
     required String id,
@@ -132,6 +134,7 @@ abstract class DatabaseRepository {
     String? code,
     DateTime? birthDate,
     required bool isActive,
+    String? notes,
   });
   Future<bool> deleteMember(String id);
 
@@ -184,6 +187,9 @@ abstract class DatabaseRepository {
 
   // Attendance Records
   Future<List<AttendanceRecordEntity>> getAttendanceRecords(String sessionId);
+  Future<List<MemberAttendanceHistoryEntry>> getMemberAttendanceHistory(
+    String memberId,
+  );
   Future<bool> saveAttendanceRecords({
     required String sessionId,
     required Map<String, AttendanceStatus> statusesByMemberId,
@@ -696,7 +702,7 @@ class SupabaseRepository implements DatabaseRepository {
   Future<void> sendPasswordResetEmail(String email) async {
     await _client.auth.resetPasswordForEmail(
       email.trim(),
-      redirectTo: 'io.supabase.link://login-callback',
+      redirectTo: 'io.supabase.link://reset-password',
     );
   }
 
@@ -786,6 +792,23 @@ class SupabaseRepository implements DatabaseRepository {
     );
     AppDataChanges.instance.notify({AppDataArea.profile});
     return updated;
+  }
+
+  @override
+  Future<void> deleteCurrentAccount() async {
+    if (_client.auth.currentUser == null) {
+      throw Exception('لا يوجد حساب مسجل دخول');
+    }
+
+    final response = await _client.functions.invoke('delete-account');
+    if (response.status < 200 || response.status >= 300) {
+      final data = response.data;
+      final message = data is Map ? data['error']?.toString() : null;
+      throw Exception(message ?? 'تعذر حذف الحساب');
+    }
+
+    await _offlineCache.clearAll();
+    await _writeQueue.clear();
   }
 
   @override
@@ -1231,6 +1254,7 @@ class SupabaseRepository implements DatabaseRepository {
     String? parentPhone,
     String? code,
     DateTime? birthDate,
+    String? notes,
   }) {
     return _notifyAfter(
       _offlineWriter.createMember(
@@ -1243,6 +1267,7 @@ class SupabaseRepository implements DatabaseRepository {
         parentPhone: parentPhone,
         code: code,
         birthDate: birthDate,
+        notes: notes,
       ),
       {AppDataArea.members},
     );
@@ -1261,6 +1286,7 @@ class SupabaseRepository implements DatabaseRepository {
     String? code,
     DateTime? birthDate,
     required bool isActive,
+    String? notes,
   }) {
     return _notifyAfter(
       _offlineWriter.updateMember(
@@ -1275,6 +1301,7 @@ class SupabaseRepository implements DatabaseRepository {
         code: code,
         birthDate: birthDate,
         isActive: isActive,
+        notes: notes,
       ),
       {AppDataArea.members},
     );
@@ -1803,6 +1830,86 @@ class SupabaseRepository implements DatabaseRepository {
         return records;
       },
       offline: () async => _readCachedAttendanceRecords(sessionId),
+    );
+  }
+
+  @override
+  Future<List<MemberAttendanceHistoryEntry>> getMemberAttendanceHistory(
+    String memberId,
+  ) async {
+    final cacheKey = 'offline_member_attendance_history_$memberId';
+
+    return OfflineNetworkPolicy.run(
+      online: () async {
+        final recordRows = await _client
+            .from('attendance_records')
+            .select('id, session_id, status, notes')
+            .eq('member_id', memberId);
+        final records = List<Map<String, dynamic>>.from(recordRows as List);
+        if (records.isEmpty) {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString(cacheKey, '[]');
+          return [];
+        }
+
+        final sessionIds = records
+            .map((row) => row['session_id'] as String)
+            .toSet()
+            .toList();
+        final sessionRows = await _client
+            .from('attendance_sessions')
+            .select('id, meeting_id, class_id, session_date, title')
+            .inFilter('id', sessionIds);
+        final sessionsById = {
+          for (final row in List<Map<String, dynamic>>.from(
+            sessionRows as List,
+          ))
+            row['id'] as String: row,
+        };
+
+        final history = <MemberAttendanceHistoryEntry>[];
+        for (final record in records) {
+          final session = sessionsById[record['session_id'] as String];
+          if (session == null) continue;
+          history.add(
+            MemberAttendanceHistoryEntry(
+              recordId: record['id'] as String,
+              sessionId: record['session_id'] as String,
+              meetingId: session['meeting_id'] as String,
+              classId: session['class_id'] as String?,
+              sessionDate: DateTime.parse(session['session_date'] as String),
+              sessionTitle: session['title'] as String?,
+              status: AttendanceStatus.fromJson(record['status'] as String),
+              notes: record['notes'] as String?,
+            ),
+          );
+        }
+        history.sort((a, b) => b.sessionDate.compareTo(a.sessionDate));
+
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(
+          cacheKey,
+          jsonEncode(history.map((entry) => entry.toJson()).toList()),
+        );
+        return history;
+      },
+      offline: () async {
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          final cached = prefs.getString(cacheKey);
+          if (cached == null) return [];
+          final rows = jsonDecode(cached) as List<dynamic>;
+          return rows
+              .map(
+                (row) => MemberAttendanceHistoryEntry.fromJson(
+                  Map<String, dynamic>.from(row as Map),
+                ),
+              )
+              .toList();
+        } catch (_) {
+          return [];
+        }
+      },
     );
   }
 

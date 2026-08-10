@@ -39,7 +39,10 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     if (password != confirm) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('كلمتا المرور غير متطابقتين', style: GoogleFonts.cairo()),
+          content: Text(
+            'كلمتا المرور غير متطابقتين',
+            style: GoogleFonts.cairo(),
+          ),
           backgroundColor: AppTheme.accentRed,
         ),
       );
@@ -67,10 +70,10 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                   backgroundColor: Colors.green,
                 ),
               );
-              Navigator.of(context).pushAndRemoveUntil(
-                MaterialPageRoute(builder: (_) => const LoginScreen()),
-                (_) => false,
-              );
+              // Return to AuthenticationGate instead of replacing it with a
+              // standalone LoginScreen. The gate owns the transition to the
+              // dashboard after the next successful login.
+              Navigator.of(context).popUntil((route) => route.isFirst);
             } else if (state is AuthPasswordResetError) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
@@ -93,10 +96,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                 const SizedBox(height: 12),
                 // Top App Logo Header
                 const Column(
-                  children: [
-                    AuthLogoMark(size: 130),
-                    SizedBox(height: 14),
-                  ],
+                  children: [AuthLogoMark(size: 130), SizedBox(height: 14)],
                 ),
                 const SizedBox(height: 24),
                 // Main Floating White Card
@@ -145,8 +145,9 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                         icon: Icons.lock_outline_rounded,
                         obscureText: _obscurePassword,
                         trailing: IconButton(
-                          onPressed: () =>
-                              setState(() => _obscurePassword = !_obscurePassword),
+                          onPressed: () => setState(
+                            () => _obscurePassword = !_obscurePassword,
+                          ),
                           icon: Icon(
                             _obscurePassword
                                 ? Icons.visibility_outlined
@@ -178,7 +179,9 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                               borderRadius: BorderRadius.circular(26),
                             ),
                             elevation: 4,
-                            shadowColor: const Color(0xFF2563EB).withValues(alpha: 0.35),
+                            shadowColor: const Color(
+                              0xFF2563EB,
+                            ).withValues(alpha: 0.35),
                           ),
                           child: isLoading
                               ? const SizedBox(

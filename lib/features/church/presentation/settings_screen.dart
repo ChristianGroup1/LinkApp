@@ -107,6 +107,8 @@ class SettingsScreen extends StatelessWidget {
                     onTap: () =>
                         context.read<AuthBloc>().add(LogoutRequested()),
                   ),
+                  const SizedBox(height: 10),
+                  const _DeleteAccountCard(),
                 ],
               ),
             ),
@@ -136,9 +138,7 @@ class _ProfileActionsCard extends StatelessWidget {
           subtitle: 'مراجعة وقبول أو رفض دعوات الخدمة',
           onTap: () => Navigator.push(
             context,
-            MaterialPageRoute(
-              builder: (_) => const MyInvitationsScreen(),
-            ),
+            MaterialPageRoute(builder: (_) => const MyInvitationsScreen()),
           ),
         ),
         Divider(height: 1, color: AppTheme.border.withValues(alpha: 0.7)),
@@ -560,6 +560,133 @@ class _SignOutCard extends StatelessWidget {
                   color: AppTheme.accentRed,
                   fontWeight: FontWeight.w900,
                 ),
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded, color: AppTheme.accentRed),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _DeleteAccountCard extends StatefulWidget {
+  const _DeleteAccountCard();
+
+  @override
+  State<_DeleteAccountCard> createState() => _DeleteAccountCardState();
+}
+
+class _DeleteAccountCardState extends State<_DeleteAccountCard> {
+  bool _isDeleting = false;
+
+  Future<void> _deleteAccount() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(
+          'حذف الحساب نهائياً؟',
+          style: GoogleFonts.cairo(fontWeight: FontWeight.w900),
+        ),
+        content: Text(
+          'سيتم حذف حسابك وبياناتك الشخصية ولن تتمكن من تسجيل الدخول مرة أخرى. '
+          'تظل سجلات الحضور وبيانات الخدمة المشتركة ملكاً للكنيسة. إذا كنت المسؤول '
+          'الوحيد، انقل مسؤولية الخدمة أولاً. لا يمكن التراجع عن هذا الإجراء.',
+          style: GoogleFonts.cairo(height: 1.65),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text('إلغاء', style: GoogleFonts.cairo()),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppTheme.accentRed),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(
+              'حذف الحساب',
+              style: GoogleFonts.cairo(fontWeight: FontWeight.w800),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isDeleting = true);
+    try {
+      await context.read<DatabaseRepository>().deleteCurrentAccount();
+      if (!mounted) return;
+      context.read<AuthBloc>().add(LogoutRequested());
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isDeleting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'تعذر حذف الحساب. تأكد من الاتصال بالإنترنت وحاول مرة أخرى.',
+            style: GoogleFonts.cairo(),
+          ),
+          backgroundColor: AppTheme.accentRed,
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: Colors.white,
+    borderRadius: BorderRadius.circular(18),
+    child: InkWell(
+      onTap: _isDeleting ? null : _deleteAccount,
+      borderRadius: BorderRadius.circular(18),
+      child: Ink(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          border: Border.all(color: AppTheme.accentRed.withValues(alpha: 0.24)),
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(9),
+              decoration: BoxDecoration(
+                color: AppTheme.accentRedLight,
+                borderRadius: BorderRadius.circular(11),
+              ),
+              child: _isDeleting
+                  ? const SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.4,
+                        color: AppTheme.accentRed,
+                      ),
+                    )
+                  : const Icon(
+                      Icons.delete_forever_outlined,
+                      color: AppTheme.accentRed,
+                    ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _isDeleting ? 'جاري حذف الحساب...' : 'حذف الحساب نهائياً',
+                    style: GoogleFonts.cairo(
+                      color: AppTheme.accentRed,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  Text(
+                    'حذف بيانات الدخول والبيانات الشخصية',
+                    style: GoogleFonts.cairo(
+                      color: AppTheme.textLight,
+                      fontSize: 10,
+                    ),
+                  ),
+                ],
               ),
             ),
             const Icon(Icons.chevron_right_rounded, color: AppTheme.accentRed),

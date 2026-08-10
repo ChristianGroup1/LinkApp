@@ -21,11 +21,12 @@ class _AddEditMemberScreenState extends State<AddEditMemberScreen> {
   late TextEditingController _phoneController;
   late TextEditingController _parentNameController;
   late TextEditingController _parentPhoneController;
+  late TextEditingController _notesController;
+  DateTime? _birthDate;
 
-  MemberScope _scope = MemberScope.meeting;
+  MemberScope _scope = MemberScope.sundaySchoolClass;
   String? _selectedClassId;
   String? _selectedMeetingId;
-  DateTime? _birthDate;
   bool _isActive = true;
 
   List<SundaySchoolClassEntity> _classes = [];
@@ -44,6 +45,7 @@ class _AddEditMemberScreenState extends State<AddEditMemberScreen> {
     _parentPhoneController = TextEditingController(
       text: widget.member?.parentPhone,
     );
+    _notesController = TextEditingController(text: widget.member?.notes);
     _birthDate = widget.member?.birthDate;
 
     if (widget.member != null) {
@@ -109,6 +111,7 @@ class _AddEditMemberScreenState extends State<AddEditMemberScreen> {
     _phoneController.dispose();
     _parentNameController.dispose();
     _parentPhoneController.dispose();
+    _notesController.dispose();
     super.dispose();
   }
 
@@ -175,6 +178,7 @@ class _AddEditMemberScreenState extends State<AddEditMemberScreen> {
     final phone = _phoneController.text.trim();
     final parentName = _parentNameController.text.trim();
     final parentPhone = _parentPhoneController.text.trim();
+    final notes = _notesController.text.trim();
 
     if (_selectedAssignmentValue == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -203,6 +207,7 @@ class _AddEditMemberScreenState extends State<AddEditMemberScreen> {
           parentPhone: parentPhone.isEmpty ? null : parentPhone,
           code: code.isEmpty ? null : code,
           birthDate: _birthDate,
+          notes: notes.isEmpty ? null : notes,
         ),
       );
     } else {
@@ -221,6 +226,7 @@ class _AddEditMemberScreenState extends State<AddEditMemberScreen> {
           code: code.isEmpty ? null : code,
           birthDate: _birthDate,
           isActive: _isActive,
+          notes: notes.isEmpty ? null : notes,
         ),
       );
     }
@@ -273,10 +279,11 @@ class _AddEditMemberScreenState extends State<AddEditMemberScreen> {
                         icon: Icons.badge_outlined,
                         iconColor: AppTheme.primary,
                         iconBackground: AppTheme.primaryLight,
-                        title: 'البيانات الأساسية',
-                        subtitle: 'الاسم وبيانات التعريف الشخصية',
+                        title: 'البيانات الأساسية والمعلومات',
+                        subtitle: 'الاسم، تاريخ الميلاد، التليفون والكود',
                         child: Column(
                           children: [
+                            // 1. الاسم (Full Name)
                             TextFormField(
                               controller: _nameController,
                               textInputAction: TextInputAction.next,
@@ -299,36 +306,106 @@ class _AddEditMemberScreenState extends State<AddEditMemberScreen> {
                               },
                             ),
                             const SizedBox(height: 12),
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                  child: TextFormField(
-                                    controller: _codeController,
-                                    textInputAction: TextInputAction.next,
-                                    style: GoogleFonts.cairo(
-                                      color: AppTheme.textDark,
-                                    ),
-                                    decoration: _fieldDecoration(
-                                      label: 'الكود',
-                                      hint: 'M-120',
-                                      icon: Icons.qr_code_2_rounded,
-                                    ),
+
+                            // 2. تاريخ الميلاد (Birth Date)
+                            _BirthDateField(
+                              birthDate: _birthDate,
+                              formattedDate: _birthDate == null
+                                  ? null
+                                  : _formatBirthDate(_birthDate!),
+                              onTap: _selectBirthDate,
+                              onClear: () => setState(() => _birthDate = null),
+                            ),
+                            const SizedBox(height: 12),
+
+                            // 3. رقم هاتف العضو (Member Phone)
+                            TextFormField(
+                              controller: _phoneController,
+                              textInputAction: TextInputAction.next,
+                              keyboardType: TextInputType.phone,
+                              style: GoogleFonts.cairo(
+                                color: AppTheme.textDark,
+                              ),
+                              decoration: _fieldDecoration(
+                                label: 'رقم هاتف العضو',
+                                hint: '01xxxxxxxxx',
+                                icon: Icons.phone_outlined,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+
+                             // 4. الكود التعريفي (Identification Code)
+                            TextFormField(
+                              controller: _codeController,
+                              textInputAction: TextInputAction.next,
+                              style: GoogleFonts.cairo(
+                                color: AppTheme.textDark,
+                              ),
+                              decoration: _fieldDecoration(
+                                label: 'الكود التعريفي',
+                                hint: 'M-120',
+                                icon: Icons.qr_code_2_rounded,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+
+                            // 5. السنة الدراسية / المرحلة (Educational Stage / Grade)
+                            Autocomplete<String>(
+                              initialValue: TextEditingValue(
+                                text: _notesController.text,
+                              ),
+                              optionsBuilder: (textEditingValue) {
+                                const options = [
+                                  'أولى ابتدائي',
+                                  'ثانية ابتدائي',
+                                  'ثالثة ابتدائي',
+                                  'رابعة ابتدائي',
+                                  'خامسة ابتدائي',
+                                  'سادسة ابتدائي',
+                                  'أولى إعدادي',
+                                  'ثانية إعدادي',
+                                  'ثالثة إعدادي',
+                                  'أولى ثانوي',
+                                  'ثانية ثانوي',
+                                  'ثالثة ثانوي',
+                                  'جامعة / خريج',
+                                ];
+                                if (textEditingValue.text.isEmpty) {
+                                  return options;
+                                }
+                                return options.where(
+                                  (option) => option.contains(
+                                    textEditingValue.text.trim(),
                                   ),
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: _BirthDateField(
-                                    birthDate: _birthDate,
-                                    formattedDate: _birthDate == null
-                                        ? null
-                                        : _formatBirthDate(_birthDate!),
-                                    onTap: _selectBirthDate,
-                                    onClear: () =>
-                                        setState(() => _birthDate = null),
+                                );
+                              },
+                              onSelected: (selection) {
+                                _notesController.text = selection;
+                              },
+                              fieldViewBuilder: (
+                                context,
+                                fieldTextEditingController,
+                                focusNode,
+                                onFieldSubmitted,
+                              ) {
+                                fieldTextEditingController.addListener(() {
+                                  _notesController.text =
+                                      fieldTextEditingController.text;
+                                });
+                                return TextFormField(
+                                  controller: fieldTextEditingController,
+                                  focusNode: focusNode,
+                                  textInputAction: TextInputAction.next,
+                                  style: GoogleFonts.cairo(
+                                    color: AppTheme.textDark,
                                   ),
-                                ),
-                              ],
+                                  decoration: _fieldDecoration(
+                                    label: 'السنة الدراسية / المرحلة',
+                                    hint: 'مثال: ثانية إعدادي / أولى ابتدائي',
+                                    icon: Icons.school_outlined,
+                                  ),
+                                );
+                              },
                             ),
                           ],
                         ),
@@ -344,27 +421,15 @@ class _AddEditMemberScreenState extends State<AddEditMemberScreen> {
                       ),
                       const SizedBox(height: 14),
                       _MemberFormSection(
-                        icon: Icons.contact_phone_outlined,
-                        iconColor: AppTheme.accentOrange,
-                        iconBackground: AppTheme.accentOrangeLight,
-                        title: 'التواصل والعائلة',
-                        subtitle: 'بيانات اختيارية تساعد في التواصل',
+                        icon: Icons.family_restroom_rounded,
+                        iconColor: AppTheme.accentPurple,
+                        iconBackground: AppTheme.accentPurple.withValues(
+                          alpha: 0.08,
+                        ),
+                        title: 'بيانات ولي الأمر والعائلة',
+                        subtitle: 'بيانات التواصل مع ولي الأمر',
                         child: Column(
                           children: [
-                            TextFormField(
-                              controller: _phoneController,
-                              textInputAction: TextInputAction.next,
-                              keyboardType: TextInputType.phone,
-                              style: GoogleFonts.cairo(
-                                color: AppTheme.textDark,
-                              ),
-                              decoration: _fieldDecoration(
-                                label: 'رقم هاتف العضو',
-                                hint: '01xxxxxxxxx',
-                                icon: Icons.phone_outlined,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
                             TextFormField(
                               controller: _parentNameController,
                               textInputAction: TextInputAction.next,

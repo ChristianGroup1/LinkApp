@@ -31,19 +31,19 @@ class AuthShell extends StatelessWidget {
             ),
           ),
           Positioned(
-            top: compact ? -140 : 10,
-            right: compact ? -90 : -80,
+            top: compact ? -60 : -40,
+            right: compact ? -40 : -60,
             child: AuthGlow(
-              size: 260,
-              color: const Color(0xFF8DBDFF).withValues(alpha: 0.35),
+              size: compact ? 220 : 280,
+              color: const Color(0xFF8DBDFF).withValues(alpha: 0.3),
             ),
           ),
           Positioned(
-            bottom: compact ? -160 : -70,
-            left: compact ? -130 : -80,
+            bottom: compact ? -60 : -50,
+            left: compact ? -50 : -60,
             child: AuthGlow(
-              size: 300,
-              color: AppTheme.primary.withValues(alpha: 0.28),
+              size: compact ? 240 : 300,
+              color: AppTheme.primary.withValues(alpha: 0.22),
             ),
           ),
           SafeArea(
@@ -118,9 +118,12 @@ class AuthLogoMark extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: size,
       height: size,
-      child: ClipOval(child: Image.asset(kLogoAsset, fit: BoxFit.cover)),
+      child: Image.asset(
+        kLogoAsset,
+        fit: BoxFit.contain,
+        semanticLabel: 'شعار تطبيق لينك',
+      ),
     );
   }
 }

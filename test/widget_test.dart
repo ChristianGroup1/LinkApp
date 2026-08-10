@@ -19,6 +19,25 @@ Future<void> _settle(WidgetTester tester) async {
 }
 
 void main() {
+  test('signs out the recovery session after updating the password', () async {
+    final repository = TestRepository();
+    final bloc = AuthBloc(repository: repository);
+    addTearDown(bloc.close);
+
+    final states = expectLater(
+      bloc.stream,
+      emitsInOrder([
+        isA<AuthPasswordUpdateLoading>(),
+        isA<AuthPasswordUpdated>(),
+      ]),
+    );
+
+    bloc.add(PasswordUpdateRequested(password: 'new-password'));
+    await states;
+
+    expect(repository.hasActiveSession(), isFalse);
+  });
+
   test('shows a useful message when the device clock breaks TLS', () async {
     final repository = LoginFailureRepository(
       errorMessage:
@@ -180,12 +199,21 @@ void main() {
     await tester.tap(find.byIcon(Icons.groups_outlined));
     await _settle(tester);
     expect(find.text('الأعضاء'), findsAtLeastNWidgets(1));
+    expect(find.byTooltip('استيراد وتصدير Excel'), findsOneWidget);
+    expect(find.byTooltip('تعديل مريم جرجس'), findsOneWidget);
+    expect(find.byTooltip('حذف مريم جرجس'), findsOneWidget);
 
     // Opening a member uses a dedicated details screen, not a popup menu.
     await tester.tap(find.text('مريم جرجس'));
     await _settle(tester);
     expect(find.text('بيانات العضو'), findsOneWidget);
     expect(find.text('البيانات الأساسية'), findsOneWidget);
+    expect(find.text('الحضور والغياب'), findsOneWidget);
+    expect(find.text('حضر'), findsOneWidget);
+    expect(find.text('غاب'), findsOneWidget);
+    expect(find.text('50٪'), findsOneWidget);
+    expect(find.text('حاضر'), findsOneWidget);
+    expect(find.text('غائب'), findsOneWidget);
     expect(find.text('التواصل والعائلة'), findsOneWidget);
     await tester.tap(find.byIcon(Icons.arrow_back_rounded));
     await _settle(tester);
@@ -315,10 +343,39 @@ class TestRepository implements DatabaseRepository {
   }
 
   @override
+  Future<void> deleteCurrentAccount() async {
+    _profile = null;
+  }
+
+  @override
   Future<void> sendPasswordResetEmail(String email) async {}
 
   @override
   Future<void> updatePassword(String password) async {}
+
+  @override
+  Future<List<MemberAttendanceHistoryEntry>> getMemberAttendanceHistory(
+    String memberId,
+  ) async => [
+    MemberAttendanceHistoryEntry(
+      recordId: 'record-1',
+      sessionId: 'session-1',
+      meetingId: 'mtg-1',
+      classId: 'cls-1',
+      sessionDate: DateTime(2026, 8, 1),
+      sessionTitle: 'الأسبوع الأول',
+      status: AttendanceStatus.present,
+    ),
+    MemberAttendanceHistoryEntry(
+      recordId: 'record-2',
+      sessionId: 'session-2',
+      meetingId: 'mtg-1',
+      classId: 'cls-1',
+      sessionDate: DateTime(2026, 7, 25),
+      sessionTitle: 'الأسبوع الرابع',
+      status: AttendanceStatus.absent,
+    ),
+  ];
 
   @override
   Future<AppProfile> updateCurrentProfile({
@@ -556,6 +613,7 @@ class TestRepository implements DatabaseRepository {
     String? phone,
     required MemberScope scope,
     String? sundaySchoolClassId,
+    String? notes,
   }) async {
     final m = MemberEntity(
       id: 'mem-${_members.length + 1}',
@@ -569,6 +627,7 @@ class TestRepository implements DatabaseRepository {
       parentName: parentName,
       parentPhone: parentPhone,
       birthDate: birthDate,
+      notes: notes,
       isActive: true,
     );
     _members.add(m);
@@ -588,6 +647,7 @@ class TestRepository implements DatabaseRepository {
     required MemberScope scope,
     String? sundaySchoolClassId,
     required bool isActive,
+    String? notes,
   }) async {
     final m = MemberEntity(
       id: id,
@@ -601,6 +661,7 @@ class TestRepository implements DatabaseRepository {
       parentName: parentName,
       parentPhone: parentPhone,
       birthDate: birthDate,
+      notes: notes,
       isActive: isActive,
     );
     return OfflineSaveResult(data: m, syncedToServer: true);

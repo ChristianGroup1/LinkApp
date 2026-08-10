@@ -10,24 +10,29 @@ String? extractInvitationToken(Uri uri) {
     return uri.queryParameters['t']?.trim();
   }
 
-  if (uri.pathSegments.length >= 2 &&
-      uri.pathSegments[uri.pathSegments.length - 2] == 'invite-redirect') {
-    return uri.queryParameters['t']?.trim();
+  // Only explicit web invitation paths belong to the invitation flow.
+  // Password recovery links must remain available for Supabase Auth to
+  // process instead of being mistaken for servant invitations.
+  if (uri.scheme == 'http' || uri.scheme == 'https') {
+    final segments = uri.pathSegments
+        .map((segment) => segment.trim().toLowerCase())
+        .where((segment) => segment.isNotEmpty)
+        .toList();
+    final isInvitationPath =
+        segments.isNotEmpty &&
+        (segments.last == 'invite' || segments.contains('invite-redirect'));
+    if (isInvitationPath) {
+      return uri.queryParameters['t']?.trim();
+    }
   }
 
-  if (uri.pathSegments.isNotEmpty &&
-      uri.pathSegments.last == 'invite-redirect') {
-    return uri.queryParameters['t']?.trim();
-  }
-
-  return uri.queryParameters['t']?.trim();
+  return null;
 }
 
-String buildInvitationLink({
-  required String inviteToken,
-  String? supabaseUrl,
-}) {
-  final webBase = dotenv.env['INVITE_LINK_BASE_URL']?.trim() ?? 'https://link-church-app.vercel.app';
+String buildInvitationLink({required String inviteToken, String? supabaseUrl}) {
+  final webBase =
+      dotenv.env['INVITE_LINK_BASE_URL']?.trim() ??
+      'https://link-church-app.vercel.app';
   final normalized = webBase.endsWith('/')
       ? webBase.substring(0, webBase.length - 1)
       : webBase;

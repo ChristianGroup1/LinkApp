@@ -165,7 +165,9 @@ class MeetingEntity {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is MeetingEntity && runtimeType == other.runtimeType && id == other.id;
+      other is MeetingEntity &&
+          runtimeType == other.runtimeType &&
+          id == other.id;
 
   @override
   int get hashCode => id.hashCode;
@@ -226,6 +228,7 @@ class MemberEntity {
   final String? code;
   final bool isActive;
   final DateTime? birthDate;
+  final String? notes;
 
   const MemberEntity({
     required this.id,
@@ -240,6 +243,7 @@ class MemberEntity {
     this.code,
     required this.isActive,
     this.birthDate,
+    this.notes,
   });
 
   factory MemberEntity.fromJson(Map<String, dynamic> json) {
@@ -258,6 +262,7 @@ class MemberEntity {
       birthDate: json['birth_date'] != null
           ? DateTime.parse(json['birth_date'] as String)
           : null,
+      notes: json['notes'] as String?,
     );
   }
 }
@@ -318,6 +323,52 @@ class AttendanceRecordEntity {
       notes: json['notes'] as String?,
     );
   }
+}
+
+class MemberAttendanceHistoryEntry {
+  final String recordId;
+  final String sessionId;
+  final String meetingId;
+  final String? classId;
+  final DateTime sessionDate;
+  final String? sessionTitle;
+  final AttendanceStatus status;
+  final String? notes;
+
+  const MemberAttendanceHistoryEntry({
+    required this.recordId,
+    required this.sessionId,
+    required this.meetingId,
+    required this.classId,
+    required this.sessionDate,
+    required this.sessionTitle,
+    required this.status,
+    this.notes,
+  });
+
+  factory MemberAttendanceHistoryEntry.fromJson(Map<String, dynamic> json) {
+    return MemberAttendanceHistoryEntry(
+      recordId: json['record_id'] as String,
+      sessionId: json['session_id'] as String,
+      meetingId: json['meeting_id'] as String,
+      classId: json['class_id'] as String?,
+      sessionDate: DateTime.parse(json['session_date'] as String),
+      sessionTitle: json['session_title'] as String?,
+      status: AttendanceStatus.fromJson(json['status'] as String),
+      notes: json['notes'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'record_id': recordId,
+    'session_id': sessionId,
+    'meeting_id': meetingId,
+    'class_id': classId,
+    'session_date': sessionDate.toIso8601String(),
+    'session_title': sessionTitle,
+    'status': status.value,
+    'notes': notes,
+  };
 }
 
 class FollowUpEntity {

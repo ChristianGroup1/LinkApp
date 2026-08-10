@@ -218,7 +218,11 @@ Deno.serve(async (req) => {
       Deno.env.get('INVITE_EMAIL_LOGO_URL') ??
       `${supabaseUrl}/storage/v1/object/public/app-assets/link_logo.png`
     const webBaseUrl = Deno.env.get('INVITE_LINK_BASE_URL') ?? 'https://link-church-app.vercel.app/invite'
-    const inviteLink = `${webBaseUrl}?t=${invite.invite_token}`
+    const encodedInviteToken = encodeURIComponent(invite.invite_token)
+    // Keep the HTTPS link available for manual sharing from the app, while
+    // links sent by email open the installed mobile app directly.
+    const webInviteLink = `${webBaseUrl}?t=${encodedInviteToken}`
+    const emailInviteLink = `io.supabase.link://invite?t=${encodedInviteToken}`
 
     const isResendKey = !!resendApiKey && resendApiKey.trim().startsWith('re_')
 
@@ -227,7 +231,9 @@ Deno.serve(async (req) => {
       const { error: nativeError } = await adminClient.auth.admin.inviteUserByEmail(
         invite.email.trim(),
         {
-          redirectTo: inviteLink,
+          // {{ .ConfirmationURL }} verifies the Supabase invite first, then
+          // redirects to this deep link with the servant invitation token.
+          redirectTo: emailInviteLink,
           data: {
             full_name: invite.full_name,
             church_name: churchName,
@@ -250,7 +256,11 @@ Deno.serve(async (req) => {
       }
 
       return new Response(
-        JSON.stringify({ success: true, invite_link: inviteLink }),
+        JSON.stringify({
+          success: true,
+          invite_link: webInviteLink,
+          email_invite_link: emailInviteLink,
+        }),
         {
           status: 200,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -261,7 +271,7 @@ Deno.serve(async (req) => {
     const html = buildArabicEmailHtml({
       churchName,
       servantName: invite.full_name,
-      inviteLink,
+      inviteLink: emailInviteLink,
       permissions: permissionSummary(invite),
       scope: scopeLabel(invite.assignment_scope),
       logoUrl,
@@ -283,10 +293,17 @@ Deno.serve(async (req) => {
       })
 
       if (emailResponse.ok) {
-        return new Response(JSON.stringify({ success: true, invite_link: inviteLink }), {
-          status: 200,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        })
+        return new Response(
+          JSON.stringify({
+            success: true,
+            invite_link: webInviteLink,
+            email_invite_link: emailInviteLink,
+          }),
+          {
+            status: 200,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          },
+        )
       }
     } catch {
       // Ignore Resend fetch error and fallback to Supabase Auth
@@ -296,7 +313,7 @@ Deno.serve(async (req) => {
     const { error: nativeError } = await adminClient.auth.admin.inviteUserByEmail(
       invite.email.trim(),
       {
-        redirectTo: inviteLink,
+        redirectTo: emailInviteLink,
         data: {
           full_name: invite.full_name,
           church_name: churchName,
@@ -318,10 +335,17 @@ Deno.serve(async (req) => {
       )
     }
 
-    return new Response(JSON.stringify({ success: true, invite_link: inviteLink }), {
-      status: 200,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
+    return new Response(
+      JSON.stringify({
+        success: true,
+        invite_link: webInviteLink,
+        email_invite_link: emailInviteLink,
+      }),
+      {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      },
+    )
   } catch (error) {
     return new Response(
       JSON.stringify({

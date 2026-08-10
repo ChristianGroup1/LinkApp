@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_theme.dart';
@@ -7,6 +8,7 @@ import '../../../data/models/models.dart';
 import '../../../data/repositories/database_repository.dart';
 import '../../../logic/home/home_bloc.dart';
 import '../../../shared/ui/app_states.dart';
+import '../data/member_excel_service.dart';
 import '../logic/members_bloc.dart';
 import 'add_edit_member_screen.dart';
 import 'member_details_screen.dart';
@@ -25,9 +27,12 @@ class _MembersListScreenState extends State<MembersListScreen> {
   String? _selectedClassId;
   String? _selectedMeetingId;
   bool _dropdownsLoaded = false;
+  bool _excelBusy = false;
+  final _excelService = MemberExcelService();
 
   List<SundaySchoolClassEntity> _classes = [];
   List<MeetingEntity> _meetings = [];
+  List<MeetingEntity> _allMeetings = [];
 
   @override
   void didChangeDependencies() {
@@ -51,7 +56,8 @@ class _MembersListScreenState extends State<MembersListScreen> {
       final meetings = results[1] as List<MeetingEntity>;
       setState(() {
         _classes = classes.where((c) => c.isActive).toList();
-        _meetings = meetings
+        _allMeetings = meetings.where((meeting) => meeting.isActive).toList();
+        _meetings = _allMeetings
             .where((m) => m.kind != MeetingKind.sundaySchool && m.isActive)
             .toList();
       });
@@ -126,6 +132,49 @@ class _MembersListScreenState extends State<MembersListScreen> {
                       ),
                     ),
                     centerTitle: true,
+                    actions: [
+                      if (_excelBusy)
+                        const Padding(
+                          padding: EdgeInsets.all(14),
+                          child: SizedBox.square(
+                            dimension: 21,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.2,
+                              color: AppTheme.primary,
+                            ),
+                          ),
+                        )
+                      else
+                        PopupMenuButton<_MemberExcelAction>(
+                          tooltip: 'استيراد وتصدير Excel',
+                          icon: const Icon(Icons.table_view_outlined),
+                          onSelected: (action) => _handleExcelAction(
+                            context,
+                            action,
+                            canManage: canManage,
+                          ),
+                          itemBuilder: (_) => [
+                            _excelMenuItem(
+                              _MemberExcelAction.export,
+                              Icons.file_download_outlined,
+                              'تصدير الأعضاء',
+                            ),
+                            if (canManage) ...[
+                              _excelMenuItem(
+                                _MemberExcelAction.template,
+                                Icons.description_outlined,
+                                'تحميل نموذج الاستيراد',
+                              ),
+                              _excelMenuItem(
+                                _MemberExcelAction.import,
+                                Icons.file_upload_outlined,
+                                'استيراد أعضاء',
+                              ),
+                            ],
+                          ],
+                        ),
+                      const SizedBox(width: 4),
+                    ],
                     bottom: PreferredSize(
                       preferredSize: const Size.fromHeight(1),
                       child: Container(
@@ -193,18 +242,23 @@ class _MembersListScreenState extends State<MembersListScreen> {
                       if (state is MembersError) {
                         return AppErrorState(
                           message: state.message,
-                          onRetry: () => context
-                              .read<MembersBloc>()
-                              .add(LoadMembers()),
+                          onRetry: () =>
+                              context.read<MembersBloc>().add(LoadMembers()),
                         );
                       }
 
-                      final allMembers = state is MembersLoaded ? state.allMembers : <MemberEntity>[];
-                      final filteredMembers = state is MembersLoaded ? state.filteredMembers : <MemberEntity>[];
+                      final allMembers = state is MembersLoaded
+                          ? state.allMembers
+                          : <MemberEntity>[];
+                      final filteredMembers = state is MembersLoaded
+                          ? state.filteredMembers
+                          : <MemberEntity>[];
 
                       final totalCount = allMembers.length;
                       final sundaySchoolCount = allMembers
-                          .where((m) => m.scope == MemberScope.sundaySchoolClass)
+                          .where(
+                            (m) => m.scope == MemberScope.sundaySchoolClass,
+                          )
                           .length;
                       final meetingsCount = allMembers
                           .where((m) => m.scope == MemberScope.meeting)
@@ -221,7 +275,12 @@ class _MembersListScreenState extends State<MembersListScreen> {
                             // Stats Summary & Search/Filter Section
                             SliverToBoxAdapter(
                               child: Padding(
-                                padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+                                padding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  14,
+                                  16,
+                                  12,
+                                ),
                                 child: Column(
                                   children: [
                                     // Modern Stats Header Banner
@@ -240,14 +299,17 @@ class _MembersListScreenState extends State<MembersListScreen> {
                                         borderRadius: BorderRadius.circular(22),
                                         boxShadow: [
                                           BoxShadow(
-                                            color: AppTheme.primary.withValues(alpha: 0.28),
+                                            color: AppTheme.primary.withValues(
+                                              alpha: 0.28,
+                                            ),
                                             blurRadius: 20,
                                             offset: const Offset(0, 8),
                                           ),
                                         ],
                                       ),
                                       child: Row(
-                                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceAround,
                                         children: [
                                           _StatItem(
                                             icon: Icons.groups_rounded,
@@ -257,7 +319,9 @@ class _MembersListScreenState extends State<MembersListScreen> {
                                           Container(
                                             height: 38,
                                             width: 1,
-                                            color: Colors.white.withValues(alpha: 0.25),
+                                            color: Colors.white.withValues(
+                                              alpha: 0.25,
+                                            ),
                                           ),
                                           _StatItem(
                                             icon: Icons.groups_3_rounded,
@@ -267,7 +331,9 @@ class _MembersListScreenState extends State<MembersListScreen> {
                                           Container(
                                             height: 38,
                                             width: 1,
-                                            color: Colors.white.withValues(alpha: 0.25),
+                                            color: Colors.white.withValues(
+                                              alpha: 0.25,
+                                            ),
                                           ),
                                           _StatItem(
                                             icon: Icons.class_rounded,
@@ -283,9 +349,12 @@ class _MembersListScreenState extends State<MembersListScreen> {
                                       controller: _searchController,
                                       style: GoogleFonts.cairo(fontSize: 14),
                                       decoration: InputDecoration(
-                                        hintText: 'ابحث بالاسم، الكود، أو رقم الهاتف...',
+                                        hintText:
+                                            'ابحث بالاسم، الكود، أو رقم الهاتف...',
                                         hintStyle: GoogleFonts.cairo(
-                                          color: AppTheme.textLight.withValues(alpha: 0.7),
+                                          color: AppTheme.textLight.withValues(
+                                            alpha: 0.7,
+                                          ),
                                           fontSize: 13,
                                         ),
                                         prefixIcon: const Icon(
@@ -293,7 +362,8 @@ class _MembersListScreenState extends State<MembersListScreen> {
                                           color: AppTheme.primary,
                                           size: 22,
                                         ),
-                                        suffixIcon: _searchController.text.isNotEmpty
+                                        suffixIcon:
+                                            _searchController.text.isNotEmpty
                                             ? IconButton(
                                                 onPressed: () {
                                                   _searchController.clear();
@@ -308,24 +378,35 @@ class _MembersListScreenState extends State<MembersListScreen> {
                                             : null,
                                         filled: true,
                                         fillColor: Colors.white,
-                                        contentPadding: const EdgeInsets.symmetric(
-                                          horizontal: 16,
-                                          vertical: 12,
-                                        ),
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                              horizontal: 16,
+                                              vertical: 12,
+                                            ),
                                         border: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(16),
+                                          borderRadius: BorderRadius.circular(
+                                            16,
+                                          ),
                                           borderSide: BorderSide(
-                                            color: AppTheme.border.withValues(alpha: 0.8),
+                                            color: AppTheme.border.withValues(
+                                              alpha: 0.8,
+                                            ),
                                           ),
                                         ),
                                         enabledBorder: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(16),
+                                          borderRadius: BorderRadius.circular(
+                                            16,
+                                          ),
                                           borderSide: BorderSide(
-                                            color: AppTheme.border.withValues(alpha: 0.8),
+                                            color: AppTheme.border.withValues(
+                                              alpha: 0.8,
+                                            ),
                                           ),
                                         ),
                                         focusedBorder: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(16),
+                                          borderRadius: BorderRadius.circular(
+                                            16,
+                                          ),
                                           borderSide: const BorderSide(
                                             color: AppTheme.primary,
                                             width: 1.5,
@@ -367,15 +448,23 @@ class _MembersListScreenState extends State<MembersListScreen> {
                                       ),
                                     ),
                                     // Dropdown Filters for specific class or meeting
-                                    if (_selectedScope == 'sunday_school_class' && _classes.isNotEmpty) ...[
+                                    if (_selectedScope ==
+                                            'sunday_school_class' &&
+                                        _classes.isNotEmpty) ...[
                                       const SizedBox(height: 10),
                                       Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                        ),
                                         decoration: BoxDecoration(
                                           color: Colors.white,
-                                          borderRadius: BorderRadius.circular(14),
+                                          borderRadius: BorderRadius.circular(
+                                            14,
+                                          ),
                                           border: Border.all(
-                                            color: AppTheme.border.withValues(alpha: 0.8),
+                                            color: AppTheme.border.withValues(
+                                              alpha: 0.8,
+                                            ),
                                           ),
                                         ),
                                         child: DropdownButtonFormField<String?>(
@@ -385,7 +474,10 @@ class _MembersListScreenState extends State<MembersListScreen> {
                                             labelText: 'تصفية حسب الفصل',
                                             border: InputBorder.none,
                                             isDense: true,
-                                            contentPadding: EdgeInsets.symmetric(vertical: 8),
+                                            contentPadding:
+                                                EdgeInsets.symmetric(
+                                                  vertical: 8,
+                                                ),
                                           ),
                                           style: GoogleFonts.cairo(
                                             color: AppTheme.textDark,
@@ -404,21 +496,30 @@ class _MembersListScreenState extends State<MembersListScreen> {
                                             ),
                                           ],
                                           onChanged: (val) {
-                                            setState(() => _selectedClassId = val);
+                                            setState(
+                                              () => _selectedClassId = val,
+                                            );
                                             _applyFilter(context);
                                           },
                                         ),
                                       ),
                                     ],
-                                    if (_selectedScope == 'meeting' && _meetings.isNotEmpty) ...[
+                                    if (_selectedScope == 'meeting' &&
+                                        _meetings.isNotEmpty) ...[
                                       const SizedBox(height: 10),
                                       Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                        ),
                                         decoration: BoxDecoration(
                                           color: Colors.white,
-                                          borderRadius: BorderRadius.circular(14),
+                                          borderRadius: BorderRadius.circular(
+                                            14,
+                                          ),
                                           border: Border.all(
-                                            color: AppTheme.border.withValues(alpha: 0.8),
+                                            color: AppTheme.border.withValues(
+                                              alpha: 0.8,
+                                            ),
                                           ),
                                         ),
                                         child: DropdownButtonFormField<String?>(
@@ -428,7 +529,10 @@ class _MembersListScreenState extends State<MembersListScreen> {
                                             labelText: 'تصفية حسب الاجتماع',
                                             border: InputBorder.none,
                                             isDense: true,
-                                            contentPadding: EdgeInsets.symmetric(vertical: 8),
+                                            contentPadding:
+                                                EdgeInsets.symmetric(
+                                                  vertical: 8,
+                                                ),
                                           ),
                                           style: GoogleFonts.cairo(
                                             color: AppTheme.textDark,
@@ -437,7 +541,9 @@ class _MembersListScreenState extends State<MembersListScreen> {
                                           items: [
                                             const DropdownMenuItem<String?>(
                                               value: null,
-                                              child: Text('كل الاجتماعات المباشرة'),
+                                              child: Text(
+                                                'كل الاجتماعات المباشرة',
+                                              ),
                                             ),
                                             ..._meetings.map(
                                               (m) => DropdownMenuItem<String?>(
@@ -447,7 +553,9 @@ class _MembersListScreenState extends State<MembersListScreen> {
                                             ),
                                           ],
                                           onChanged: (val) {
-                                            setState(() => _selectedMeetingId = val);
+                                            setState(
+                                              () => _selectedMeetingId = val,
+                                            );
                                             _applyFilter(context);
                                           },
                                         ),
@@ -463,11 +571,16 @@ class _MembersListScreenState extends State<MembersListScreen> {
                               SliverFillRemaining(
                                 hasScrollBody: false,
                                 child: Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                  ),
                                   child: AppEmptyState(
                                     icon: Icons.person_search_outlined,
-                                    message: 'لم يتم العثور على أعضاء مطابقين للبحث',
-                                    actionLabel: canManage && _searchController.text.isEmpty
+                                    message:
+                                        'لم يتم العثور على أعضاء مطابقين للبحث',
+                                    actionLabel:
+                                        canManage &&
+                                            _searchController.text.isEmpty
                                         ? 'إضافة عضو جديد'
                                         : null,
                                     onAction: canManage
@@ -476,12 +589,16 @@ class _MembersListScreenState extends State<MembersListScreen> {
                                               context,
                                               MaterialPageRoute(
                                                 builder: (_) => BlocProvider.value(
-                                                  value: context.read<MembersBloc>(),
-                                                  child: const AddEditMemberScreen(),
+                                                  value: context
+                                                      .read<MembersBloc>(),
+                                                  child:
+                                                      const AddEditMemberScreen(),
                                                 ),
                                               ),
                                             );
-                                            if (context.mounted) _applyFilter(context);
+                                            if (context.mounted) {
+                                              _applyFilter(context);
+                                            }
                                           }
                                         : null,
                                   ),
@@ -489,38 +606,49 @@ class _MembersListScreenState extends State<MembersListScreen> {
                               )
                             else
                               SliverPadding(
-                                padding: const EdgeInsets.fromLTRB(16, 0, 16, 96),
+                                padding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  0,
+                                  16,
+                                  96,
+                                ),
                                 sliver: SliverList(
-                                  delegate: SliverChildBuilderDelegate(
-                                    (context, index) {
-                                      final member = filteredMembers[index];
-                                      return _MemberTile(
-                                        member: member,
-                                        classes: _classes,
-                                        meetings: _meetings,
-                                        onOpen: () async {
-                                          await Navigator.push<bool>(
-                                            context,
-                                            MaterialPageRoute(
-                                              builder: (_) => BlocProvider.value(
-                                                value: context.read<MembersBloc>(),
-                                                child: MemberDetailsScreen(
-                                                  member: member,
-                                                  classes: _classes,
-                                                  meetings: _meetings,
-                                                  canManage: canManage,
-                                                ),
+                                  delegate: SliverChildBuilderDelegate((
+                                    context,
+                                    index,
+                                  ) {
+                                    final member = filteredMembers[index];
+                                    return _MemberTile(
+                                      member: member,
+                                      classes: _classes,
+                                      meetings: _meetings,
+                                      canManage: canManage,
+                                      onOpen: () async {
+                                        await Navigator.push<bool>(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => BlocProvider.value(
+                                              value: context
+                                                  .read<MembersBloc>(),
+                                              child: MemberDetailsScreen(
+                                                member: member,
+                                                classes: _classes,
+                                                meetings: _meetings,
+                                                canManage: canManage,
                                               ),
                                             ),
-                                          );
-                                          if (context.mounted) {
-                                            _applyFilter(context);
-                                          }
-                                        },
-                                      );
-                                    },
-                                    childCount: filteredMembers.length,
-                                  ),
+                                          ),
+                                        );
+                                        if (context.mounted) {
+                                          _applyFilter(context);
+                                        }
+                                      },
+                                      onEdit: () =>
+                                          _openEditMember(context, member),
+                                      onDelete: () =>
+                                          _confirmDeleteMember(context, member),
+                                    );
+                                  }, childCount: filteredMembers.length),
                                 ),
                               ),
                           ],
@@ -606,8 +734,462 @@ class _MembersListScreenState extends State<MembersListScreen> {
             : AppTheme.border.withValues(alpha: 0.8),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    );
+  }
+
+  Future<void> _openEditMember(
+    BuildContext context,
+    MemberEntity member,
+  ) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => BlocProvider.value(
+          value: context.read<MembersBloc>(),
+          child: AddEditMemberScreen(member: member),
+        ),
+      ),
+    );
+    if (context.mounted) _applyFilter(context);
+  }
+
+  PopupMenuItem<_MemberExcelAction> _excelMenuItem(
+    _MemberExcelAction value,
+    IconData icon,
+    String label,
+  ) {
+    return PopupMenuItem(
+      value: value,
+      child: Row(
+        children: [
+          Icon(icon, color: AppTheme.primary, size: 20),
+          const SizedBox(width: 10),
+          Text(label, style: GoogleFonts.cairo(fontWeight: FontWeight.w700)),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _handleExcelAction(
+    BuildContext context,
+    _MemberExcelAction action, {
+    required bool canManage,
+  }) async {
+    if (_excelBusy) return;
+    if (action != _MemberExcelAction.export && !canManage) return;
+
+    switch (action) {
+      case _MemberExcelAction.export:
+        await _exportMembers(context);
+      case _MemberExcelAction.template:
+        await _downloadTemplate(context);
+      case _MemberExcelAction.import:
+        await _importMembers(context);
+    }
+  }
+
+  Future<void> _exportMembers(BuildContext context) async {
+    final state = _membersBloc?.state;
+    final members = state is MembersLoaded
+        ? state.allMembers
+        : <MemberEntity>[];
+    await _runExcelTask(context, () async {
+      final bytes = _excelService.exportMembers(
+        members: members,
+        meetings: _allMeetings,
+        classes: _classes,
+      );
+      final date = DateTime.now().toIso8601String().split('T').first;
+      final path = await FilePicker.saveFile(
+        dialogTitle: 'حفظ ملف الأعضاء',
+        fileName: 'Link_members_$date.xlsx',
+        type: FileType.custom,
+        allowedExtensions: const ['xlsx'],
+        bytes: bytes,
+      );
+      if (path != null && context.mounted) {
+        _showExcelSnack(context, 'تم تصدير ${members.length} عضو بنجاح');
+      }
+    });
+  }
+
+  Future<void> _downloadTemplate(BuildContext context) async {
+    await _runExcelTask(context, () async {
+      final bytes = _excelService.buildTemplate(
+        meetings: _allMeetings,
+        classes: _classes,
+      );
+      final path = await FilePicker.saveFile(
+        dialogTitle: 'حفظ نموذج استيراد الأعضاء',
+        fileName: 'Link_members_import_template.xlsx',
+        type: FileType.custom,
+        allowedExtensions: const ['xlsx'],
+        bytes: bytes,
+      );
+      if (path != null && context.mounted) {
+        _showExcelSnack(context, 'تم حفظ نموذج الاستيراد');
+      }
+    });
+  }
+
+  Future<void> _importMembers(BuildContext context) async {
+    final picked = await FilePicker.pickFiles(
+      dialogTitle: 'اختر ملف أعضاء Excel',
+      type: FileType.custom,
+      allowedExtensions: const ['xlsx'],
+      withData: true,
+    );
+    if (picked == null) return;
+    final bytes = picked.files.single.bytes;
+    if (bytes == null) {
+      if (context.mounted) {
+        _showExcelSnack(context, 'تعذر قراءة الملف', isError: true);
+      }
+      return;
+    }
+
+    final currentState = _membersBloc?.state;
+    final existing = currentState is MembersLoaded
+        ? currentState.allMembers
+        : <MemberEntity>[];
+    final parsed = _excelService.parseImport(
+      bytes: bytes,
+      meetings: _allMeetings,
+      classes: _classes,
+      existingMembers: existing,
+    );
+    if (!context.mounted) return;
+
+    final confirmed = await _showImportPreview(context, parsed);
+    if (confirmed != true || parsed.validRows.isEmpty || !context.mounted) {
+      return;
+    }
+
+    await _runExcelTask(context, () async {
+      final repository = context.read<DatabaseRepository>();
+      var imported = 0;
+      final failed = <MemberImportIssue>[];
+      for (final row in parsed.validRows) {
+        try {
+          final created = await repository.createMember(
+            fullName: row.fullName,
+            scope: row.scope,
+            sundaySchoolClassId: row.sundaySchoolClassId,
+            meetingId: row.meetingId,
+            phone: row.phone,
+            parentName: row.parentName,
+            parentPhone: row.parentPhone,
+            code: row.code,
+            birthDate: row.birthDate,
+          );
+          if (!row.isActive) {
+            final member = created.data;
+            await repository.updateMember(
+              id: member.id,
+              fullName: member.fullName,
+              scope: member.scope,
+              sundaySchoolClassId: member.sundaySchoolClassId,
+              meetingId: member.meetingId,
+              phone: member.phone,
+              parentName: member.parentName,
+              parentPhone: member.parentPhone,
+              code: member.code,
+              birthDate: member.birthDate,
+              isActive: false,
+            );
+          }
+          imported++;
+        } catch (error) {
+          failed.add(
+            MemberImportIssue(
+              row: row.sourceRow,
+              message: error.toString().replaceAll('Exception: ', ''),
+            ),
+          );
+        }
+      }
+      _membersBloc?.add(LoadMembers());
+      if (!context.mounted) return;
+      _showExcelSnack(
+        context,
+        failed.isEmpty
+            ? 'تم استيراد $imported عضو بنجاح'
+            : 'تم استيراد $imported عضو، وفشل ${failed.length}',
+        isError: failed.isNotEmpty,
+      );
+      if (failed.isNotEmpty) {
+        await _showImportIssues(context, failed, title: 'صفوف فشل حفظها');
+      }
+    });
+  }
+
+  Future<bool?> _showImportPreview(
+    BuildContext context,
+    MemberImportParseResult result,
+  ) {
+    return showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          title: Text(
+            'معاينة استيراد الأعضاء',
+            style: GoogleFonts.cairo(fontWeight: FontWeight.w900),
+          ),
+          content: SizedBox(
+            width: 520,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: _ImportCountCard(
+                        label: 'جاهز للاستيراد',
+                        count: result.validRows.length,
+                        color: AppTheme.secondary,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _ImportCountCard(
+                        label: 'صفوف بها أخطاء',
+                        count: result.issues.length,
+                        color: AppTheme.accentRed,
+                      ),
+                    ),
+                  ],
+                ),
+                if (result.issues.isNotEmpty) ...[
+                  const SizedBox(height: 14),
+                  Container(
+                    constraints: const BoxConstraints(maxHeight: 210),
+                    padding: const EdgeInsets.all(11),
+                    decoration: BoxDecoration(
+                      color: AppTheme.accentRed.withValues(alpha: 0.055),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: ListView(
+                      shrinkWrap: true,
+                      children: result.issues
+                          .take(10)
+                          .map(
+                            (issue) => Padding(
+                              padding: const EdgeInsets.only(bottom: 5),
+                              child: Text(
+                                'صف ${issue.row}: ${issue.message}',
+                                style: GoogleFonts.cairo(
+                                  color: AppTheme.accentRed,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  ),
+                  if (result.issues.length > 10)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Text(
+                        'وهناك ${result.issues.length - 10} أخطاء أخرى',
+                        style: GoogleFonts.cairo(
+                          color: AppTheme.textLight,
+                          fontSize: 10.5,
+                        ),
+                      ),
+                    ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: Text('إلغاء', style: GoogleFonts.cairo()),
+            ),
+            FilledButton.icon(
+              onPressed: result.validRows.isEmpty
+                  ? null
+                  : () => Navigator.pop(dialogContext, true),
+              icon: const Icon(Icons.group_add_outlined),
+              label: Text(
+                'استيراد ${result.validRows.length} عضو',
+                style: GoogleFonts.cairo(fontWeight: FontWeight.w800),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showImportIssues(
+    BuildContext context,
+    List<MemberImportIssue> issues, {
+    required String title,
+  }) {
+    return showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(
+          title,
+          style: GoogleFonts.cairo(fontWeight: FontWeight.w900),
+        ),
+        content: SizedBox(
+          width: 500,
+          child: ListView(
+            shrinkWrap: true,
+            children: issues
+                .map(
+                  (issue) => Text(
+                    'صف ${issue.row}: ${issue.message}',
+                    style: GoogleFonts.cairo(fontSize: 11.5),
+                  ),
+                )
+                .toList(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('إغلاق'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _runExcelTask(
+    BuildContext context,
+    Future<void> Function() task,
+  ) async {
+    setState(() => _excelBusy = true);
+    try {
+      await task();
+    } catch (error) {
+      if (context.mounted) {
+        _showExcelSnack(
+          context,
+          'تعذر تنفيذ العملية: ${error.toString().replaceAll('Exception: ', '')}',
+          isError: true,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _excelBusy = false);
+    }
+  }
+
+  void _showExcelSnack(
+    BuildContext context,
+    String message, {
+    bool isError = false,
+  }) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message, style: GoogleFonts.cairo()),
+        backgroundColor: isError ? AppTheme.accentRed : AppTheme.secondary,
+      ),
+    );
+  }
+
+  Future<void> _confirmDeleteMember(
+    BuildContext context,
+    MemberEntity member,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          icon: const Icon(
+            Icons.warning_amber_rounded,
+            color: AppTheme.accentRed,
+            size: 44,
+          ),
+          title: Text(
+            'حذف العضو نهائيًا؟',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.cairo(fontWeight: FontWeight.w900),
+          ),
+          content: Text(
+            'سيتم حذف بيانات ${member.fullName} وسجلاته المرتبطة، ولا يمكن التراجع عن هذه الخطوة.',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.cairo(height: 1.6),
+          ),
+          actionsAlignment: MainAxisAlignment.center,
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: Text('إلغاء', style: GoogleFonts.cairo()),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppTheme.accentRed,
+              ),
+              child: Text(
+                'حذف',
+                style: GoogleFonts.cairo(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirmed == true && context.mounted) {
+      context.read<MembersBloc>().add(DeleteMemberEvent(member.id));
+    }
+  }
+}
+
+enum _MemberExcelAction { export, template, import }
+
+class _ImportCountCard extends StatelessWidget {
+  final String label;
+  final int count;
+  final Color color;
+
+  const _ImportCountCard({
+    required this.label,
+    required this.count,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(13),
+      ),
+      child: Column(
+        children: [
+          Text(
+            '$count',
+            style: GoogleFonts.cairo(
+              color: color,
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.cairo(
+              color: AppTheme.textLight,
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -663,13 +1245,19 @@ class _MemberTile extends StatelessWidget {
   final MemberEntity member;
   final List<SundaySchoolClassEntity> classes;
   final List<MeetingEntity> meetings;
+  final bool canManage;
   final VoidCallback onOpen;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
 
   const _MemberTile({
     required this.member,
     required this.classes,
     required this.meetings,
+    required this.canManage,
     required this.onOpen,
+    required this.onEdit,
+    required this.onDelete,
   });
 
   String _getInitials(String fullName) {
@@ -735,10 +1323,7 @@ class _MemberTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Top accent strip
-                Container(
-                  height: 4,
-                  color: accent,
-                ),
+                Container(height: 4, color: accent),
                 Padding(
                   padding: const EdgeInsets.all(14),
                   child: Column(
@@ -778,23 +1363,168 @@ class _MemberTile extends StatelessWidget {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
+                                // 1. الاسم (Name)
                                 Text(
                                   member.fullName,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: GoogleFonts.cairo(
                                     fontWeight: FontWeight.w900,
-                                    fontSize: 15,
+                                    fontSize: 15.5,
                                     color: AppTheme.textDark,
-                                    height: 1.2,
+                                    height: 1.25,
                                   ),
                                 ),
                                 const SizedBox(height: 5),
-                                _MemberTag(
-                                  icon: destinationIcon,
-                                  label: destinationLabel,
-                                  color: accent,
-                                  backgroundColor: accentLight,
+
+                                // 2. تاريخ الميلاد (Birth Date)
+                                if (birthDateLabel != null) ...[
+                                  Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.cake_outlined,
+                                        size: 14,
+                                        color: AppTheme.accentOrange,
+                                      ),
+                                      const SizedBox(width: 5),
+                                      Text(
+                                        'تاريخ الميلاد: $birthDateLabel',
+                                        style: GoogleFonts.cairo(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w700,
+                                          color: AppTheme.textDark,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                ],
+
+                                // 3. رقم هاتف العضو (Member Phone)
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.phone_outlined,
+                                      size: 14,
+                                      color: member.phone != null
+                                          ? AppTheme.secondary
+                                          : AppTheme.textLight,
+                                    ),
+                                    const SizedBox(width: 5),
+                                    Text(
+                                      member.phone != null
+                                          ? 'رقم التليفون: ${member.phone}'
+                                          : 'رقم التليفون: غير مسجل',
+                                      style: GoogleFonts.cairo(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                        color: member.phone != null
+                                            ? AppTheme.textDark
+                                            : AppTheme.textLight,
+                                      ),
+                                    ),
+                                    if (member.phone != null) ...[
+                                      const SizedBox(width: 8),
+                                      InkWell(
+                                        onTap: () => _callNumber(member.phone!),
+                                        borderRadius: BorderRadius.circular(6),
+                                        child: const Padding(
+                                          padding: EdgeInsets.symmetric(
+                                            horizontal: 4,
+                                            vertical: 2,
+                                          ),
+                                          child: Icon(
+                                            Icons.phone_in_talk_outlined,
+                                            size: 15,
+                                            color: AppTheme.secondary,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      InkWell(
+                                        onTap: () => _openWhatsApp(member.phone!),
+                                        borderRadius: BorderRadius.circular(6),
+                                        child: const Padding(
+                                          padding: EdgeInsets.symmetric(
+                                            horizontal: 4,
+                                            vertical: 2,
+                                          ),
+                                          child: Icon(
+                                            Icons.chat_bubble_outline_rounded,
+                                            size: 15,
+                                            color: AppTheme.accentSky,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+
+                                // 4. كود التعريفي (Identification Code)
+                                if (member.code != null &&
+                                    member.code!.isNotEmpty) ...[
+                                  Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.qr_code_rounded,
+                                        size: 14,
+                                        color: AppTheme.primary,
+                                      ),
+                                      const SizedBox(width: 5),
+                                      Text(
+                                        'الكود التعريفي: ${member.code}',
+                                        style: GoogleFonts.cairo(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w800,
+                                          color: AppTheme.primary,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                ],
+
+                                const SizedBox(height: 2),
+
+                                // Tags Row (Scope, Parent Name & Parent Phone)
+                                Wrap(
+                                  spacing: 6,
+                                  runSpacing: 4,
+                                  children: [
+                                    _MemberTag(
+                                      icon: destinationIcon,
+                                      label: destinationLabel,
+                                      color: accent,
+                                      backgroundColor: accentLight,
+                                    ),
+                                    if (member.notes != null && member.notes!.isNotEmpty)
+                                      _MemberTag(
+                                        icon: Icons.school_outlined,
+                                        label: 'المرحلة: ${member.notes}',
+                                        color: AppTheme.secondary,
+                                        backgroundColor: AppTheme.secondaryLight,
+                                      ),
+                                    if (member.parentName != null)
+                                      _MemberTag(
+                                        icon: Icons.family_restroom_outlined,
+                                        label: 'ولي الأمر: ${member.parentName}',
+                                        color: AppTheme.accentPurple,
+                                        backgroundColor: AppTheme.accentPurple
+                                            .withValues(alpha: 0.08),
+                                      ),
+                                    if (member.parentPhone != null)
+                                      InkWell(
+                                        onTap: () => _callNumber(member.parentPhone!),
+                                        borderRadius: BorderRadius.circular(8),
+                                        child: _MemberTag(
+                                          icon: Icons.phone_iphone_rounded,
+                                          label: 'هاتف ولي الأمر: ${member.parentPhone}',
+                                          color: AppTheme.accentOrange,
+                                          backgroundColor: AppTheme.accentOrangeLight,
+                                        ),
+                                      ),
+                                  ],
                                 ),
                               ],
                             ),
@@ -813,74 +1543,34 @@ class _MemberTile extends StatelessWidget {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 8,
-                              ),
-                              decoration: BoxDecoration(
-                                color: AppTheme.surfaceMuted.withValues(alpha: 0.6),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: _MemberInfo(
-                                icon: Icons.phone_outlined,
-                                text: member.phone ?? 'لا يوجد رقم هاتف',
-                                muted: member.phone == null,
-                              ),
-                            ),
-                          ),
-                          if (contactNumber != null) ...[
-                            const SizedBox(width: 8),
-                            _ContactButton(
-                              icon: Icons.phone_in_talk_outlined,
-                              color: AppTheme.secondary,
-                              tooltip: 'اتصال مباشر',
-                              onTap: () => _callNumber(contactNumber),
-                            ),
-                            const SizedBox(width: 6),
-                            _ContactButton(
-                              icon: Icons.chat_bubble_outline_rounded,
-                              color: AppTheme.accentSky,
-                              tooltip: 'واتساب',
-                              onTap: () => _openWhatsApp(contactNumber),
-                            ),
-                          ],
-                        ],
-                      ),
-                      if (member.code != null ||
-                          member.parentName != null ||
-                          birthDateLabel != null) ...[
+                      if (canManage) ...[
+                        const SizedBox(height: 12),
+                        Divider(
+                          height: 1,
+                          color: AppTheme.border.withValues(alpha: 0.7),
+                        ),
                         const SizedBox(height: 10),
-                        Wrap(
-                          spacing: 7,
-                          runSpacing: 6,
+                        Row(
                           children: [
-                            if (member.code != null)
-                              _MemberTag(
-                                icon: Icons.qr_code_rounded,
-                                label: 'كود: ${member.code}',
+                            Expanded(
+                              child: _MemberQuickAction(
+                                tooltip: 'تعديل ${member.fullName}',
+                                icon: Icons.edit_outlined,
+                                label: 'تعديل',
                                 color: AppTheme.primary,
-                                backgroundColor: AppTheme.primaryLight,
+                                onTap: onEdit,
                               ),
-                            if (member.parentName != null)
-                              _MemberTag(
-                                icon: Icons.family_restroom_outlined,
-                                label: 'ولي الأمر: ${member.parentName}',
-                                color: AppTheme.accentPurple,
-                                backgroundColor: AppTheme.accentPurple
-                                    .withValues(alpha: 0.08),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: _MemberQuickAction(
+                                tooltip: 'حذف ${member.fullName}',
+                                icon: Icons.delete_outline_rounded,
+                                label: 'حذف',
+                                color: AppTheme.accentRed,
+                                onTap: onDelete,
                               ),
-                            if (birthDateLabel != null)
-                              _MemberTag(
-                                icon: Icons.cake_outlined,
-                                label: birthDateLabel,
-                                color: AppTheme.accentOrange,
-                                backgroundColor: AppTheme.accentOrangeLight,
-                              ),
+                            ),
                           ],
                         ),
                       ],
@@ -896,21 +1586,92 @@ class _MemberTile extends StatelessWidget {
   }
 
   void _callNumber(String number) async {
-    final uri = Uri.parse('tel:$number');
-    if (await canLaunchUrl(uri)) {
+    final cleanNumber = number.replaceAll(RegExp(r'[^0-9+]'), '');
+    if (cleanNumber.isEmpty) return;
+
+    final uri = Uri.parse('tel:$cleanNumber');
+    try {
+      if (await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+        return;
+      }
+    } catch (_) {}
+
+    try {
       await launchUrl(uri);
-    }
+    } catch (_) {}
   }
 
   void _openWhatsApp(String number) async {
-    var cleanNum = number.replaceAll(' ', '').replaceAll('+', '');
-    if (cleanNum.startsWith('01')) {
-      cleanNum = '2$cleanNum';
+    var cleanNumber = number.replaceAll(RegExp(r'[^0-9]'), '');
+    if (cleanNumber.isEmpty) return;
+
+    if (cleanNumber.startsWith('01') && cleanNumber.length == 11) {
+      cleanNumber = '2$cleanNumber';
     }
-    final uri = Uri.parse('https://wa.me/$cleanNum');
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri);
+
+    final urls = [
+      'whatsapp://send?phone=$cleanNumber',
+      'https://wa.me/$cleanNumber',
+      'https://api.whatsapp.com/send?phone=$cleanNumber',
+    ];
+
+    for (final urlStr in urls) {
+      try {
+        final uri = Uri.parse(urlStr);
+        if (await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+          return;
+        }
+      } catch (_) {}
     }
+  }
+}
+
+class _MemberQuickAction extends StatelessWidget {
+  final String tooltip;
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _MemberQuickAction({
+    required this.tooltip,
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: color.withValues(alpha: 0.075),
+        borderRadius: BorderRadius.circular(11),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(11),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 9),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, color: color, size: 17),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: GoogleFonts.cairo(
+                    color: color,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -1019,4 +1780,3 @@ class _MemberTag extends StatelessWidget {
     ),
   );
 }
-
