@@ -9,7 +9,7 @@
 - Primary category: Productivity
 - Secondary category: Utilities
 - Version: `1.0.2`
-- Build: `4`
+- Build: `6`
 - Price: Free
 - Copyright: `2026 fady khayrat`
 
