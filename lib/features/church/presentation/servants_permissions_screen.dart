@@ -420,7 +420,8 @@ class _ServantsPermissionsScreenState extends State<ServantsPermissionsScreen> {
           path: email,
           queryParameters: {
             'subject': 'دعوة خادم جديدة - تطبيق LinkApp',
-            'body': 'سلام ونعمة يا ${invitation.fullName}،\n\n'
+            'body':
+                'مرحبًا يا ${invitation.fullName}،\n\n'
                 'ادعوك للانضمام لخدمتنا على تطبيق LinkApp.\n'
                 'رابط الدعوة الخاص بك:\n$link\n\n'
                 'كود التفعيل: ${invitation.code}',
@@ -453,6 +454,116 @@ class _ServantsPermissionsScreenState extends State<ServantsPermissionsScreen> {
       if (!mounted) return;
       _showSnack('فشل حذف الدعوة: ${e.toString()}', isError: true);
     }
+  }
+
+  Future<void> _editInvitation(HelperInvitation invitation) async {
+    final nameController = TextEditingController(text: invitation.fullName);
+    final emailController = TextEditingController(text: invitation.email ?? '');
+    final formKey = GlobalKey<FormState>();
+    var isSaving = false;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(
+            'تعديل بيانات الدعوة',
+            style: GoogleFonts.cairo(fontWeight: FontWeight.w900),
+          ),
+          content: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: nameController,
+                  autofocus: true,
+                  textInputAction: TextInputAction.next,
+                  decoration: const InputDecoration(
+                    labelText: 'اسم الخادم',
+                    prefixIcon: Icon(Icons.person_outline_rounded),
+                  ),
+                  validator: (value) => value == null || value.trim().isEmpty
+                      ? 'اكتب اسم الخادم'
+                      : null,
+                ),
+                const SizedBox(height: 14),
+                TextFormField(
+                  controller: emailController,
+                  keyboardType: TextInputType.emailAddress,
+                  textDirection: TextDirection.ltr,
+                  decoration: const InputDecoration(
+                    labelText: 'البريد الإلكتروني (اختياري)',
+                    prefixIcon: Icon(Icons.alternate_email_rounded),
+                  ),
+                  validator: (value) {
+                    final email = value?.trim() ?? '';
+                    if (email.isEmpty) return null;
+                    final valid = RegExp(
+                      r'^[^\s@]+@[^\s@]+\.[^\s@]+$',
+                    ).hasMatch(email);
+                    return valid ? null : 'اكتب بريدًا إلكترونيًا صحيحًا';
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: isSaving ? null : () => Navigator.pop(dialogContext),
+              child: Text('إلغاء', style: GoogleFonts.cairo()),
+            ),
+            FilledButton.icon(
+              onPressed: isSaving
+                  ? null
+                  : () async {
+                      if (!formKey.currentState!.validate()) return;
+                      setDialogState(() => isSaving = true);
+                      try {
+                        final synced = await context
+                            .read<DatabaseRepository>()
+                            .updateInvitation(
+                              invitation: invitation,
+                              fullName: nameController.text,
+                              email: emailController.text,
+                            );
+                        if (!dialogContext.mounted) return;
+                        Navigator.pop(dialogContext);
+                        if (!mounted) return;
+                        await _refresh();
+                        _showSnack(
+                          synced
+                              ? 'تم تعديل بيانات الدعوة'
+                              : 'تم حفظ التعديل وسيتم مزامنته عند عودة الاتصال',
+                        );
+                      } catch (error) {
+                        if (!dialogContext.mounted) return;
+                        setDialogState(() => isSaving = false);
+                        if (!mounted) return;
+                        _showSnack(
+                          'تعذر تعديل الدعوة: ${error.toString().replaceAll('Exception: ', '')}',
+                          isError: true,
+                        );
+                      }
+                    },
+              icon: isSaving
+                  ? const SizedBox.square(
+                      dimension: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.check_rounded),
+              label: Text('حفظ', style: GoogleFonts.cairo()),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    nameController.dispose();
+    emailController.dispose();
   }
 
   @override
@@ -626,6 +737,7 @@ class _ServantsPermissionsScreenState extends State<ServantsPermissionsScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: ServantsPendingInvitationsSection(
                   invitations: data.pendingInvitations,
+                  onEdit: _editInvitation,
                   onDelete: _deleteInvitation,
                   onResendEmail: _resendInvitationEmail,
                 ),

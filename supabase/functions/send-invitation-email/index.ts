@@ -217,12 +217,12 @@ Deno.serve(async (req) => {
     const logoUrl =
       Deno.env.get('INVITE_EMAIL_LOGO_URL') ??
       `${supabaseUrl}/storage/v1/object/public/app-assets/link_logo.png`
-    const webBaseUrl = Deno.env.get('INVITE_LINK_BASE_URL') ?? 'https://link-church-app.vercel.app/invite'
+    const webBaseUrl = Deno.env.get('INVITE_LINK_BASE_URL') ?? 'https://linkchurch.space/invite'
     const encodedInviteToken = encodeURIComponent(invite.invite_token)
     // Keep the HTTPS link available for manual sharing from the app, while
     // links sent by email open the installed mobile app directly.
     const webInviteLink = `${webBaseUrl}?t=${encodedInviteToken}`
-    const emailInviteLink = `io.supabase.link://invite?t=${encodedInviteToken}`
+    const emailInviteLink = `io.supabase.link://invite/?t=${encodedInviteToken}`
 
     const isResendKey = !!resendApiKey && resendApiKey.trim().startsWith('re_')
 

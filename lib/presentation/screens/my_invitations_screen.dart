@@ -18,6 +18,7 @@ class _MyInvitationsScreenState extends State<MyInvitationsScreen>
   late TabController _tabController;
   bool _isLoading = true;
   List<Map<String, dynamic>> _invitations = [];
+  final Set<String> _processingTokens = {};
   String? _error;
 
   @override
@@ -57,8 +58,10 @@ class _MyInvitationsScreenState extends State<MyInvitationsScreen>
   }
 
   Future<void> _accept(String inviteToken) async {
+    if (inviteToken.isEmpty || _processingTokens.contains(inviteToken)) return;
     final authBloc = context.read<AuthBloc>();
     final messenger = ScaffoldMessenger.of(context);
+    setState(() => _processingTokens.add(inviteToken));
     try {
       final repo = context.read<DatabaseRepository>();
       await repo.acceptInvitationLink(inviteToken);
@@ -70,20 +73,25 @@ class _MyInvitationsScreenState extends State<MyInvitationsScreen>
           backgroundColor: Colors.green,
         ),
       );
-      _fetchInvitations();
+      await _fetchInvitations();
     } catch (e) {
       if (!mounted) return;
       messenger.showSnackBar(
         SnackBar(
-          content: Text(e.toString().replaceAll('Exception: ', ''),
-              style: GoogleFonts.cairo()),
+          content: Text(
+            e.toString().replaceAll('Exception: ', ''),
+            style: GoogleFonts.cairo(),
+          ),
           backgroundColor: AppTheme.accentRed,
         ),
       );
+    } finally {
+      if (mounted) setState(() => _processingTokens.remove(inviteToken));
     }
   }
 
   Future<void> _decline(String inviteToken) async {
+    if (inviteToken.isEmpty || _processingTokens.contains(inviteToken)) return;
     final repo = context.read<DatabaseRepository>();
     final messenger = ScaffoldMessenger.of(context);
 
@@ -92,9 +100,17 @@ class _MyInvitationsScreenState extends State<MyInvitationsScreen>
       builder: (ctx) => Directionality(
         textDirection: TextDirection.rtl,
         child: AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Text('رفض الدعوة؟', style: GoogleFonts.cairo(fontWeight: FontWeight.w800)),
-          content: Text('هل أنت أتق ق من رغبتك في رفض هذه الدعوة؟', style: GoogleFonts.cairo()),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Text(
+            'رفض الدعوة؟',
+            style: GoogleFonts.cairo(fontWeight: FontWeight.w800),
+          ),
+          content: Text(
+            'هل أنت متأكد من رغبتك في رفض هذه الدعوة؟',
+            style: GoogleFonts.cairo(),
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
@@ -102,7 +118,13 @@ class _MyInvitationsScreenState extends State<MyInvitationsScreen>
             ),
             TextButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: Text('رفض الدعوة', style: GoogleFonts.cairo(color: AppTheme.accentRed, fontWeight: FontWeight.w800)),
+              child: Text(
+                'رفض الدعوة',
+                style: GoogleFonts.cairo(
+                  color: AppTheme.accentRed,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
             ),
           ],
         ),
@@ -111,23 +133,27 @@ class _MyInvitationsScreenState extends State<MyInvitationsScreen>
 
     if (confirmed != true) return;
 
+    if (mounted) setState(() => _processingTokens.add(inviteToken));
     try {
       await repo.declineInvitationByToken(inviteToken);
       if (!mounted) return;
       messenger.showSnackBar(
-        SnackBar(
-          content: Text('تم رفض الدعوة', style: GoogleFonts.cairo()),
-        ),
+        SnackBar(content: Text('تم رفض الدعوة', style: GoogleFonts.cairo())),
       );
-      _fetchInvitations();
+      await _fetchInvitations();
     } catch (e) {
       if (!mounted) return;
       messenger.showSnackBar(
         SnackBar(
-          content: Text(e.toString(), style: GoogleFonts.cairo()),
+          content: Text(
+            e.toString().replaceAll('Exception: ', ''),
+            style: GoogleFonts.cairo(),
+          ),
           backgroundColor: AppTheme.accentRed,
         ),
       );
+    } finally {
+      if (mounted) setState(() => _processingTokens.remove(inviteToken));
     }
   }
 
@@ -170,7 +196,10 @@ class _MyInvitationsScreenState extends State<MyInvitationsScreen>
           backgroundColor: Colors.white,
           elevation: 0,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF0F172A)),
+            icon: const Icon(
+              Icons.arrow_back_rounded,
+              color: Color(0xFF0F172A),
+            ),
             onPressed: () => Navigator.pop(context),
           ),
           title: Text(
@@ -187,8 +216,14 @@ class _MyInvitationsScreenState extends State<MyInvitationsScreen>
             indicatorWeight: 3,
             labelColor: const Color(0xFF2563EB),
             unselectedLabelColor: const Color(0xFF64748B),
-            labelStyle: GoogleFonts.cairo(fontWeight: FontWeight.w800, fontSize: 13),
-            unselectedLabelStyle: GoogleFonts.cairo(fontWeight: FontWeight.w600, fontSize: 13),
+            labelStyle: GoogleFonts.cairo(
+              fontWeight: FontWeight.w800,
+              fontSize: 13,
+            ),
+            unselectedLabelStyle: GoogleFonts.cairo(
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
+            ),
             tabs: [
               Tab(text: 'المعلقة (${_pendingList.length})'),
               Tab(text: 'المقبولة (${_acceptedList.length})'),
@@ -197,43 +232,54 @@ class _MyInvitationsScreenState extends State<MyInvitationsScreen>
           ),
         ),
         body: _isLoading
-            ? const Center(child: CircularProgressIndicator(color: Color(0xFF2563EB)))
+            ? const Center(
+                child: CircularProgressIndicator(color: Color(0xFF2563EB)),
+              )
             : _error != null
-                ? Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24.0),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(_error!, style: GoogleFonts.cairo(color: AppTheme.accentRed)),
-                          const SizedBox(height: 12),
-                          ElevatedButton(
-                            onPressed: _fetchInvitations,
-                            child: Text('إعادة المحاولة', style: GoogleFonts.cairo()),
-                          ),
-                        ],
-                      ),
-                    ),
-                  )
-                : TabBarView(
-                    controller: _tabController,
+            ? Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24.0),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      _buildInvitationsList(_pendingList, type: 'pending'),
-                      _buildInvitationsList(_acceptedList, type: 'accepted'),
-                      _buildInvitationsList(_declinedList, type: 'declined'),
+                      Text(
+                        _error!,
+                        style: GoogleFonts.cairo(color: AppTheme.accentRed),
+                      ),
+                      const SizedBox(height: 12),
+                      ElevatedButton(
+                        onPressed: _fetchInvitations,
+                        child: Text(
+                          'إعادة المحاولة',
+                          style: GoogleFonts.cairo(),
+                        ),
+                      ),
                     ],
                   ),
+                ),
+              )
+            : TabBarView(
+                controller: _tabController,
+                children: [
+                  _buildInvitationsList(_pendingList, type: 'pending'),
+                  _buildInvitationsList(_acceptedList, type: 'accepted'),
+                  _buildInvitationsList(_declinedList, type: 'declined'),
+                ],
+              ),
       ),
     );
   }
 
-  Widget _buildInvitationsList(List<Map<String, dynamic>> items, {required String type}) {
+  Widget _buildInvitationsList(
+    List<Map<String, dynamic>> items, {
+    required String type,
+  }) {
     if (items.isEmpty) {
       final emptyText = type == 'pending'
           ? 'لا توجد دعوات معلقة حالياً'
           : type == 'accepted'
-              ? 'لا توجد دعوات مقبولة'
-              : 'لا توجد دعوات مرفوضة';
+          ? 'لا توجد دعوات مقبولة'
+          : 'لا توجد دعوات مرفوضة';
 
       return Center(
         child: Column(
@@ -243,8 +289,8 @@ class _MyInvitationsScreenState extends State<MyInvitationsScreen>
               type == 'pending'
                   ? Icons.mark_email_unread_outlined
                   : type == 'accepted'
-                      ? Icons.task_alt_rounded
-                      : Icons.cancel_outlined,
+                  ? Icons.task_alt_rounded
+                  : Icons.cancel_outlined,
               size: 64,
               color: const Color(0xFFCBD5E1),
             ),
@@ -268,9 +314,12 @@ class _MyInvitationsScreenState extends State<MyInvitationsScreen>
       itemBuilder: (ctx, index) {
         final item = items[index];
         final churchMap = item['churches'] as Map?;
-        final churchName = churchMap?['name_ar'] ?? churchMap?['name'] ?? 'الكنيسة';
+        final churchName =
+            churchMap?['name_ar'] ?? churchMap?['name'] ?? 'الكنيسة';
         final token = item['invite_token'] as String? ?? '';
         final scope = item['assignment_scope'] as String?;
+        final targetExists = item['target_exists'] != false;
+        final isProcessing = _processingTokens.contains(token);
 
         return Container(
           margin: const EdgeInsets.only(bottom: 14),
@@ -305,7 +354,11 @@ class _MyInvitationsScreenState extends State<MyInvitationsScreen>
                             color: const Color(0xFFEFF6FF),
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          child: const Icon(Icons.church_rounded, color: Color(0xFF2563EB), size: 22),
+                          child: const Icon(
+                            Icons.church_rounded,
+                            color: Color(0xFF2563EB),
+                            size: 22,
+                          ),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
@@ -337,58 +390,123 @@ class _MyInvitationsScreenState extends State<MyInvitationsScreen>
                   ),
                   if (type == 'accepted')
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: const Color(0xFFDCFCE7),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
                         'مقبولة',
-                        style: GoogleFonts.cairo(color: const Color(0xFF166534), fontSize: 11, fontWeight: FontWeight.w800),
+                        style: GoogleFonts.cairo(
+                          color: const Color(0xFF166534),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     )
                   else if (type == 'declined')
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: const Color(0xFFFEE2E2),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
                         'مرفوضة',
-                        style: GoogleFonts.cairo(color: const Color(0xFF991B1B), fontSize: 11, fontWeight: FontWeight.w800),
+                        style: GoogleFonts.cairo(
+                          color: const Color(0xFF991B1B),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ),
                 ],
               ),
               if (type == 'pending') ...[
+                if (!targetExists) ...[
+                  const SizedBox(height: 14),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF7ED),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFFED7AA)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.info_outline_rounded,
+                          color: Color(0xFFC2410C),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'المهمة الأصلية لم تعد موجودة. يمكنك قبول الانضمام وسيُسند لك المسؤول مهمة جديدة لاحقًا.',
+                            style: GoogleFonts.cairo(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFF9A3412),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 16),
                 Row(
                   textDirection: TextDirection.rtl,
                   children: [
                     Expanded(
                       child: FilledButton.icon(
-                        onPressed: () => _accept(token),
-                        icon: const Icon(Icons.check_circle_rounded, size: 18),
-                        label: Text('قبول الدعوة 🚀', style: GoogleFonts.cairo(fontWeight: FontWeight.w800)),
+                        onPressed: isProcessing ? null : () => _accept(token),
+                        icon: isProcessing
+                            ? const SizedBox.square(
+                                dimension: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Icon(Icons.check_circle_rounded, size: 18),
+                        label: Text(
+                          'قبول الدعوة 🚀',
+                          style: GoogleFonts.cairo(fontWeight: FontWeight.w800),
+                        ),
                         style: FilledButton.styleFrom(
                           backgroundColor: const Color(0xFF2563EB),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                           padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
                       ),
                     ),
                     const SizedBox(width: 10),
                     OutlinedButton(
-                      onPressed: () => _decline(token),
+                      onPressed: isProcessing ? null : () => _decline(token),
                       style: OutlinedButton.styleFrom(
                         side: const BorderSide(color: Color(0xFFEF4444)),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
                       ),
                       child: Text(
                         'رفض',
-                        style: GoogleFonts.cairo(color: const Color(0xFFEF4444), fontWeight: FontWeight.w800),
+                        style: GoogleFonts.cairo(
+                          color: const Color(0xFFEF4444),
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ),
                   ],

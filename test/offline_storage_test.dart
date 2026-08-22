@@ -176,6 +176,7 @@ void main() {
       contains(OfflineOpType.currentProfileUpdate),
     );
     expect(OfflineOpType.syncOrder, contains(OfflineOpType.profileRoleUpdate));
+    expect(OfflineOpType.syncOrder, contains(OfflineOpType.invitationUpdate));
     expect(
       OfflineOpType.syncOrder,
       contains(OfflineOpType.classAssignmentUpsert),

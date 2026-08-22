@@ -103,7 +103,7 @@ create table public.meetings (
     check (attendance_reminder_minutes between 0 and 1439),
   description text,
   is_active boolean not null default true,
-  created_by uuid references auth.users(id),
+  created_by uuid references auth.users(id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint meetings_unique_name unique (church_id, name_ar)
@@ -159,7 +159,7 @@ create table public.class_assignments (
   user_id uuid not null references public.profiles(id) on delete cascade,
   can_take_attendance boolean not null default true,
   can_view_reports boolean not null default true,
-  assigned_by uuid references auth.users(id),
+  assigned_by uuid references auth.users(id) on delete set null,
   created_at timestamptz not null default now(),
   constraint class_assignments_unique unique (class_id, user_id)
 );
@@ -172,7 +172,7 @@ create table public.meeting_assignments (
   user_id uuid not null references public.profiles(id) on delete cascade,
   can_take_attendance boolean not null default true,
   can_view_reports boolean not null default true,
-  assigned_by uuid references auth.users(id),
+  assigned_by uuid references auth.users(id) on delete set null,
   created_at timestamptz not null default now(),
   constraint meeting_assignments_unique unique (meeting_id, user_id)
 );
@@ -186,7 +186,7 @@ create table public.attendance_sessions (
   session_date date not null,
   week_number integer not null,
   title text,
-  created_by uuid references auth.users(id),
+  created_by uuid references auth.users(id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint sessions_unique_slot unique nulls not distinct (church_id, meeting_id, class_id, session_date)
@@ -200,7 +200,7 @@ create table public.attendance_records (
   member_id uuid not null references public.members(id) on delete cascade,
   status public.attendance_status not null default 'absent',
   notes text,
-  recorded_by uuid references auth.users(id),
+  recorded_by uuid references auth.users(id) on delete set null,
   recorded_at timestamptz not null default now(),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -218,7 +218,7 @@ create table public.follow_ups (
   result text,
   responsible_user_id uuid references public.profiles(id) on delete set null,
   follow_up_date date not null,
-  created_by uuid references auth.users(id),
+  created_by uuid references auth.users(id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -329,26 +329,13 @@ begin
     raise exception 'اسم الكنيسة مطلوب';
   end if;
 
-  select id
-    into target_church_id
-    from public.churches
-    where lower(btrim(name_ar)) = lower(normalized_name)
-       or lower(btrim(name)) = lower(normalized_name)
-    order by created_at
-    limit 1;
-
-  if target_church_id is not null then
-    return target_church_id;
-  end if;
-
+  -- Display names are not tenant identifiers. Always create a fresh church.
   insert into public.churches (name, name_ar, slug)
   values (
     normalized_name,
     normalized_name,
-    'church-' || substr(md5(lower(normalized_name)), 1, 12)
+    'church-' || replace(gen_random_uuid()::text, '-', '')
   )
-  on conflict (slug) do update
-    set name_ar = excluded.name_ar
   returning id into target_church_id;
 
   return target_church_id;
@@ -372,6 +359,10 @@ declare
   normalized_name text := nullif(btrim(profile_full_name), '');
   normalized_email text := nullif(btrim(profile_email), '');
 begin
+  if auth.uid() is null or auth.uid() <> profile_id then
+    raise exception 'غير مصرح بإكمال التسجيل';
+  end if;
+
   if normalized_name is null then
     raise exception 'اسم المستخدم مطلوب';
   end if;
@@ -382,6 +373,10 @@ begin
 
   if not exists (select 1 from public.churches where id = profile_church_id) then
     raise exception 'الكنيسة غير موجودة';
+  end if;
+
+  if exists (select 1 from public.profiles where id = profile_id) then
+    raise exception 'الحساب مربوط بكنيسة بالفعل';
   end if;
 
   insert into public.profiles (
@@ -399,13 +394,7 @@ begin
     profile_role,
     normalized_email,
     nullif(btrim(profile_phone), '')
-  )
-  on conflict (id) do update
-    set church_id = excluded.church_id,
-        full_name = excluded.full_name,
-        role = excluded.role,
-        email = excluded.email,
-        phone = excluded.phone;
+  );
 end;
 $$;
 
@@ -1052,7 +1041,7 @@ begin
   values (
     normalized_name,
     normalized_name,
-    'church-' || substr(md5(lower(normalized_name) || random()::text), 1, 12)
+    'church-' || replace(gen_random_uuid()::text, '-', '')
   )
   returning id into target_church_id;
 
@@ -1206,13 +1195,21 @@ begin
 end;
 $$;
 
-grant execute on function public.register_new_church_signup(uuid, text, text, text, text) to authenticated;
-grant execute on function public.register_invited_signup(uuid, text, text, text, text, text) to authenticated;
+revoke all on function public.register_new_church_signup(uuid, text, text, text, text)
+  from public, anon;
+grant execute on function public.register_new_church_signup(uuid, text, text, text, text)
+  to authenticated;
+
+revoke all on function public.register_invited_signup(uuid, text, text, text, text, text)
+  from public, anon;
+grant execute on function public.register_invited_signup(uuid, text, text, text, text, text)
+  to authenticated;
 grant execute on function public.admin_update_profile_role(uuid, public.app_role) to authenticated;
 grant execute on function public.admin_update_profile_status(uuid, boolean) to authenticated;
 
-revoke execute on function public.ensure_church(text) from anon, authenticated;
-revoke execute on function public.create_signup_profile(uuid, uuid, text, public.app_role, text, text) from anon, authenticated;
+revoke all on function public.ensure_church(text) from public, anon, authenticated;
+revoke all on function public.create_signup_profile(uuid, uuid, text, public.app_role, text, text)
+  from public, anon, authenticated;
 
 create or replace function public.accept_invitation_assignment(
   invitation_id uuid,

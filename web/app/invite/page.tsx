@@ -8,24 +8,26 @@ function InviteContent() {
   const token = searchParams.get('t') || searchParams.get('token') || '';
 
   const customSchemeLink = token
-    ? `io.supabase.link://invite?t=${encodeURIComponent(token)}`
-    : 'io.supabase.link://invite';
+    ? `io.supabase.link://invite/?t=${encodeURIComponent(token)}`
+    : 'io.supabase.link://invite/';
 
   const androidIntentLink = token
-    ? `intent://invite?t=${encodeURIComponent(token)}#Intent;scheme=io.supabase.link;end;`
-    : 'intent://invite#Intent;scheme=io.supabase.link;end;';
+    ? `intent://invite/?t=${encodeURIComponent(token)}#Intent;scheme=io.supabase.link;package=com.linkapp.church;end;`
+    : 'intent://invite/#Intent;scheme=io.supabase.link;package=com.linkapp.church;end;';
+
+  const openApp = React.useCallback(() => {
+    const isAndroid = /android/i.test(navigator.userAgent || '');
+    window.location.href = isAndroid ? androidIntentLink : customSchemeLink;
+  }, [androidIntentLink, customSchemeLink]);
 
   useEffect(() => {
     if (token) {
-      const isAndroid = /android/i.test(navigator.userAgent || '');
-      const targetLink = isAndroid ? androidIntentLink : customSchemeLink;
-
       const timer = setTimeout(() => {
-        window.location.href = targetLink;
+        openApp();
       }, 100);
       return () => clearTimeout(timer);
     }
-  }, [token, customSchemeLink, androidIntentLink]);
+  }, [token, openApp]);
 
   return (
     <main
@@ -89,8 +91,9 @@ function InviteContent() {
 
         <a
           href={customSchemeLink}
-          onClick={() => {
-            window.location.href = customSchemeLink;
+          onClick={(event) => {
+            event.preventDefault();
+            openApp();
           }}
           style={{
             display: 'inline-block',

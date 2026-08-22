@@ -258,7 +258,7 @@ class _EditProfileDialogFormState extends State<_EditProfileDialogForm> {
           content: Text('تم حفظ البيانات الشخصية', style: GoogleFonts.cairo()),
         ),
       );
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
       setState(() => _isSaving = false);
       ScaffoldMessenger.of(widget.hostContext).showSnackBar(
@@ -617,13 +617,13 @@ class _DeleteAccountCardState extends State<_DeleteAccountCard> {
       await context.read<DatabaseRepository>().deleteCurrentAccount();
       if (!mounted) return;
       context.read<AuthBloc>().add(LogoutRequested());
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
       setState(() => _isDeleting = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'تعذر حذف الحساب. تأكد من الاتصال بالإنترنت وحاول مرة أخرى.',
+            error.toString().replaceAll('Exception: ', ''),
             style: GoogleFonts.cairo(),
           ),
           backgroundColor: AppTheme.accentRed,

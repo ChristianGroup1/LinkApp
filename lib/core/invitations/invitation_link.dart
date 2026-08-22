@@ -31,8 +31,7 @@ String? extractInvitationToken(Uri uri) {
 
 String buildInvitationLink({required String inviteToken, String? supabaseUrl}) {
   final webBase =
-      dotenv.env['INVITE_LINK_BASE_URL']?.trim() ??
-      'https://link-church-app.vercel.app';
+      dotenv.env['INVITE_LINK_BASE_URL']?.trim() ?? 'https://linkchurch.space';
   final normalized = webBase.endsWith('/')
       ? webBase.substring(0, webBase.length - 1)
       : webBase;
@@ -40,5 +39,5 @@ String buildInvitationLink({required String inviteToken, String? supabaseUrl}) {
 }
 
 String buildInvitationAppDeepLink(String inviteToken) {
-  return '$_appInviteScheme?t=${Uri.encodeComponent(inviteToken)}';
+  return '$_appInviteScheme/?t=${Uri.encodeComponent(inviteToken)}';
 }

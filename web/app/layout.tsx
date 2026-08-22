@@ -3,7 +3,7 @@ import React from 'react';
 import './globals.css';
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://link-church-app.vercel.app'),
+  metadataBase: new URL('https://linkchurch.space'),
   title: 'Link — إدارة الخدمة والحضور والافتقاد',
   description:
     'منظومة عربية متكاملة لإدارة الاجتماعات والحضور والأعضاء ومتابعة الافتقاد على Android وWindows.',

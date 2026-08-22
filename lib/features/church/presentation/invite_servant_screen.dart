@@ -140,7 +140,8 @@ class _InviteServantScreenState extends State<InviteServantScreen> {
             path: email,
             queryParameters: {
               'subject': 'دعوة خادم جديدة - تطبيق LinkApp',
-              'body': 'سلام ونعمة يا ${_nameController.text.trim()}،\n\n'
+              'body':
+                  'مرحبًا يا ${_nameController.text.trim()}،\n\n'
                   'ادعوك للانضمام لخدمتنا على تطبيق LinkApp.\n'
                   'رابط الدعوة الخاص بك:\n${result.data.inviteLink}\n\n'
                   'كود التفعيل: ${result.data.code}',
@@ -205,7 +206,10 @@ class _InviteServantScreenState extends State<InviteServantScreen> {
           ),
           centerTitle: true,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back_rounded, color: AppTheme.textDark),
+            icon: const Icon(
+              Icons.arrow_back_rounded,
+              color: AppTheme.textDark,
+            ),
             onPressed: _isGenerating
                 ? null
                 : () => Navigator.pop(context, _generatedInviteLink != null),
@@ -239,7 +243,10 @@ class _InviteServantScreenState extends State<InviteServantScreen> {
                       const SizedBox(height: 12),
                       OutlinedButton(
                         onPressed: _loadTargets,
-                        child: Text('إعادة المحاولة', style: GoogleFonts.cairo()),
+                        child: Text(
+                          'إعادة المحاولة',
+                          style: GoogleFonts.cairo(),
+                        ),
                       ),
                     ],
                   ),
@@ -262,7 +269,11 @@ class _InviteServantScreenState extends State<InviteServantScreen> {
                         borderRadius: BorderRadius.circular(14),
                       ),
                     ),
-                    icon: const Icon(Icons.link_rounded, size: 20, color: Colors.white),
+                    icon: const Icon(
+                      Icons.link_rounded,
+                      size: 20,
+                      color: Colors.white,
+                    ),
                     label: _isGenerating
                         ? const SizedBox(
                             width: 22,
@@ -354,7 +365,10 @@ class _InviteServantScreenState extends State<InviteServantScreen> {
                 TextFormField(
                   controller: _nameController,
                   style: GoogleFonts.cairo(),
-                  decoration: _inputDecoration('الاسم بالكامل*', Icons.badge_outlined),
+                  decoration: _inputDecoration(
+                    'الاسم بالكامل*',
+                    Icons.badge_outlined,
+                  ),
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
                       return 'اكتب اسم الخادم';
@@ -410,10 +424,15 @@ class _InviteServantScreenState extends State<InviteServantScreen> {
                   children: [
                     Expanded(
                       child: InkWell(
-                        onTap: () => setState(() => _selectedRole = AppRole.attendanceOfficer),
+                        onTap: () => setState(
+                          () => _selectedRole = AppRole.attendanceOfficer,
+                        ),
                         borderRadius: BorderRadius.circular(14),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 12,
+                            horizontal: 10,
+                          ),
                           decoration: BoxDecoration(
                             color: _selectedRole == AppRole.attendanceOfficer
                                 ? AppTheme.primaryLight
@@ -423,14 +442,17 @@ class _InviteServantScreenState extends State<InviteServantScreen> {
                               color: _selectedRole == AppRole.attendanceOfficer
                                   ? AppTheme.primary
                                   : Colors.grey.shade300,
-                              width: _selectedRole == AppRole.attendanceOfficer ? 2 : 1,
+                              width: _selectedRole == AppRole.attendanceOfficer
+                                  ? 2
+                                  : 1,
                             ),
                           ),
                           child: Column(
                             children: [
                               Icon(
                                 Icons.checklist_rtl_rounded,
-                                color: _selectedRole == AppRole.attendanceOfficer
+                                color:
+                                    _selectedRole == AppRole.attendanceOfficer
                                     ? AppTheme.primary
                                     : AppTheme.textLight,
                                 size: 24,
@@ -441,7 +463,8 @@ class _InviteServantScreenState extends State<InviteServantScreen> {
                                 style: GoogleFonts.cairo(
                                   fontWeight: FontWeight.w900,
                                   fontSize: 13,
-                                  color: _selectedRole == AppRole.attendanceOfficer
+                                  color:
+                                      _selectedRole == AppRole.attendanceOfficer
                                       ? AppTheme.primary
                                       : AppTheme.textDark,
                                 ),
@@ -461,10 +484,14 @@ class _InviteServantScreenState extends State<InviteServantScreen> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: InkWell(
-                        onTap: () => setState(() => _selectedRole = AppRole.churchAdmin),
+                        onTap: () =>
+                            setState(() => _selectedRole = AppRole.churchAdmin),
                         borderRadius: BorderRadius.circular(14),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 12,
+                            horizontal: 10,
+                          ),
                           decoration: BoxDecoration(
                             color: _selectedRole == AppRole.churchAdmin
                                 ? const Color(0xFFEFF6FF)
@@ -474,7 +501,9 @@ class _InviteServantScreenState extends State<InviteServantScreen> {
                               color: _selectedRole == AppRole.churchAdmin
                                   ? const Color(0xFF0EA5E9)
                                   : Colors.grey.shade300,
-                              width: _selectedRole == AppRole.churchAdmin ? 2 : 1,
+                              width: _selectedRole == AppRole.churchAdmin
+                                  ? 2
+                                  : 1,
                             ),
                           ),
                           child: Column(

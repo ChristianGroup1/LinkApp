@@ -446,6 +446,26 @@ class HelperInvitation {
 
   bool get isPending => !isUsed && declinedAt == null;
 
+  HelperInvitation copyWith({String? fullName, String? email}) {
+    return HelperInvitation(
+      id: id,
+      churchId: churchId,
+      fullName: fullName ?? this.fullName,
+      email: email,
+      phone: phone,
+      role: role,
+      targetId: targetId,
+      assignmentScope: assignmentScope,
+      canTakeAttendance: canTakeAttendance,
+      canViewReports: canViewReports,
+      code: code,
+      inviteToken: inviteToken,
+      isUsed: isUsed,
+      declinedAt: declinedAt,
+      createdAt: createdAt,
+    );
+  }
+
   factory HelperInvitation.fromJson(Map<String, dynamic> json) {
     return HelperInvitation(
       id: json['id'] as String,

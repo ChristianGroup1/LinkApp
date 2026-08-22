@@ -12,9 +12,13 @@ void main() {
       );
       expect(
         extractInvitationToken(
-          Uri.parse(
-            'https://link-church-app.vercel.app/invite?t=servant-token',
-          ),
+          Uri.parse('https://linkchurch.space/invite?t=servant-token'),
+        ),
+        'servant-token',
+      );
+      expect(
+        extractInvitationToken(
+          Uri.parse('io.supabase.link://invite/?t=servant-token'),
         ),
         'servant-token',
       );
@@ -41,5 +45,12 @@ void main() {
         isNull,
       );
     });
+  });
+
+  test('builds an app link compatible with Android invite filters', () {
+    expect(
+      buildInvitationAppDeepLink('servant token'),
+      'io.supabase.link://invite/?t=servant%20token',
+    );
   });
 }

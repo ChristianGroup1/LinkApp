@@ -872,6 +872,13 @@ class TestRepository implements DatabaseRepository {
   }
 
   @override
+  Future<bool> updateInvitation({
+    required HelperInvitation invitation,
+    required String fullName,
+    String? email,
+  }) async => true;
+
+  @override
   Future<bool> deleteInvitation(String id) async => true;
 
   @override

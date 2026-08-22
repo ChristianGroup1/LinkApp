@@ -49,6 +49,7 @@ abstract class OfflineOpType {
   static const followUpCreate = 'follow_up.create';
   static const followUpDelete = 'follow_up.delete';
   static const invitationCreate = 'invitation.create';
+  static const invitationUpdate = 'invitation.update';
   static const invitationDelete = 'invitation.delete';
   static const currentProfileUpdate = 'profile.current_update';
   static const profileRoleUpdate = 'profile.role_update';
@@ -74,6 +75,7 @@ abstract class OfflineOpType {
     followUpCreate,
     followUpDelete,
     invitationCreate,
+    invitationUpdate,
     invitationDelete,
     currentProfileUpdate,
     profileRoleUpdate,

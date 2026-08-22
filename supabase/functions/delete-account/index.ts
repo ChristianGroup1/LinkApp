@@ -42,6 +42,53 @@ Deno.serve(async (req) => {
     // role key remains server-side and the target ID always comes from the
     // verified access token, never from request input.
     const adminClient = createClient(supabaseUrl, serviceRoleKey)
+
+    const { data: profile, error: profileError } = await adminClient
+      .from('profiles')
+      .select('church_id, role')
+      .eq('id', user.id)
+      .maybeSingle()
+
+    if (profileError) {
+      console.error('Account profile lookup failed', {
+        userId: user.id,
+        message: profileError.message,
+      })
+      return json({ error: 'تعذر التحقق من مسؤوليات الحساب الآن.' }, 500)
+    }
+
+    if (
+      profile?.church_id &&
+      (profile.role === 'church_admin' || profile.role === 'super_admin')
+    ) {
+      const { count, error: adminsError } = await adminClient
+        .from('profiles')
+        .select('id', { count: 'exact', head: true })
+        .eq('church_id', profile.church_id)
+        .eq('is_active', true)
+        .in('role', ['church_admin', 'super_admin'])
+        .neq('id', user.id)
+
+      if (adminsError) {
+        console.error('Church admins lookup failed', {
+          userId: user.id,
+          message: adminsError.message,
+        })
+        return json({ error: 'تعذر التحقق من مسؤولي الخدمة الآن.' }, 500)
+      }
+
+      if ((count ?? 0) === 0) {
+        return json(
+          {
+            error:
+              'لا يمكن حذف آخر مدير للكنيسة. عيّن مديرًا آخر أولًا ثم أعد المحاولة.',
+            code: 'last_church_admin',
+          },
+          409,
+        )
+      }
+    }
+
     const { error: deletionError } = await adminClient.auth.admin.deleteUser(
       user.id,
       false,
@@ -55,7 +102,8 @@ Deno.serve(async (req) => {
       return json(
         {
           error:
-            'تعذر حذف الحساب الآن. تأكد من نقل مسؤولية الخدمة ثم حاول مرة أخرى.',
+            'تعذر حذف الحساب بسبب ارتباطه ببيانات خدمة محفوظة. شغّل تحديث قاعدة البيانات الخاص بحذف الحساب ثم حاول مرة أخرى.',
+          code: 'account_delete_conflict',
         },
         409,
       )

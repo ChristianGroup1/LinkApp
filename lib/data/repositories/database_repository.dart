@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/models.dart';
+import '../../core/auth/account_deletion_errors.dart';
 import '../../core/invitations/invitation_email_errors.dart';
 import '../../core/invitations/invitation_preview.dart';
 import '../offline/invitation_create_result.dart';
@@ -224,6 +225,11 @@ abstract class DatabaseRepository {
     bool canViewReports = true,
   });
   Future<List<HelperInvitation>> getInvitations();
+  Future<bool> updateInvitation({
+    required HelperInvitation invitation,
+    required String fullName,
+    String? email,
+  });
   Future<bool> deleteInvitation(String id);
   Future<void> sendInvitationEmail(String invitationId);
   Future<List<Map<String, dynamic>>> getUserClassAssignments(String userId);
@@ -656,18 +662,34 @@ class SupabaseRepository implements DatabaseRepository {
 
   @override
   Future<void> declineInvitationByToken(String inviteToken) async {
-    await _client.rpc(
-      'decline_invitation_by_token',
-      params: {'p_token': inviteToken.trim()},
-    );
+    try {
+      await _client.rpc(
+        'decline_invitation_by_token',
+        params: {'p_token': inviteToken.trim()},
+      );
+    } on PostgrestException catch (error) {
+      throw Exception(_invitationActionErrorMessage(error));
+    }
   }
 
   @override
   Future<void> acceptInvitationLink(String inviteToken) async {
-    await _client.rpc(
-      'accept_invitation_link',
-      params: {'p_token': inviteToken.trim()},
-    );
+    try {
+      await _client.rpc(
+        'accept_invitation_link',
+        params: {'p_token': inviteToken.trim()},
+      );
+    } on PostgrestException catch (error) {
+      throw Exception(_invitationActionErrorMessage(error));
+    }
+  }
+
+  String _invitationActionErrorMessage(PostgrestException error) {
+    if (error.code == '23503') {
+      return 'المهمة المرتبطة بالدعوة لم تعد موجودة. اطلب من مسؤول الكنيسة تحديث الدعوة أو إنشاء دعوة جديدة.';
+    }
+    final message = error.message.trim();
+    return message.isEmpty ? 'تعذر تنفيذ الإجراء على الدعوة.' : message;
   }
 
   @override
@@ -800,11 +822,15 @@ class SupabaseRepository implements DatabaseRepository {
       throw Exception('لا يوجد حساب مسجل دخول');
     }
 
-    final response = await _client.functions.invoke('delete-account');
-    if (response.status < 200 || response.status >= 300) {
-      final data = response.data;
-      final message = data is Map ? data['error']?.toString() : null;
-      throw Exception(message ?? 'تعذر حذف الحساب');
+    try {
+      final response = await _client.functions.invoke('delete-account');
+      if (response.status < 200 || response.status >= 300) {
+        final data = response.data;
+        final message = data is Map ? data['error']?.toString() : null;
+        throw Exception(message ?? 'تعذر حذف الحساب');
+      }
+    } catch (error) {
+      throw Exception(accountDeletionErrorMessage(error));
     }
 
     await _offlineCache.clearAll();
@@ -2195,13 +2221,21 @@ class SupabaseRepository implements DatabaseRepository {
     if (profile?.churchId == null) {
       throw Exception('المستخدم غير مرتبط بكنيسة');
     }
+    final normalizedRole =
+        role == AppRole.churchAdmin ||
+            role == AppRole.superAdmin ||
+            assignmentScope == null
+        ? role
+        : assignmentScope == 'meeting'
+        ? AppRole.attendanceOfficer
+        : AppRole.classLeader;
     return _notifyAfter(
       _offlineWriter.createInvitation(
         churchId: profile!.churchId!,
         fullName: fullName,
         email: email,
         phone: phone,
-        role: role,
+        role: normalizedRole,
         targetId: targetId,
         assignmentScope: assignmentScope,
         canTakeAttendance: canTakeAttendance,
@@ -2262,6 +2296,26 @@ class SupabaseRepository implements DatabaseRepository {
           pendingDeletes,
         );
       },
+    );
+  }
+
+  @override
+  Future<bool> updateInvitation({
+    required HelperInvitation invitation,
+    required String fullName,
+    String? email,
+  }) async {
+    final profile = await getCurrentProfile();
+    if (profile?.churchId == null) {
+      throw Exception('المستخدم غير مرتبط بكنيسة');
+    }
+    return _notifyAfter(
+      _offlineWriter.updateInvitation(
+        invitation: invitation,
+        fullName: fullName,
+        email: email,
+      ),
+      {AppDataArea.invitations, AppDataArea.assignments},
     );
   }
 

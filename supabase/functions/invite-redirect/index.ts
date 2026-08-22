@@ -127,7 +127,9 @@ Deno.serve(async (req) => {
 
     const preview = data as Record<string, unknown>
     const valid = preview.valid === true
-    const appLink = `io.supabase.link://invite?t=${encodeURIComponent(token)}`
+    // The trailing slash also opens Android builds whose intent filter expects
+    // an invite path, while remaining compatible with newer builds.
+    const appLink = `io.supabase.link://invite/?t=${encodeURIComponent(token)}`
 
     const html = buildPage({
       valid,

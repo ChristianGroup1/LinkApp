@@ -53,8 +53,7 @@
                 <category android:name="android.intent.category.BROWSABLE"/>
                 <data
                     android:scheme="io.supabase.link"
-                    android:host="invite"
-                    android:pathPrefix="/" />
+                    android:host="invite" />
             </intent-filter>
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW"/>
@@ -63,6 +62,10 @@
                 <data
                     android:scheme="https"
                     android:host="link-church-app.vercel.app"
+                    android:pathPrefix="/invite"/>
+                <data
+                    android:scheme="https"
+                    android:host="linkchurch.space"
                     android:pathPrefix="/invite"/>
             </intent-filter>
         </activity>

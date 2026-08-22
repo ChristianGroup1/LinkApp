@@ -1251,6 +1251,81 @@ class OfflineWriteHandler {
     }
   }
 
+  Future<bool> updateInvitation({
+    required HelperInvitation invitation,
+    required String fullName,
+    String? email,
+  }) async {
+    final normalizedName = fullName.trim();
+    final normalizedEmail = emptyToNull(email?.trim());
+    final resolvedId = await queue.resolveId(invitation.id);
+    final updated = invitation.copyWith(
+      fullName: normalizedName,
+      email: normalizedEmail,
+    );
+
+    if (isOfflineId(invitation.id) && resolvedId == invitation.id) {
+      await cache.upsertInvitation(invitation.churchId, updated);
+      await queue.removeByEntityId(invitation.id);
+      await queue.enqueue(
+        QueuedOperation(
+          id: await queue.generateId('op'),
+          type: OfflineOpType.invitationCreate,
+          payload: {
+            'local_id': invitation.id,
+            'church_id': invitation.churchId,
+            'full_name': normalizedName,
+            'email': normalizedEmail,
+            'phone': invitation.phone,
+            'role': invitation.role.value,
+            'target_id': invitation.targetId,
+            'assignment_scope': invitation.assignmentScope,
+            'can_take_attendance': invitation.canTakeAttendance,
+            'can_view_reports': invitation.canViewReports,
+            'code': invitation.code,
+            'invite_token': invitation.inviteToken,
+          },
+          queuedAt: DateTime.now(),
+        ),
+      );
+      return false;
+    }
+
+    try {
+      await _throwIfKnownOffline();
+      final row = await client
+          .from('invitations')
+          .update({'full_name': normalizedName, 'email': normalizedEmail})
+          .eq('id', resolvedId)
+          .eq('church_id', invitation.churchId)
+          .eq('is_used', false)
+          .select()
+          .single();
+      await cache.upsertInvitation(
+        invitation.churchId,
+        HelperInvitation.fromJson(row),
+      );
+      return true;
+    } catch (error) {
+      if (!isRecoverableOfflineError(error)) rethrow;
+      await cache.upsertInvitation(invitation.churchId, updated);
+      await queue.enqueue(
+        QueuedOperation(
+          id: await queue.generateId('op'),
+          type: OfflineOpType.invitationUpdate,
+          payload: {
+            'id': resolvedId,
+            'church_id': invitation.churchId,
+            'full_name': normalizedName,
+            'email': normalizedEmail,
+          },
+          queuedAt: DateTime.now(),
+        ),
+      );
+      return false;
+    }
+  }
+
   String _generateActivationCode() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     final rand = Random.secure();
@@ -1585,6 +1660,17 @@ class OfflineWriteHandler {
           operation.payload['church_id'] as String,
           HelperInvitation.fromJson(row),
         );
+        return true;
+      case OfflineOpType.invitationUpdate:
+        await client
+            .from('invitations')
+            .update({
+              'full_name': operation.payload['full_name'],
+              'email': operation.payload['email'],
+            })
+            .eq('id', operation.payload['id'])
+            .eq('church_id', operation.payload['church_id'])
+            .eq('is_used', false);
         return true;
       case OfflineOpType.invitationDelete:
         await client

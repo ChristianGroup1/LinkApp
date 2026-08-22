@@ -82,22 +82,20 @@ begin
     raise exception 'اسم المستخدم مطلوب';
   end if;
 
-  -- Find existing church by name or create a new one smoothly for stats
-  select id into target_church_id
-  from public.churches
-  where lower(btrim(name_ar)) = lower(normalized_name)
-     or lower(btrim(name)) = lower(normalized_name)
-  limit 1;
-
-  if target_church_id is null then
-    insert into public.churches (name, name_ar, slug)
-    values (
-      normalized_name,
-      normalized_name,
-      'church-' || substr(md5(lower(normalized_name) || random()::text), 1, 12)
-    )
-    returning id into target_church_id;
+  if exists (select 1 from public.profiles where id = profile_id) then
+    raise exception 'الحساب مربوط بكنيسة بالفعل';
   end if;
+
+  -- A church name is display-only and is never an authorization boundary.
+  -- Every new-church signup receives a fresh tenant even when another church
+  -- has exactly the same Arabic or English name.
+  insert into public.churches (name, name_ar, slug)
+  values (
+    normalized_name,
+    normalized_name,
+    'church-' || replace(gen_random_uuid()::text, '-', '')
+  )
+  returning id into target_church_id;
 
   insert into public.profiles (id, church_id, full_name, role, email, phone)
   values (
@@ -107,12 +105,7 @@ begin
     'church_admin',
     nullif(btrim(profile_email), ''),
     nullif(btrim(profile_phone), '')
-  )
-  on conflict (id) do update set
-    church_id = excluded.church_id,
-    full_name = excluded.full_name,
-    email = excluded.email,
-    phone = excluded.phone;
+  );
 
   return target_church_id;
 end;
@@ -175,11 +168,19 @@ begin
 end;
 $$;
 
-grant execute on function public.register_new_church_signup(uuid, text, text, text, text) to authenticated;
-grant execute on function public.register_invited_signup(uuid, text, text, text, text) to authenticated;
+revoke all on function public.register_new_church_signup(uuid, text, text, text, text)
+  from public, anon;
+grant execute on function public.register_new_church_signup(uuid, text, text, text, text)
+  to authenticated;
 
-revoke execute on function public.ensure_church(text) from anon;
-revoke execute on function public.create_signup_profile(uuid, uuid, text, public.app_role, text, text) from anon;
+revoke all on function public.register_invited_signup(uuid, text, text, text, text)
+  from public, anon;
+grant execute on function public.register_invited_signup(uuid, text, text, text, text)
+  to authenticated;
+
+revoke all on function public.ensure_church(text) from public, anon, authenticated;
+revoke all on function public.create_signup_profile(uuid, uuid, text, public.app_role, text, text)
+  from public, anon, authenticated;
 
 -- ---------- 4. Cascade delete RPCs ----------
 create or replace function public.delete_sunday_school_class_cascade(target_class_id uuid)
@@ -369,8 +370,9 @@ $$;
 grant execute on function public.admin_update_profile_role(uuid, public.app_role) to authenticated;
 grant execute on function public.admin_update_profile_status(uuid, boolean) to authenticated;
 
-revoke execute on function public.ensure_church(text) from authenticated;
-revoke execute on function public.create_signup_profile(uuid, uuid, text, public.app_role, text, text) from authenticated;
+revoke all on function public.ensure_church(text) from public, anon, authenticated;
+revoke all on function public.create_signup_profile(uuid, uuid, text, public.app_role, text, text)
+  from public, anon, authenticated;
 
 -- Rate-limit invitation brute force: require non-empty code
 create or replace function public.validate_invitation_code(invite_code text)
@@ -606,6 +608,4 @@ end;
 $$;
 
 grant execute on function public.accept_invitation_link(text) to authenticated;
-
-
 
