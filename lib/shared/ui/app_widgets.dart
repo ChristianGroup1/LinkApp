@@ -297,10 +297,14 @@ class AppWelcomeHeader extends StatelessWidget {
                 ),
               ],
             ),
-            child: Image.asset(
-              'assets/images/link_logo.png',
-              fit: BoxFit.contain,
-              semanticLabel: 'شعار لينك',
+            child: ClipOval(
+              child: Image.asset(
+                'assets/images/link_logo.png',
+                width: 62,
+                height: 62,
+                fit: BoxFit.cover,
+                semanticLabel: 'شعار لينك',
+              ),
             ),
           ),
           const SizedBox(width: 14),
@@ -337,7 +341,10 @@ class AppWelcomeHeader extends StatelessWidget {
                 onTap: onStartTour,
                 borderRadius: BorderRadius.circular(16),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(16),
@@ -348,7 +355,11 @@ class AppWelcomeHeader extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 15),
+                      const Icon(
+                        Icons.auto_awesome_rounded,
+                        color: Colors.white,
+                        size: 15,
+                      ),
                       const SizedBox(width: 4),
                       Text(
                         'الجولة 🚀',

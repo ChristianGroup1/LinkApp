@@ -12,7 +12,7 @@ cp .env.example .env
 
 2. Run the SQL migration in Supabase SQL Editor: `supabase_security_and_fixes_migration.sql`
 
-3. For invitation links and emails: run `supabase_invitation_link_migration.sql`, then `supabase_invitation_identity_fix.sql` (and `supabase_invitation_email_migration.sql` if not already applied), deploy Edge Functions `invite-redirect` and `send-invitation-email`, upload `link_logo.png` to public Storage bucket `app-assets`, and set secrets `RESEND_API_KEY`, `INVITE_EMAIL_FROM`, `INVITE_EMAIL_LOGO_URL`. Optional: set `INVITE_LINK_BASE_URL` in `.env` for a custom HTTPS invite domain.
+3. For invitation links and emails: run `supabase_invitation_link_migration.sql`, then `supabase_invitation_identity_fix.sql` (and `supabase_invitation_email_migration.sql` if not already applied), configure Gmail SMTP in Supabase Authentication, and deploy Edge Functions `invite-redirect` and `send-invitation-email`. Optional: set `INVITE_LINK_BASE_URL` for a custom HTTPS invite domain.
 
 ## Run (automatic)
 

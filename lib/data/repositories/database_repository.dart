@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/models.dart';
 import '../../core/auth/account_deletion_errors.dart';
+import '../../core/auth/password_recovery_link.dart';
 import '../../core/invitations/invitation_email_errors.dart';
 import '../../core/invitations/invitation_identity.dart';
 import '../../core/invitations/invitation_preview.dart';
@@ -736,7 +737,7 @@ class SupabaseRepository implements DatabaseRepository {
   Future<void> sendPasswordResetEmail(String email) async {
     await _client.auth.resetPasswordForEmail(
       email.trim(),
-      redirectTo: 'io.supabase.link://reset-password',
+      redirectTo: passwordResetRedirectUrl,
     );
   }
 

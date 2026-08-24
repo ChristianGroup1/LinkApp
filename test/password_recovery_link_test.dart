@@ -4,6 +4,10 @@ import 'package:link/core/auth/password_recovery_link.dart';
 import 'package:link/presentation/screens/password_recovery_error_screen.dart';
 
 void main() {
+  test('uses the native app callback for password reset emails', () {
+    expect(passwordResetRedirectUrl, 'io.supabase.link://reset-password');
+  });
+
   group('extractPasswordRecoveryLinkError', () {
     test('reads an expired token error from query parameters', () {
       final error = extractPasswordRecoveryLinkError(

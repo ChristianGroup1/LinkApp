@@ -64,6 +64,29 @@ void main() {
     await states;
   });
 
+  test('sends password reset email through the repository', () async {
+    final repository = TestRepository();
+    final bloc = AuthBloc(repository: repository);
+    addTearDown(bloc.close);
+
+    final states = expectLater(
+      bloc.stream,
+      emitsInOrder([
+        isA<AuthPasswordResetEmailLoading>(),
+        isA<AuthPasswordResetEmailSent>().having(
+          (state) => state.email,
+          'email',
+          'user@example.com',
+        ),
+      ]),
+    );
+
+    bloc.add(PasswordResetEmailRequested(email: 'user@example.com'));
+    await states;
+
+    expect(repository.lastPasswordResetEmail, 'user@example.com');
+  });
+
   test(
     'tracks spotlight tour completion separately for each account',
     () async {
@@ -317,6 +340,7 @@ class LoginFailureRepository extends TestRepository {
 }
 
 class TestRepository implements DatabaseRepository {
+  String? lastPasswordResetEmail;
   AppProfile? _profile = const AppProfile(
     id: 'prof-1',
     churchId: 'ch-1',
@@ -421,7 +445,9 @@ class TestRepository implements DatabaseRepository {
   }
 
   @override
-  Future<void> sendPasswordResetEmail(String email) async {}
+  Future<void> sendPasswordResetEmail(String email) async {
+    lastPasswordResetEmail = email;
+  }
 
   @override
   Future<void> updatePassword(String password) async {}

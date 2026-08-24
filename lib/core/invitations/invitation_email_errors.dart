@@ -5,12 +5,6 @@ String invitationEmailErrorMessage(Object error) {
     final details = error.details;
     final message = _extractErrorText(details).toLowerCase();
 
-    if (message.contains('resend_api_key')) {
-      return 'إرسال البريد غير مفعّل على السيرفر. أضف RESEND_API_KEY في Supabase → Edge Functions → Secrets.';
-    }
-    if (message.contains('invite_email_from')) {
-      return 'عنوان مرسل الدعوات غير مضبوط. أضف INVITE_EMAIL_FROM في Supabase → Edge Functions → Secrets.';
-    }
     if (message.contains('invitation not found') ||
         message.contains('invite_token')) {
       return 'تعذر قراءة الدعوة من السيرفر. شغّل supabase_invitation_link_migration.sql ثم أعد المحاولة.';
@@ -18,9 +12,9 @@ String invitationEmailErrorMessage(Object error) {
     if (message.contains('invitation has no email')) {
       return 'الدعوة لا تحتوي على بريد إلكتروني.';
     }
-    if (message.contains('failed to send email') ||
-        message.contains('resend')) {
-      return 'فشل إرسال البريد عبر Resend. تأكد من INVITE_EMAIL_FROM ودومين مُفعّل في Resend، أو راجع مجلد Spam.';
+    if (message.contains('failed to send invitation via supabase smtp') ||
+        message.contains('smtp')) {
+      return 'فشل إرسال الدعوة عبر Gmail SMTP في Supabase. راجع إعدادات SMTP وحد الإرسال، ثم افحص مجلد Spam.';
     }
     if (error.status == 401 || error.status == 403) {
       return 'غير مصرح بإرسال البريد. سجّل دخولك كمدير كنيسة وحاول مرة أخرى.';

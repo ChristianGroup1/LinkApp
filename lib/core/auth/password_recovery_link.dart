@@ -1,3 +1,5 @@
+const passwordResetRedirectUrl = 'io.supabase.link://reset-password';
+
 class PasswordRecoveryLinkError {
   final String code;
   final String description;

@@ -664,8 +664,7 @@ class _DesktopNavigationPanel extends StatelessWidget {
           children: [
             Row(
               children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(18),
+                ClipOval(
                   child: Image.asset(
                     'assets/images/link_logo.png',
                     width: 64,

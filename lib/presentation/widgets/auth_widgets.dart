@@ -118,11 +118,16 @@ class AuthLogoMark extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
+      width: size,
       height: size,
-      child: Image.asset(
-        kLogoAsset,
-        fit: BoxFit.contain,
-        semanticLabel: 'شعار تطبيق لينك',
+      child: ClipOval(
+        child: Image.asset(
+          kLogoAsset,
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+          semanticLabel: 'شعار تطبيق لينك',
+        ),
       ),
     );
   }

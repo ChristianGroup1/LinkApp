@@ -6,155 +6,32 @@ const corsHeaders = {
     'authorization, x-client-info, apikey, content-type',
 }
 
-type InvitationRow = {
-  id: string
-  church_id: string
-  full_name: string
-  email: string | null
-  invite_token: string
-  can_take_attendance: boolean
-  can_view_reports: boolean
-  assignment_scope: string | null
-  churches: { name_ar: string } | null
-}
-
-function permissionSummary(invitation: InvitationRow): string {
-  const parts: string[] = []
-  if (invitation.can_take_attendance) parts.push('تسجيل الحضور والغياب')
-  if (invitation.can_view_reports) parts.push('عرض التقارير والمتابعة')
-  return parts.length > 0 ? parts.join(' • ') : 'صلاحيات محددة من المدير'
-}
-
-function scopeLabel(scope: string | null): string {
-  switch (scope) {
-    case 'class':
-      return 'فصل محدد'
-    case 'meeting_classes':
-      return 'كل فصول اجتماع'
-    case 'meeting':
-      return 'اجتماع مباشر'
-    default:
-      return 'مهمة محددة'
-  }
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;')
-}
-
-function buildArabicEmailHtml(params: {
-  churchName: string
-  servantName: string
-  inviteLink: string
-  permissions: string
-  scope: string
-  logoUrl: string
-}) {
-  const { churchName, servantName, inviteLink, permissions, scope, logoUrl } =
-    params
-
-  return `<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>دعوة خادم جديدة - لينك</title>
-</head>
-<body style="margin:0;padding:0;background-color:#f4f7fb;font-family:system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;direction:rtl;text-align:right;">
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#f4f7fb;padding:32px 16px;">
-    <tr>
-      <td align="center">
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:540px;background-color:#ffffff;border-radius:24px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,0.05);border:1px solid #e8edf5;">
-          
-          <!-- Header Banner with Logo -->
-          <tr>
-            <td style="padding:36px 28px 24px;text-align:center;background:linear-gradient(135deg,#4338ca 0%,#312e81 100%);color:#ffffff;">
-              <img src="${escapeHtml(logoUrl)}"
-                   alt="LinkApp Logo" 
-                   width="72" 
-                   height="72" 
-                   style="display:block;margin:0 auto 16px;border-radius:20px;box-shadow:0 6px 16px rgba(0,0,0,0.25);background:#ffffff;padding:4px;" />
-              <h1 style="margin:0;font-size:26px;font-weight:900;letter-spacing:-0.5px;color:#ffffff;">لينك</h1>
-              <p style="margin:6px 0 0;font-size:13px;color:rgba(255,255,255,0.85);">نظام خدمة وإدارة الاجتماعات</p>
-            </td>
-          </tr>
-
-          <!-- Body Content -->
-          <tr>
-            <td style="padding:32px 28px 20px;">
-              <h2 style="margin:0 0 12px;font-size:20px;font-weight:800;color:#1e293b;">مرحباً ${escapeHtml(servantName)} 🌸</h2>
-              <p style="margin:0 0 16px;font-size:15px;line-height:1.8;color:#475569;">
-                تمت دعوتك للانضمام إلى <strong style="color:#4338ca;">${escapeHtml(churchName)}</strong> عبر تطبيق لينك.
-              </p>
-              
-              <div style="background-color:#f8fafc;border-radius:16px;padding:20px;margin:20px 0;border:1px solid #e2e8f0;">
-                <p style="margin:0 0 8px;font-size:14px;font-weight:700;color:#334155;">💡 للبدء وتفعيل حسابك:</p>
-                <p style="margin:0;font-size:13px;line-height:1.7;color:#64748b;">
-                  نطاق الخدمة: <strong>${escapeHtml(scope)}</strong><br/>
-                  الصلاحيات: ${escapeHtml(permissions)}
-                </p>
-              </div>
-
-              <!-- Action Button -->
-              <div style="text-align:center;margin:28px 0 16px;">
-                <a href="${escapeHtml(inviteLink)}"
-                   style="display:inline-block;background-color:#4338ca;color:#ffffff;text-decoration:none;padding:16px 36px;border-radius:16px;font-size:16px;font-weight:800;box-shadow:0 4px 14px rgba(67,56,202,0.35);">
-                  قبول الدعوة وتفعيل الحساب 🚀
-                </a>
-              </div>
-            </td>
-          </tr>
-
-          <!-- Footer -->
-          <tr>
-            <td style="padding:20px 28px 28px;background-color:#f8fafc;border-top:1px solid #f1f5f9;text-align:center;">
-              <p style="margin:0;font-size:12px;color:#94a3b8;line-height:1.6;">
-                إذا لم تكن تتوقع هذه الدعوة، يمكنك تجاهل هذا البريد.<br/>
-                تطبيق LinkApp — جميع الحقوق محفوظة.
-              </p>
-            </td>
-          </tr>
-
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>
-`
+function json(body: Record<string, unknown>, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  })
 }
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
+  if (req.method !== 'POST') {
+    return json({ error: 'Method not allowed' }, 405)
+  }
 
   try {
-    const resendApiKey = Deno.env.get('RESEND_API_KEY')
-    const fromAddress = Deno.env.get('INVITE_EMAIL_FROM')?.trim()
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader) return json({ error: 'Unauthorized' }, 401)
+
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
-    const authHeader = req.headers.get('Authorization')
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
-
     const { invitation_id } = await req.json()
     if (!invitation_id) {
-      return new Response(JSON.stringify({ error: 'invitation_id is required' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+      return json({ error: 'invitation_id is required' }, 400)
     }
 
     const userClient = createClient(supabaseUrl, supabaseAnonKey, {
@@ -164,12 +41,7 @@ Deno.serve(async (req) => {
       data: { user },
       error: userError,
     } = await userClient.auth.getUser()
-    if (userError || !user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
+    if (userError || !user) return json({ error: 'Unauthorized' }, 401)
 
     const adminClient = createClient(supabaseUrl, serviceRoleKey)
     const { data: profile, error: profileError } = await adminClient
@@ -179,144 +51,122 @@ Deno.serve(async (req) => {
       .single()
 
     if (profileError || !profile) {
-      return new Response(JSON.stringify({ error: 'Profile not found' }), {
-        status: 403,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+      return json({ error: 'Profile not found' }, 403)
     }
 
     const isAdmin =
       profile.role === 'church_admin' || profile.role === 'super_admin'
-    if (!isAdmin) {
-      return new Response(JSON.stringify({ error: 'Forbidden' }), {
-        status: 403,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
+    if (!isAdmin) return json({ error: 'Forbidden' }, 403)
 
     const { data: invitation, error: invitationError } = await adminClient
       .from('invitations')
-      .select(
-        'id, church_id, full_name, email, invite_token, can_take_attendance, can_view_reports, assignment_scope, churches(name_ar)',
-      )
+      .select('id, church_id, full_name, email, invite_token, churches(name_ar)')
       .eq('id', invitation_id)
       .single()
 
     if (invitationError || !invitation) {
-      return new Response(JSON.stringify({ error: 'Invitation not found' }), {
-        status: 404,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+      return json({ error: 'Invitation not found' }, 404)
+    }
+    if (invitation.church_id !== profile.church_id) {
+      return json({ error: 'Forbidden' }, 403)
     }
 
-    const invite = invitation as InvitationRow
-    if (invite.church_id !== profile.church_id) {
-      return new Response(JSON.stringify({ error: 'Forbidden' }), {
-        status: 403,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
+    const email = invitation.email?.trim().toLowerCase()
+    if (!email) return json({ error: 'Invitation has no email' }, 400)
 
-    if (!invite.email?.trim()) {
-      return new Response(JSON.stringify({ error: 'Invitation has no email' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
-
-    const churchName = invite.churches?.name_ar ?? 'الكنيسة'
-    const logoUrl =
-      Deno.env.get('INVITE_EMAIL_LOGO_URL') ??
-      `${supabaseUrl}/storage/v1/object/public/app-assets/link_logo.png`
     const configuredWebBase =
-      Deno.env.get('INVITE_LINK_BASE_URL')?.trim() ?? 'https://linkchurch.space'
+      Deno.env.get('INVITE_LINK_BASE_URL')?.trim() ??
+      'https://linkchurch.space'
     const normalizedWebBase = configuredWebBase.replace(/\/+$/, '')
     const webBaseUrl = normalizedWebBase.endsWith('/invite')
       ? normalizedWebBase
       : `${normalizedWebBase}/invite`
-    const encodedInviteToken = encodeURIComponent(invite.invite_token)
-    // HTTPS stays clickable in Gmail and opens the app through the invite page.
-    const webInviteLink = `${webBaseUrl}?t=${encodedInviteToken}`
-    const emailInviteLink = webInviteLink
+    const inviteLink = `${webBaseUrl}?t=${encodeURIComponent(invitation.invite_token)}`
+    const churchName = invitation.churches?.name_ar ?? 'الكنيسة'
 
-    if (!resendApiKey?.trim().startsWith('re_')) {
-      return new Response(
-        JSON.stringify({ error: 'RESEND_API_KEY is not configured' }),
+    // Existing accounts get a Supabase magic link through the configured
+    // Gmail SMTP. The callback carries the same servant invitation token.
+    const { data: existingProfile, error: existingProfileError } =
+      await adminClient
+        .from('profiles')
+        .select('id')
+        .ilike('email', email)
+        .maybeSingle()
+
+    if (existingProfileError) {
+      return json(
         {
-          status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          error: 'Failed to check invitation account',
+          details: existingProfileError.message,
         },
+        500,
       )
     }
 
-    if (!fromAddress) {
-      return new Response(
-        JSON.stringify({ error: 'INVITE_EMAIL_FROM is not configured' }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    if (existingProfile) {
+      const smtpClient = createClient(supabaseUrl, supabaseAnonKey)
+      const { error: magicLinkError } = await smtpClient.auth.signInWithOtp({
+        email,
+        options: {
+          shouldCreateUser: false,
+          emailRedirectTo: inviteLink,
         },
-      )
-    }
-
-    const html = buildArabicEmailHtml({
-      churchName,
-      servantName: invite.full_name,
-      inviteLink: emailInviteLink,
-      permissions: permissionSummary(invite),
-      scope: scopeLabel(invite.assignment_scope),
-      logoUrl,
-    })
-
-    const emailResponse = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${resendApiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          from: fromAddress,
-          to: [invite.email.trim()],
-          subject: `دعوة للانضمام إلى ${churchName} — Link`,
-          html,
-        }),
       })
 
-    if (!emailResponse.ok) {
-      const providerDetails = await emailResponse.text()
-      return new Response(
-        JSON.stringify({
-          error: 'Failed to send email via Resend',
-          details: providerDetails,
-        }),
-        {
-          status: 502,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      if (magicLinkError) {
+        return json(
+          {
+            error: 'Failed to send invitation via Supabase SMTP',
+            details: magicLinkError.message,
+          },
+          502,
+        )
+      }
+
+      return json({
+        success: true,
+        provider: 'supabase_gmail_smtp',
+        delivery: 'existing_account_magic_link',
+        invite_link: inviteLink,
+      })
+    }
+
+    // New accounts use Supabase's native invitation email through Gmail SMTP.
+    const { error: inviteError } =
+      await adminClient.auth.admin.inviteUserByEmail(email, {
+        redirectTo: inviteLink,
+        data: {
+          full_name: invitation.full_name,
+          church_name: churchName,
+          invitation_id: invitation.id,
+          invitation_token: invitation.invite_token,
+          signup_type: 'invitation',
         },
+      })
+
+    if (inviteError) {
+      return json(
+        {
+          error: 'Failed to send invitation via Supabase SMTP',
+          details: inviteError.message,
+        },
+        502,
       )
     }
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        provider: 'resend',
-        invite_link: webInviteLink,
-        email_invite_link: emailInviteLink,
-      }),
-      {
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      },
-    )
+    return json({
+      success: true,
+      provider: 'supabase_gmail_smtp',
+      delivery: 'new_account_invite',
+      invite_link: inviteLink,
+    })
   } catch (error) {
-    return new Response(
-      JSON.stringify({
-        error: error instanceof Error ? error.message : 'Unexpected error',
-      }),
+    console.error('Unexpected invitation email error', error)
+    return json(
       {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        error: error instanceof Error ? error.message : 'Unexpected error',
       },
+      500,
     )
   }
 })
