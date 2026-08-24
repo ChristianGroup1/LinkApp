@@ -224,6 +224,7 @@ class AuthSoftTextField extends StatefulWidget {
   final Widget? trailing;
   final bool obscureText;
   final bool latinInput;
+  final bool readOnly;
   final TextInputType? keyboardType;
 
   const AuthSoftTextField({
@@ -234,6 +235,7 @@ class AuthSoftTextField extends StatefulWidget {
     this.trailing,
     this.obscureText = false,
     this.latinInput = false,
+    this.readOnly = false,
     this.keyboardType,
   });
 
@@ -285,6 +287,7 @@ class _AuthSoftTextFieldState extends State<AuthSoftTextField> {
           ),
           child: TextField(
             controller: widget.controller,
+            readOnly: widget.readOnly,
             obscureText: widget.obscureText,
             keyboardType: widget.keyboardType,
             textDirection: fieldDirection,

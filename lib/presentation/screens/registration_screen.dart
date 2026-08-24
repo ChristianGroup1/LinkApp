@@ -132,15 +132,14 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
               Navigator.pop(context);
             } else if (state is AuthError) {
               final msg = state.message.toLowerCase();
-              final isUserAlreadyExists = msg.contains('already registered') ||
+              final isUserAlreadyExists =
+                  msg.contains('already registered') ||
                   msg.contains('already exists') ||
                   msg.contains('موجود بالفعل') ||
                   msg.contains('مسجل بالفعل');
 
               if (isUserAlreadyExists) {
-                _showExistingUserDialog(
-                  email: _emailController.text.trim(),
-                );
+                _showExistingUserDialog(email: _emailController.text.trim());
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
@@ -167,7 +166,6 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                   children: [
                     const AuthLogoMark(size: 130),
                     const SizedBox(height: 14),
-
                   ],
                 ),
                 const SizedBox(height: 24),
@@ -190,7 +188,9 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                     textDirection: TextDirection.rtl,
                     children: [
                       Text(
-                        _isInvitationLinkFlow ? 'إكمال الانضمام' : 'إنشاء حساب جديد',
+                        _isInvitationLinkFlow
+                            ? 'إكمال الانضمام'
+                            : 'إنشاء حساب جديد',
                         textAlign: TextAlign.center,
                         style: GoogleFonts.cairo(
                           fontSize: 24,
@@ -236,6 +236,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                         hint: 'example@domain.com',
                         icon: Icons.alternate_email_rounded,
                         latinInput: true,
+                        readOnly: _isInvitationLinkFlow,
                         keyboardType: TextInputType.emailAddress,
                       ),
                       const SizedBox(height: 16),
@@ -336,7 +337,9 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                             borderRadius: BorderRadius.circular(26),
                           ),
                           elevation: 4,
-                          shadowColor: const Color(0xFF2563EB).withValues(alpha: 0.35),
+                          shadowColor: const Color(
+                            0xFF2563EB,
+                          ).withValues(alpha: 0.35),
                         ),
                         child: isLoading
                             ? const SizedBox(
@@ -374,7 +377,24 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                             ),
                           ),
                           GestureDetector(
-                            onTap: isLoading ? null : () => Navigator.pop(context),
+                            onTap: isLoading
+                                ? null
+                                : () {
+                                    if (_isInvitationLinkFlow) {
+                                      Navigator.pushReplacement(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => LoginScreen(
+                                            initialEmail: widget.initialEmail,
+                                            invitationToken:
+                                                widget.invitationToken,
+                                          ),
+                                        ),
+                                      );
+                                    } else {
+                                      Navigator.pop(context);
+                                    }
+                                  },
                             child: Text(
                               'تسجيل الدخول',
                               style: GoogleFonts.cairo(
@@ -408,9 +428,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     );
   }
 
-  void _showExistingUserDialog({
-    required String email,
-  }) {
+  void _showExistingUserDialog({required String email}) {
     showDialog(
       context: context,
       builder: (dialogContext) => Directionality(

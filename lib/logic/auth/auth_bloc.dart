@@ -76,6 +76,8 @@ class PasswordUpdateRequested extends AuthEvent {
 
 class LogoutRequested extends AuthEvent {}
 
+class SwitchToInvitationAccountRequested extends AuthEvent {}
+
 // STATES
 abstract class AuthState {}
 
@@ -95,6 +97,10 @@ class AuthAuthenticated extends AuthState {
 }
 
 class AuthUnauthenticated extends AuthState {}
+
+/// The previous device account has been signed out while an invitation flow
+/// remains open on top of the authentication gate.
+class AuthInvitationAccountReady extends AuthState {}
 
 class AuthPasswordResetEmailSent extends AuthState {
   final String email;
@@ -284,6 +290,16 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         // revoke the remote token. Always return the user to the login screen.
       }
       emit(AuthUnauthenticated());
+    });
+
+    on<SwitchToInvitationAccountRequested>((event, emit) async {
+      emit(AuthLoading());
+      try {
+        await repository.signOut();
+      } catch (_) {
+        // Local auth/cache cleanup is best-effort, matching normal logout.
+      }
+      emit(AuthInvitationAccountReady());
     });
   }
 }

@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/models.dart';
 import '../../core/auth/account_deletion_errors.dart';
 import '../../core/invitations/invitation_email_errors.dart';
+import '../../core/invitations/invitation_identity.dart';
 import '../../core/invitations/invitation_preview.dart';
 import '../offline/invitation_create_result.dart';
 import '../offline/offline_cache.dart';
@@ -612,8 +613,19 @@ class SupabaseRepository implements DatabaseRepository {
       throw Exception('رابط الدعوة غير صالح أو انتهت صلاحيته.');
     }
 
+    if (!invitationEmailMatchesAccount(
+      invitationEmail: preview.email,
+      accountEmail: email,
+    )) {
+      throw Exception(
+        'يجب إنشاء الحساب بنفس البريد الإلكتروني المكتوب في الدعوة.',
+      );
+    }
+
+    final invitationEmail = preview.email!.trim();
+
     final response = await _client.auth.signUp(
-      email: email.trim(),
+      email: invitationEmail,
       password: password,
       data: {
         'full_name': name.trim(),
@@ -637,7 +649,7 @@ class SupabaseRepository implements DatabaseRepository {
         userId: response.user!.id,
         inviteToken: inviteToken,
         fullName: name,
-        email: response.user!.email ?? email,
+        email: response.user!.email ?? invitationEmail,
         phone: phone,
       );
     } catch (e) {

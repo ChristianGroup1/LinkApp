@@ -303,6 +303,7 @@ class AuthenticationGate extends StatelessWidget {
             state is AuthPasswordResetEmailSent ||
             state is AuthPasswordResetError ||
             state is AuthPasswordUpdated ||
+            state is AuthInvitationAccountReady ||
             state is AuthSignUpConfirmationSent) {
           return const LoginScreen();
         } else if (state is AuthProfileLoadFailed) {

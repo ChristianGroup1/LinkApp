@@ -8,6 +8,9 @@ String invitationEmailErrorMessage(Object error) {
     if (message.contains('resend_api_key')) {
       return 'إرسال البريد غير مفعّل على السيرفر. أضف RESEND_API_KEY في Supabase → Edge Functions → Secrets.';
     }
+    if (message.contains('invite_email_from')) {
+      return 'عنوان مرسل الدعوات غير مضبوط. أضف INVITE_EMAIL_FROM في Supabase → Edge Functions → Secrets.';
+    }
     if (message.contains('invitation not found') ||
         message.contains('invite_token')) {
       return 'تعذر قراءة الدعوة من السيرفر. شغّل supabase_invitation_link_migration.sql ثم أعد المحاولة.';

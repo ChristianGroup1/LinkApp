@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/invitations/invitation_preview.dart';
+import '../../core/invitations/invitation_identity.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/repositories/database_repository.dart';
 import '../../logic/auth/auth_bloc.dart';
@@ -23,6 +24,17 @@ class _InvitationLinkScreenState extends State<InvitationLinkScreen> {
   bool _isLoading = true;
   bool _isSubmitting = false;
   Object? _error;
+
+  bool _matchesAuthenticatedAccount(AuthState state) {
+    if (state is! AuthAuthenticated) return false;
+    return invitationEmailMatchesAccount(
+      invitationEmail: _preview?.email,
+      accountEmail: state.profile.email,
+    );
+  }
+
+  bool _hasMismatchedAuthenticatedAccount(AuthState state) =>
+      state is AuthAuthenticated && !_matchesAuthenticatedAccount(state);
 
   @override
   void initState() {
@@ -54,6 +66,12 @@ class _InvitationLinkScreenState extends State<InvitationLinkScreen> {
   }
 
   Future<void> _decline() async {
+    final authState = context.read<AuthBloc>().state;
+    if (!_matchesAuthenticatedAccount(authState)) {
+      await _switchAccountAndOpen(login: true);
+      return;
+    }
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -104,6 +122,11 @@ class _InvitationLinkScreenState extends State<InvitationLinkScreen> {
   Future<void> _accept() async {
     final authState = context.read<AuthBloc>().state;
     if (authState is AuthAuthenticated) {
+      if (!_matchesAuthenticatedAccount(authState)) {
+        await _switchAccountAndOpen(login: false);
+        return;
+      }
+
       setState(() => _isSubmitting = true);
       try {
         final repo = context.read<DatabaseRepository>();
@@ -149,6 +172,42 @@ class _InvitationLinkScreenState extends State<InvitationLinkScreen> {
     );
   }
 
+  Future<void> _switchAccountAndOpen({required bool login}) async {
+    final preview = _preview;
+    if (preview == null || !preview.valid) return;
+
+    final authBloc = context.read<AuthBloc>();
+    if (authBloc.state is AuthAuthenticated) {
+      setState(() => _isSubmitting = true);
+      authBloc.add(SwitchToInvitationAccountRequested());
+      try {
+        await authBloc.stream.firstWhere(
+          (state) => state is AuthInvitationAccountReady || state is AuthError,
+        );
+      } catch (_) {}
+      if (!mounted) return;
+      setState(() => _isSubmitting = false);
+    }
+
+    final route = MaterialPageRoute<void>(
+      builder: (_) => BlocProvider.value(
+        value: authBloc,
+        child: login
+            ? LoginScreen(
+                initialEmail: preview.email,
+                invitationToken: widget.inviteToken,
+              )
+            : RegistrationScreen(
+                invitationToken: widget.inviteToken,
+                initialName: preview.inviteeName,
+                initialEmail: preview.email,
+              ),
+      ),
+    );
+
+    await Navigator.pushReplacement(context, route);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Directionality(
@@ -187,6 +246,9 @@ class _InvitationLinkScreenState extends State<InvitationLinkScreen> {
       };
       return AppEmptyState(icon: Icons.link_off_rounded, message: message);
     }
+
+    final authState = context.read<AuthBloc>().state;
+    final accountMismatch = _hasMismatchedAuthenticatedAccount(authState);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
@@ -244,6 +306,26 @@ class _InvitationLinkScreenState extends State<InvitationLinkScreen> {
             ),
           ),
           const SizedBox(height: 20),
+          if (accountMismatch) ...[
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF7ED),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFFED7AA)),
+              ),
+              child: Text(
+                invitationAccountMismatchMessage(preview.email),
+                style: GoogleFonts.cairo(
+                  fontSize: 13,
+                  height: 1.6,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF9A3412),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
           FilledButton(
             onPressed: _isSubmitting ? null : _accept,
             style: FilledButton.styleFrom(
@@ -263,7 +345,11 @@ class _InvitationLinkScreenState extends State<InvitationLinkScreen> {
                     ),
                   )
                 : Text(
-                    'قبول والانضمام',
+                    accountMismatch
+                        ? 'تسجيل الخروج وإنشاء حساب المدعو'
+                        : authState is AuthAuthenticated
+                        ? 'قبول والانضمام'
+                        : 'إنشاء حساب لقبول الدعوة',
                     style: GoogleFonts.cairo(fontWeight: FontWeight.w800),
                   ),
           ),
@@ -279,7 +365,11 @@ class _InvitationLinkScreenState extends State<InvitationLinkScreen> {
               ),
             ),
             child: Text(
-              'رفض الدعوة',
+              accountMismatch
+                  ? 'تسجيل الخروج والدخول بحساب المدعو'
+                  : authState is AuthAuthenticated
+                  ? 'رفض الدعوة'
+                  : 'لدي حساب بالفعل',
               style: GoogleFonts.cairo(fontWeight: FontWeight.w800),
             ),
           ),

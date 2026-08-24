@@ -11,6 +11,8 @@ import 'package:link/data/repositories/database_repository.dart';
 import 'package:link/logic/auth/auth_bloc.dart';
 import 'package:link/main.dart';
 import 'package:link/presentation/screens/app_tour_screen.dart';
+import 'package:link/presentation/screens/invitation_link_screen.dart';
+import 'package:link/presentation/screens/my_invitations_screen.dart';
 
 Future<void> _settle(WidgetTester tester) async {
   for (int i = 0; i < 15; i++) {
@@ -127,6 +129,77 @@ void main() {
       'password123  ',
     );
     expect(find.text('بيانات الدخول غير صحيحة'), findsOneWidget);
+  });
+
+  testWidgets(
+    'signs out account x before opening signup for invitation account y',
+    (tester) async {
+      tester.view.physicalSize = const Size(1200, 1920);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final repository = InvitationMismatchRepository();
+      final bloc = AuthBloc(repository: repository)..add(AuthCheckRequested());
+      addTearDown(bloc.close);
+
+      await tester.pumpWidget(
+        RepositoryProvider<DatabaseRepository>.value(
+          value: repository,
+          child: BlocProvider<AuthBloc>.value(
+            value: bloc,
+            child: const MaterialApp(
+              home: InvitationLinkScreen(inviteToken: 'invite-y'),
+            ),
+          ),
+        ),
+      );
+      await _settle(tester);
+
+      expect(find.textContaining('y@example.com'), findsAtLeastNWidgets(1));
+      expect(find.text('تسجيل الخروج وإنشاء حساب المدعو'), findsOneWidget);
+
+      await tester.tap(find.text('تسجيل الخروج وإنشاء حساب المدعو'));
+      await _settle(tester);
+
+      expect(repository.hasActiveSession(), isFalse);
+      expect(find.text('إكمال الانضمام'), findsOneWidget);
+      final emailField = tester.widget<TextField>(find.byType(TextField).at(1));
+      expect(emailField.controller!.text, 'y@example.com');
+      expect(emailField.readOnly, isTrue);
+    },
+  );
+
+  testWidgets('reject button only declines and never accepts an invitation', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 1920);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final repository = InvitationActionRepository();
+    final bloc = AuthBloc(repository: repository)..add(AuthCheckRequested());
+    addTearDown(bloc.close);
+
+    await tester.pumpWidget(
+      RepositoryProvider<DatabaseRepository>.value(
+        value: repository,
+        child: BlocProvider<AuthBloc>.value(
+          value: bloc,
+          child: const MaterialApp(home: MyInvitationsScreen()),
+        ),
+      ),
+    );
+    await _settle(tester);
+
+    await tester.tap(find.text('رفض'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('رفض الدعوة'));
+    await _settle(tester);
+
+    expect(repository.declineCalls, 1);
+    expect(repository.acceptCalls, 0);
   });
 
   testWidgets('renders login and navigates to dashboard', (tester) async {
@@ -910,4 +983,51 @@ class TestRepository implements DatabaseRepository {
 
   @override
   Future<void> warmOfflineCache() async {}
+}
+
+class InvitationMismatchRepository extends TestRepository {
+  @override
+  Future<InvitationPreview> getInvitationPreview(String inviteToken) async {
+    return const InvitationPreview(
+      valid: true,
+      status: 'pending',
+      churchName: 'كنيسة الاختبار',
+      inviteeName: 'User Y',
+      email: 'y@example.com',
+    );
+  }
+}
+
+class InvitationActionRepository extends TestRepository {
+  int acceptCalls = 0;
+  int declineCalls = 0;
+  bool declined = false;
+
+  @override
+  Future<List<Map<String, dynamic>>> getUserReceivedInvitations() async => [
+    {
+      'id': 'invite-1',
+      'church_id': 'ch-1',
+      'full_name': 'مينا سمير',
+      'email': 'admin@example.com',
+      'role': 'attendance_officer',
+      'assignment_scope': 'meeting',
+      'invite_token': 'token-1',
+      'is_used': false,
+      'declined_at': declined ? '2026-08-24T00:00:00Z' : null,
+      'target_exists': false,
+      'churches': {'name': 'Test Church', 'name_ar': 'كنيسة الاختبار'},
+    },
+  ];
+
+  @override
+  Future<void> acceptInvitationLink(String inviteToken) async {
+    acceptCalls++;
+  }
+
+  @override
+  Future<void> declineInvitationByToken(String inviteToken) async {
+    declineCalls++;
+    declined = true;
+  }
 }

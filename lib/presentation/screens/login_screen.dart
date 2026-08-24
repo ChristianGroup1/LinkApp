@@ -39,6 +39,11 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   bool remember = false;
   bool obscure = true;
+  bool _handledInvitationAfterLogin = false;
+
+  bool get _hasInvitationEmail =>
+      widget.invitationToken?.trim().isNotEmpty == true &&
+      widget.initialEmail?.trim().isNotEmpty == true;
 
   @override
   void initState() {
@@ -100,6 +105,20 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
+    if (_hasInvitationEmail &&
+        email.toLowerCase() != widget.initialEmail!.trim().toLowerCase()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'سجّل الدخول بنفس البريد الإلكتروني الموجهة إليه الدعوة.',
+            style: GoogleFonts.cairo(),
+          ),
+          backgroundColor: AppTheme.accentRed,
+        ),
+      );
+      return;
+    }
+
     _persistRememberPreference(email);
     context.read<AuthBloc>().add(
       LoginRequested(email: email, password: password),
@@ -115,24 +134,11 @@ class _LoginScreenState extends State<LoginScreen> {
           listener: (context, state) {
             if (state is AuthAuthenticated) {
               final inviteToken = widget.invitationToken;
-              if (inviteToken != null && inviteToken.isNotEmpty) {
-                context
-                    .read<DatabaseRepository>()
-                    .acceptInvitationLink(inviteToken)
-                    .then((_) {
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              'تم تسجيل الدخول وتفعيل الدعوة بنجاح 🎉',
-                              style: GoogleFonts.cairo(),
-                            ),
-                            backgroundColor: Colors.green,
-                          ),
-                        );
-                      }
-                    })
-                    .catchError((_) {});
+              if (inviteToken != null &&
+                  inviteToken.isNotEmpty &&
+                  !_handledInvitationAfterLogin) {
+                _handledInvitationAfterLogin = true;
+                _acceptInvitationAfterLogin(inviteToken);
               }
             } else if (state is AuthError) {
               ScaffoldMessenger.of(context).showSnackBar(
@@ -204,6 +210,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         hint: 'البريد الإلكتروني أو اسم المستخدم',
                         icon: Icons.alternate_email_rounded,
                         latinInput: true,
+                        readOnly: _hasInvitationEmail,
                         keyboardType: TextInputType.emailAddress,
                       ),
                       const SizedBox(height: 16),
@@ -346,8 +353,10 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ? null
                                 : () => Navigator.of(context).push(
                                     MaterialPageRoute(
-                                      builder: (_) =>
-                                          const RegistrationScreen(),
+                                      builder: (_) => RegistrationScreen(
+                                        invitationToken: widget.invitationToken,
+                                        initialEmail: widget.initialEmail,
+                                      ),
                                     ),
                                   ),
                             child: Text(
@@ -381,5 +390,37 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _acceptInvitationAfterLogin(String inviteToken) async {
+    try {
+      await context.read<DatabaseRepository>().acceptInvitationLink(
+        inviteToken,
+      );
+      if (!mounted) return;
+      context.read<AuthBloc>().add(AuthCheckRequested());
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'تم تسجيل الدخول وتفعيل الدعوة بنجاح 🎉',
+            style: GoogleFonts.cairo(),
+          ),
+          backgroundColor: Colors.green,
+        ),
+      );
+      Navigator.popUntil(context, (route) => route.isFirst);
+    } catch (error) {
+      if (!mounted) return;
+      _handledInvitationAfterLogin = false;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            error.toString().replaceAll('Exception: ', ''),
+            style: GoogleFonts.cairo(),
+          ),
+          backgroundColor: AppTheme.accentRed,
+        ),
+      );
+    }
   }
 }

@@ -932,13 +932,18 @@ create or replace function public.decline_invitation_by_token(p_token text)
 returns void
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, auth
 as $$
 declare
-  inv_id uuid;
+  inv record;
+  current_email text;
 begin
-  select id
-  into inv_id
+  if auth.uid() is null then
+    raise exception 'يجب تسجيل الدخول بنفس البريد الموجهة إليه الدعوة.';
+  end if;
+
+  select *
+  into inv
   from public.invitations
   where invite_token = btrim(p_token)
     and is_used = false
@@ -949,13 +954,22 @@ begin
     raise exception 'الدعوة غير صالحة أو انتهت صلاحيتها.';
   end if;
 
+  select lower(btrim(email)) into current_email
+  from auth.users where id = auth.uid();
+
+  if nullif(lower(btrim(inv.email)), '') is null
+     or current_email is distinct from lower(btrim(inv.email)) then
+    raise exception 'هذه الدعوة موجهة إلى بريد إلكتروني مختلف. سجّل الدخول بالبريد المدعو.';
+  end if;
+
   update public.invitations
   set declined_at = now()
-  where id = inv_id;
+  where id = inv.id;
 end;
 $$;
 
-grant execute on function public.decline_invitation_by_token(text) to anon, authenticated;
+revoke all on function public.decline_invitation_by_token(text) from public, anon;
+grant execute on function public.decline_invitation_by_token(text) to authenticated;
 
 create or replace function public.accept_invitation_link(p_token text)
 returns uuid
@@ -965,7 +979,7 @@ set search_path = public, auth
 as $$
 declare
   inv record;
-  profile_church_id uuid;
+  current_email text;
 begin
   if auth.uid() is null then
     raise exception 'يجب تسجيل الدخول أولاً';
@@ -983,17 +997,21 @@ begin
     raise exception 'الدعوة غير صالحة أو انتهت صلاحيتها.';
   end if;
 
-  select church_id
-  into profile_church_id
-  from public.profiles
-  where id = auth.uid();
+  select lower(btrim(email)) into current_email
+  from auth.users where id = auth.uid();
 
-  if profile_church_id is null then
-    raise exception 'أكمل إنشاء حسابك أولاً من شاشة التسجيل.';
+  if nullif(lower(btrim(inv.email)), '') is null
+     or current_email is distinct from lower(btrim(inv.email)) then
+    raise exception 'هذه الدعوة موجهة إلى بريد إلكتروني مختلف. سجّل الدخول بالبريد المدعو.';
   end if;
 
-  if profile_church_id <> inv.church_id then
-    raise exception 'هذا الحساب مرتبط بكنيسة أخرى.';
+  update public.profiles
+  set church_id = inv.church_id,
+      updated_at = now()
+  where id = auth.uid();
+
+  if not found then
+    raise exception 'أكمل إنشاء حسابك أولاً من شاشة التسجيل.';
   end if;
 
   perform public.accept_invitation_assignment(inv.id, auth.uid());
@@ -1002,6 +1020,7 @@ begin
 end;
 $$;
 
+revoke all on function public.accept_invitation_link(text) from public, anon;
 grant execute on function public.accept_invitation_link(text) to authenticated;
 
 create or replace function public.register_new_church_signup(
@@ -1078,6 +1097,7 @@ declare
   profile_church_id uuid;
   normalized_code text := nullif(upper(btrim(invite_code)), '');
   normalized_token text := nullif(btrim(invite_token), '');
+  current_email text;
 begin
   if auth.uid() is null or auth.uid() <> profile_id then
     raise exception 'غير مصرح بإكمال التسجيل';
@@ -1110,13 +1130,24 @@ begin
     raise exception 'الدعوة غير صالحة أو تم استخدامها أو رفضها.';
   end if;
 
+  if normalized_token is not null then
+    select lower(btrim(email)) into current_email
+    from auth.users where id = auth.uid();
+
+    if nullif(lower(btrim(inv.email)), '') is null
+       or current_email is distinct from lower(btrim(inv.email))
+       or lower(btrim(profile_email)) is distinct from lower(btrim(inv.email)) then
+      raise exception 'يجب إنشاء الحساب بنفس البريد الإلكتروني المكتوب في الدعوة.';
+    end if;
+  end if;
+
   insert into public.profiles (id, church_id, full_name, role, email, phone)
   values (
     profile_id,
     inv.church_id,
     normalized_full_name,
     inv.role,
-    nullif(btrim(profile_email), ''),
+    coalesce(current_email, nullif(lower(btrim(profile_email)), '')),
     nullif(btrim(profile_phone), '')
   )
   returning church_id into profile_church_id;
@@ -1246,7 +1277,11 @@ begin
   end if;
 
   if invite.target_id is not null then
-    if invite.role = 'class_leader' and invite.assignment_scope = 'meeting_classes' then
+    if invite.role = 'class_leader'
+       and invite.assignment_scope = 'meeting_classes'
+       and exists (
+         select 1 from public.meetings where id = invite.target_id
+       ) then
       for class_row in
         select id
         from public.sunday_school_classes
@@ -1271,7 +1306,11 @@ begin
           can_take_attendance = excluded.can_take_attendance,
           can_view_reports = excluded.can_view_reports;
       end loop;
-    elsif invite.role = 'class_leader' then
+    elsif invite.role = 'class_leader'
+          and exists (
+            select 1 from public.sunday_school_classes
+            where id = invite.target_id
+          ) then
       insert into public.class_assignments (
         church_id,
         class_id,
@@ -1289,7 +1328,10 @@ begin
       on conflict (class_id, user_id) do update set
         can_take_attendance = excluded.can_take_attendance,
         can_view_reports = excluded.can_view_reports;
-    elsif invite.role = 'attendance_officer' then
+    elsif invite.role = 'attendance_officer'
+          and exists (
+            select 1 from public.meetings where id = invite.target_id
+          ) then
       insert into public.meeting_assignments (
         church_id,
         meeting_id,
@@ -1316,7 +1358,8 @@ begin
 end;
 $$;
 
-grant execute on function public.accept_invitation_assignment(uuid, uuid) to authenticated;
+revoke all on function public.accept_invitation_assignment(uuid, uuid)
+  from public, anon, authenticated;
 
 create or replace function public.delete_sunday_school_class_cascade(target_class_id uuid)
 returns void

@@ -439,6 +439,24 @@ begin
         'is_used', i.is_used,
         'declined_at', i.declined_at,
         'created_at', i.created_at,
+        'target_exists', case
+          when i.target_id is null then true
+          when i.role = 'class_leader'
+               and i.assignment_scope = 'meeting_classes'
+            then exists (
+              select 1 from public.meetings m where m.id = i.target_id
+            )
+          when i.role = 'class_leader'
+            then exists (
+              select 1 from public.sunday_school_classes s
+              where s.id = i.target_id
+            )
+          when i.role = 'attendance_officer'
+            then exists (
+              select 1 from public.meetings m where m.id = i.target_id
+            )
+          else true
+        end,
         'churches', jsonb_build_object(
           'name', c.name,
           'name_ar', c.name_ar
@@ -497,7 +515,11 @@ begin
   where id = new_user_id;
 
   if invite.target_id is not null then
-    if invite.role = 'class_leader' and invite.assignment_scope = 'meeting_classes' then
+    if invite.role = 'class_leader'
+       and invite.assignment_scope = 'meeting_classes'
+       and exists (
+         select 1 from public.meetings where id = invite.target_id
+       ) then
       for class_row in
         select id
         from public.sunday_school_classes
@@ -522,7 +544,11 @@ begin
           can_take_attendance = excluded.can_take_attendance,
           can_view_reports = excluded.can_view_reports;
       end loop;
-    elsif invite.role = 'class_leader' then
+    elsif invite.role = 'class_leader'
+          and exists (
+            select 1 from public.sunday_school_classes
+            where id = invite.target_id
+          ) then
       insert into public.class_assignments (
         church_id,
         class_id,
@@ -540,7 +566,10 @@ begin
       on conflict (class_id, user_id) do update set
         can_take_attendance = excluded.can_take_attendance,
         can_view_reports = excluded.can_view_reports;
-    elsif invite.role = 'attendance_officer' then
+    elsif invite.role = 'attendance_officer'
+          and exists (
+            select 1 from public.meetings where id = invite.target_id
+          ) then
       insert into public.meeting_assignments (
         church_id,
         meeting_id,
@@ -608,4 +637,3 @@ end;
 $$;
 
 grant execute on function public.accept_invitation_link(text) to authenticated;
-

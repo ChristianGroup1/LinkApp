@@ -38,6 +38,15 @@ function scopeLabel(scope: string | null): string {
   }
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;')
+}
+
 function buildArabicEmailHtml(params: {
   churchName: string
   servantName: string
@@ -65,7 +74,7 @@ function buildArabicEmailHtml(params: {
           <!-- Header Banner with Logo -->
           <tr>
             <td style="padding:36px 28px 24px;text-align:center;background:linear-gradient(135deg,#4338ca 0%,#312e81 100%);color:#ffffff;">
-              <img src="https://zowxjinnpqcldhtyjjmd.supabase.co/storage/v1/object/public/app-assets/link_logo.png" 
+              <img src="${escapeHtml(logoUrl)}"
                    alt="LinkApp Logo" 
                    width="72" 
                    height="72" 
@@ -78,21 +87,22 @@ function buildArabicEmailHtml(params: {
           <!-- Body Content -->
           <tr>
             <td style="padding:32px 28px 20px;">
-              <h2 style="margin:0 0 12px;font-size:20px;font-weight:800;color:#1e293b;">مرحباً بك 🌸</h2>
+              <h2 style="margin:0 0 12px;font-size:20px;font-weight:800;color:#1e293b;">مرحباً ${escapeHtml(servantName)} 🌸</h2>
               <p style="margin:0 0 16px;font-size:15px;line-height:1.8;color:#475569;">
-                تمت دعوتك للانضمام كخادم في تطبيق <strong style="color:#4338ca;">لينك</strong> لمتابعة الخدمة والاجتماعات.
+                تمت دعوتك للانضمام إلى <strong style="color:#4338ca;">${escapeHtml(churchName)}</strong> عبر تطبيق لينك.
               </p>
               
               <div style="background-color:#f8fafc;border-radius:16px;padding:20px;margin:20px 0;border:1px solid #e2e8f0;">
                 <p style="margin:0 0 8px;font-size:14px;font-weight:700;color:#334155;">💡 للبدء وتفعيل حسابك:</p>
                 <p style="margin:0;font-size:13px;line-height:1.7;color:#64748b;">
-                  اضغط على الزر أدناه لتأكيد قبول دعوتك وإنشاء كلمة المرور الخاصة بك للانضمام فوراً.
+                  نطاق الخدمة: <strong>${escapeHtml(scope)}</strong><br/>
+                  الصلاحيات: ${escapeHtml(permissions)}
                 </p>
               </div>
 
               <!-- Action Button -->
               <div style="text-align:center;margin:28px 0 16px;">
-                <a href="{{ .ConfirmationURL }}"
+                <a href="${escapeHtml(inviteLink)}"
                    style="display:inline-block;background-color:#4338ca;color:#ffffff;text-decoration:none;padding:16px 36px;border-radius:16px;font-size:16px;font-weight:800;box-shadow:0 4px 14px rgba(67,56,202,0.35);">
                   قبول الدعوة وتفعيل الحساب 🚀
                 </a>
@@ -126,6 +136,7 @@ Deno.serve(async (req) => {
 
   try {
     const resendApiKey = Deno.env.get('RESEND_API_KEY')
+    const fromAddress = Deno.env.get('INVITE_EMAIL_FROM')?.trim()
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -217,52 +228,32 @@ Deno.serve(async (req) => {
     const logoUrl =
       Deno.env.get('INVITE_EMAIL_LOGO_URL') ??
       `${supabaseUrl}/storage/v1/object/public/app-assets/link_logo.png`
-    const webBaseUrl = Deno.env.get('INVITE_LINK_BASE_URL') ?? 'https://linkchurch.space/invite'
+    const configuredWebBase =
+      Deno.env.get('INVITE_LINK_BASE_URL')?.trim() ?? 'https://linkchurch.space'
+    const normalizedWebBase = configuredWebBase.replace(/\/+$/, '')
+    const webBaseUrl = normalizedWebBase.endsWith('/invite')
+      ? normalizedWebBase
+      : `${normalizedWebBase}/invite`
     const encodedInviteToken = encodeURIComponent(invite.invite_token)
-    // Keep the HTTPS link available for manual sharing from the app, while
-    // links sent by email open the installed mobile app directly.
+    // HTTPS stays clickable in Gmail and opens the app through the invite page.
     const webInviteLink = `${webBaseUrl}?t=${encodedInviteToken}`
-    const emailInviteLink = `io.supabase.link://invite/?t=${encodedInviteToken}`
+    const emailInviteLink = webInviteLink
 
-    const isResendKey = !!resendApiKey && resendApiKey.trim().startsWith('re_')
-
-    if (!isResendKey) {
-      // Use native Supabase Auth inviteUserByEmail
-      const { error: nativeError } = await adminClient.auth.admin.inviteUserByEmail(
-        invite.email.trim(),
+    if (!resendApiKey?.trim().startsWith('re_')) {
+      return new Response(
+        JSON.stringify({ error: 'RESEND_API_KEY is not configured' }),
         {
-          // {{ .ConfirmationURL }} verifies the Supabase invite first, then
-          // redirects to this deep link with the servant invitation token.
-          redirectTo: emailInviteLink,
-          data: {
-            full_name: invite.full_name,
-            church_name: churchName,
-            invitation_id: invite.id,
-          },
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         },
       )
+    }
 
-      if (nativeError) {
-        return new Response(
-          JSON.stringify({
-            error: 'Failed to send invitation via Supabase Auth',
-            details: nativeError.message,
-          }),
-          {
-            status: 500,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          },
-        )
-      }
-
+    if (!fromAddress) {
       return new Response(
-        JSON.stringify({
-          success: true,
-          invite_link: webInviteLink,
-          email_invite_link: emailInviteLink,
-        }),
+        JSON.stringify({ error: 'INVITE_EMAIL_FROM is not configured' }),
         {
-          status: 200,
+          status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         },
       )
@@ -277,8 +268,7 @@ Deno.serve(async (req) => {
       logoUrl,
     })
 
-    try {
-      const emailResponse = await fetch('https://api.resend.com/emails', {
+    const emailResponse = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${resendApiKey}`,
@@ -292,44 +282,15 @@ Deno.serve(async (req) => {
         }),
       })
 
-      if (emailResponse.ok) {
-        return new Response(
-          JSON.stringify({
-            success: true,
-            invite_link: webInviteLink,
-            email_invite_link: emailInviteLink,
-          }),
-          {
-            status: 200,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          },
-        )
-      }
-    } catch {
-      // Ignore Resend fetch error and fallback to Supabase Auth
-    }
-
-    // Fallback to Supabase Auth inviteUserByEmail if Resend fails
-    const { error: nativeError } = await adminClient.auth.admin.inviteUserByEmail(
-      invite.email.trim(),
-      {
-        redirectTo: emailInviteLink,
-        data: {
-          full_name: invite.full_name,
-          church_name: churchName,
-          invitation_id: invite.id,
-        },
-      },
-    )
-
-    if (nativeError) {
+    if (!emailResponse.ok) {
+      const providerDetails = await emailResponse.text()
       return new Response(
         JSON.stringify({
-          error: 'Failed to send email via Resend & Supabase Auth',
-          details: nativeError.message,
+          error: 'Failed to send email via Resend',
+          details: providerDetails,
         }),
         {
-          status: 500,
+          status: 502,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         },
       )
@@ -338,6 +299,7 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
+        provider: 'resend',
         invite_link: webInviteLink,
         email_invite_link: emailInviteLink,
       }),
