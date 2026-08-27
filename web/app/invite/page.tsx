@@ -1,24 +1,29 @@
 'use client';
 
 import { useSearchParams } from 'next/navigation';
-import React, { useEffect, Suspense } from 'react';
+import React, { useCallback, useEffect, Suspense } from 'react';
 
 function InviteContent() {
   const searchParams = useSearchParams();
   const token = searchParams.get('t') || searchParams.get('token') || '';
 
-  const customSchemeLink = token
+  const fallbackAppLink = token
     ? `io.supabase.link://invite/?t=${encodeURIComponent(token)}`
     : 'io.supabase.link://invite/';
 
-  const androidIntentLink = token
-    ? `intent://invite/?t=${encodeURIComponent(token)}#Intent;scheme=io.supabase.link;package=com.linkapp.church;end;`
-    : 'intent://invite/#Intent;scheme=io.supabase.link;package=com.linkapp.church;end;';
+  const getAppLink = useCallback(() => {
+    if (typeof window === 'undefined') return fallbackAppLink;
 
-  const openApp = React.useCallback(() => {
-    const isAndroid = /android/i.test(navigator.userAgent || '');
-    window.location.href = isAndroid ? androidIntentLink : customSchemeLink;
-  }, [androidIntentLink, customSchemeLink]);
+    // Supabase appends the authenticated invitation session in the URL hash
+    // (or a PKCE code in the query string). Forward the complete callback to
+    // Flutter; forwarding only `t` creates an Auth user but loses the session,
+    // so signup incorrectly reports that the same account already exists.
+    return `io.supabase.link://invite/${window.location.search}${window.location.hash}`;
+  }, [fallbackAppLink]);
+
+  const openApp = useCallback(() => {
+    window.location.href = getAppLink();
+  }, [getAppLink]);
 
   useEffect(() => {
     if (token) {
@@ -90,7 +95,7 @@ function InviteContent() {
         </p>
 
         <a
-          href={customSchemeLink}
+          href={fallbackAppLink}
           onClick={(event) => {
             event.preventDefault();
             openApp();

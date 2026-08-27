@@ -12,6 +12,7 @@ import 'package:link/logic/auth/auth_bloc.dart';
 import 'package:link/main.dart';
 import 'package:link/presentation/screens/app_tour_screen.dart';
 import 'package:link/presentation/screens/invitation_link_screen.dart';
+import 'package:link/presentation/screens/login_screen.dart';
 import 'package:link/presentation/screens/my_invitations_screen.dart';
 
 Future<void> _settle(WidgetTester tester) async {
@@ -153,6 +154,54 @@ void main() {
     );
     expect(find.text('بيانات الدخول غير صحيحة'), findsOneWidget);
   });
+
+  testWidgets(
+    'requires matching password confirmation and normalizes signup password',
+    (tester) async {
+      tester.view.physicalSize = const Size(1200, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final repository = RegistrationCaptureRepository();
+      final bloc = AuthBloc(repository: repository);
+      addTearDown(bloc.close);
+
+      await tester.pumpWidget(
+        RepositoryProvider<DatabaseRepository>.value(
+          value: repository,
+          child: BlocProvider<AuthBloc>.value(
+            value: bloc,
+            child: const MaterialApp(home: RegistrationScreen()),
+          ),
+        ),
+      );
+
+      final fields = find.byType(TextField);
+      expect(fields, findsNWidgets(6));
+      await tester.enterText(fields.at(0), 'مينا سمير');
+      await tester.enterText(fields.at(1), 'كنيسة الاختبار');
+      await tester.enterText(fields.at(2), 'mina@example.com');
+      await tester.enterText(fields.at(4), 'password123  ');
+      await tester.enterText(fields.at(5), 'different-password');
+      await tester.tap(find.byType(Checkbox));
+      await tester.tap(find.widgetWithText(FilledButton, 'إنشاء حساب جديد'));
+      await tester.pump();
+
+      expect(repository.signupCalls, 0);
+      expect(
+        find.text('كلمة المرور وتأكيد كلمة المرور غير متطابقين'),
+        findsOneWidget,
+      );
+
+      await tester.enterText(fields.at(5), 'password123\n');
+      await tester.tap(find.widgetWithText(FilledButton, 'إنشاء حساب جديد'));
+      await tester.pump();
+
+      expect(repository.signupCalls, 1);
+      expect(repository.submittedSignupPassword, 'password123');
+    },
+  );
 
   testWidgets(
     'signs out account x before opening signup for invitation account y',
@@ -336,6 +385,28 @@ class LoginFailureRepository extends TestRepository {
     submittedPassword = password;
     await Future<void>.delayed(const Duration(milliseconds: 300));
     throw Exception(errorMessage);
+  }
+}
+
+class RegistrationCaptureRepository extends TestRepository {
+  int signupCalls = 0;
+  String? submittedSignupPassword;
+
+  RegistrationCaptureRepository() {
+    _profile = null;
+  }
+
+  @override
+  Future<AppProfile?> signUpWithEmailAndPassword({
+    required String name,
+    required String churchName,
+    required String email,
+    required String password,
+    String? phone,
+  }) async {
+    signupCalls++;
+    submittedSignupPassword = password;
+    return null;
   }
 }
 

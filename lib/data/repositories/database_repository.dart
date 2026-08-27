@@ -541,6 +541,14 @@ class SupabaseRepository implements DatabaseRepository {
           (token == null || token.trim().isEmpty)) {
         return;
       }
+
+      // A Supabase email invitation authenticates the invited user before a
+      // password has been chosen. Token-based invitations must therefore stay
+      // pending until RegistrationScreen sets the password explicitly. Doing
+      // this automatically here would accept the invitation merely by opening
+      // the email link and leave the user with no usable password.
+      if (token != null && token.trim().isNotEmpty) return;
+
       await _registerInvitedProfile(
         userId: user.id,
         code: code,
@@ -624,6 +632,50 @@ class SupabaseRepository implements DatabaseRepository {
     }
 
     final invitationEmail = preview.email!.trim();
+
+    final invitedUser = _client.auth.currentUser;
+    if (invitedUser != null &&
+        invitationEmailMatchesAccount(
+          invitationEmail: invitationEmail,
+          accountEmail: invitedUser.email,
+        )) {
+      final existingProfile = await getCurrentProfile();
+      if (existingProfile != null) {
+        // Existing accounts are authenticated by the magic link. Keep their
+        // current password unchanged and complete the invitation the user just
+        // confirmed. This also covers the short race where the auth bloc has
+        // not repainted InvitationLinkScreen as authenticated yet.
+        await acceptInvitationLink(inviteToken);
+        return getCurrentProfile();
+      }
+
+      await _client.auth.updateUser(
+        UserAttributes(
+          password: password,
+          data: {
+            'full_name': name.trim(),
+            'signup_type': 'invitation',
+            'invitation_token': inviteToken.trim(),
+            if (phone != null && phone.trim().isNotEmpty) 'phone': phone.trim(),
+          },
+        ),
+      );
+
+      try {
+        await _registerInvitedProfile(
+          userId: invitedUser.id,
+          inviteToken: inviteToken,
+          fullName: name,
+          email: invitedUser.email ?? invitationEmail,
+          phone: phone,
+        );
+      } catch (e) {
+        await _client.auth.signOut();
+        rethrow;
+      }
+
+      return getCurrentProfile();
+    }
 
     final response = await _client.auth.signUp(
       email: invitationEmail,

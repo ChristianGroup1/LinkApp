@@ -22,8 +22,10 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
   bool _acceptedTerms = false;
   bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
 
   bool get _isInvitationLinkFlow => widget.invitationToken != null;
 
@@ -45,6 +47,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     _emailController.dispose();
     _phoneController.dispose();
     _passwordController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
   }
 
@@ -53,7 +56,11 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     final churchName = _churchController.text.trim();
     final email = _emailController.text.trim();
     final phone = _phoneController.text.trim();
-    final password = _passwordController.text;
+    // Keep signup and login normalization identical. Pasted passwords can
+    // contain an invisible trailing space/newline; storing that character and
+    // later removing it during login makes the freshly created password fail.
+    final password = _passwordController.text.trimRight();
+    final confirmPassword = _confirmPasswordController.text.trimRight();
 
     if (name.isEmpty ||
         (!_isInvitationLinkFlow && churchName.isEmpty) ||
@@ -66,6 +73,19 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
             _isInvitationLinkFlow
                 ? 'أدخل الاسم والبريد وكلمة مرور من ٦ أحرف'
                 : 'أدخل الاسم واسم الكنيسة والبريد وكلمة مرور من ٦ أحرف',
+            style: GoogleFonts.cairo(),
+          ),
+          backgroundColor: AppTheme.accentRed,
+        ),
+      );
+      return;
+    }
+
+    if (password != confirmPassword) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'كلمة المرور وتأكيد كلمة المرور غير متطابقين',
             style: GoogleFonts.cairo(),
           ),
           backgroundColor: AppTheme.accentRed,
@@ -265,6 +285,29 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                                 ),
                           icon: Icon(
                             _obscurePassword
+                                ? Icons.visibility_outlined
+                                : Icons.visibility_off_outlined,
+                            color: const Color(0xFF94A3B8),
+                            size: 20,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      const AuthFieldLabel('تأكيد كلمة المرور'),
+                      AuthSoftTextField(
+                        controller: _confirmPasswordController,
+                        hint: 'أعد إدخال كلمة المرور',
+                        icon: Icons.lock_reset_rounded,
+                        obscureText: _obscureConfirmPassword,
+                        trailing: IconButton(
+                          onPressed: isLoading
+                              ? null
+                              : () => setState(
+                                  () => _obscureConfirmPassword =
+                                      !_obscureConfirmPassword,
+                                ),
+                          icon: Icon(
+                            _obscureConfirmPassword
                                 ? Icons.visibility_outlined
                                 : Icons.visibility_off_outlined,
                             color: const Color(0xFF94A3B8),
