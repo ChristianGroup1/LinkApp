@@ -139,7 +139,9 @@ void showAddClassDialog(BuildContext context, String meetingId) {
                 );
                 Navigator.pop(dialogContext);
               },
-              style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primary),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primary,
+              ),
               child: Text(
                 'حفظ',
                 style: GoogleFonts.cairo(

@@ -21,7 +21,8 @@ class MeetingsListScreen extends StatefulWidget {
   State<MeetingsListScreen> createState() => _MeetingsListScreenState();
 }
 
-class _MeetingsListScreenState extends State<MeetingsListScreen> with RouteAware {
+class _MeetingsListScreenState extends State<MeetingsListScreen>
+    with RouteAware {
   MeetingsBloc? _meetingsBloc;
 
   @override
@@ -90,7 +91,7 @@ class _MeetingsListScreenState extends State<MeetingsListScreen> with RouteAware
             return Scaffold(
               backgroundColor: AppTheme.background,
               appBar: AppBar(
-                backgroundColor: Colors.white,
+                backgroundColor: AppTheme.cardBackground,
                 surfaceTintColor: Colors.transparent,
                 elevation: 0,
                 title: Text(
@@ -134,7 +135,10 @@ class _MeetingsListScreenState extends State<MeetingsListScreen> with RouteAware
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16),
                         ),
-                        icon: const Icon(Icons.add_rounded, color: Colors.white),
+                        icon: const Icon(
+                          Icons.add_rounded,
+                          color: Colors.white,
+                        ),
                         label: Text(
                           'إضافة اجتماع',
                           style: GoogleFonts.cairo(
@@ -167,7 +171,8 @@ class _SundaySchoolTab extends StatefulWidget {
 
 class _SundaySchoolTabState extends State<_SundaySchoolTab> {
   final TextEditingController _searchController = TextEditingController();
-  int? _selectedWeekday; // null = all, 7 = Sun, 5 = Fri, 6 = Sat, 4 = Thu, 3 = Wed, 2 = Tue, 1 = Mon
+  int?
+  _selectedWeekday; // null = all, 7 = Sun, 5 = Fri, 6 = Sat, 4 = Thu, 3 = Wed, 2 = Tue, 1 = Mon
 
   final List<Map<String, dynamic>> _weekdayFilters = const [
     {'label': 'الكل', 'value': null},
@@ -246,17 +251,18 @@ class _SundaySchoolTabState extends State<_SundaySchoolTab> {
         final visibleGroupedMeetingIds = visibleClasses
             .map((c) => c.meetingId)
             .toSet();
-        final allVisibleMeetings = state.meetings
-            .where(
-              (m) =>
-                  m.isActive &&
-                  (widget.isAdmin ||
-                      visibleMeetingIds.contains(m.id) ||
-                      (m.kind == MeetingKind.sundaySchool &&
-                          visibleGroupedMeetingIds.contains(m.id))),
-            )
-            .toList()
-          ..sort((a, b) => a.nameAr.compareTo(b.nameAr));
+        final allVisibleMeetings =
+            state.meetings
+                .where(
+                  (m) =>
+                      m.isActive &&
+                      (widget.isAdmin ||
+                          visibleMeetingIds.contains(m.id) ||
+                          (m.kind == MeetingKind.sundaySchool &&
+                              visibleGroupedMeetingIds.contains(m.id))),
+                )
+                .toList()
+              ..sort((a, b) => a.nameAr.compareTo(b.nameAr));
 
         // Filter based on search query & weekday
         final searchQuery = _searchController.text.trim().toLowerCase();
@@ -283,7 +289,7 @@ class _SundaySchoolTabState extends State<_SundaySchoolTab> {
         // Calculate summary stats
         final totalMeetings = allVisibleMeetings.length;
         final totalClasses = visibleClasses.length;
-        
+
         // Count total active unique servants assigned across meetings and classes
         final uniqueServants = <String>{};
         for (final assignList in state.meetingAssignmentsById.values) {
@@ -385,7 +391,7 @@ class _SundaySchoolTabState extends State<_SundaySchoolTab> {
                           ),
                           suffixIcon: _searchController.text.isNotEmpty
                               ? IconButton(
-                                  icon: const Icon(
+                                  icon: Icon(
                                     Icons.clear_rounded,
                                     size: 18,
                                     color: AppTheme.textLight,
@@ -397,7 +403,7 @@ class _SundaySchoolTabState extends State<_SundaySchoolTab> {
                                 )
                               : null,
                           filled: true,
-                          fillColor: Colors.white,
+                          fillColor: AppTheme.cardBackground,
                           contentPadding: const EdgeInsets.symmetric(
                             horizontal: 16,
                             vertical: 12,
@@ -459,7 +465,7 @@ class _SundaySchoolTabState extends State<_SundaySchoolTab> {
                                 });
                               },
                               selectedColor: AppTheme.primary,
-                              backgroundColor: Colors.white,
+                              backgroundColor: AppTheme.cardBackground,
                               side: BorderSide(
                                 color: isSelected
                                     ? AppTheme.primary
@@ -489,10 +495,15 @@ class _SundaySchoolTabState extends State<_SundaySchoolTab> {
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: AppEmptyState(
                       icon: Icons.groups_outlined,
-                      message: _searchController.text.isNotEmpty || _selectedWeekday != null
+                      message:
+                          _searchController.text.isNotEmpty ||
+                              _selectedWeekday != null
                           ? 'لا توجد نتائج تطابق خيارات البحث'
                           : 'لا توجد اجتماعات حالياً',
-                      actionLabel: widget.isAdmin && _searchController.text.isEmpty && _selectedWeekday == null
+                      actionLabel:
+                          widget.isAdmin &&
+                              _searchController.text.isEmpty &&
+                              _selectedWeekday == null
                           ? 'إضافة اجتماع جديد'
                           : null,
                       onAction: widget.isAdmin
@@ -508,41 +519,38 @@ class _SundaySchoolTabState extends State<_SundaySchoolTab> {
                 SliverPadding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 96),
                   sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        final meeting = filteredMeetings[index];
-                        if (meeting.kind == MeetingKind.sundaySchool) {
-                          final classes = visibleClasses
-                              .where((c) => c.meetingId == meeting.id)
-                              .toList();
-                          return GroupedMeetingClassesCard(
-                            meeting: meeting,
-                            classes: classes,
-                            isAdmin: widget.isAdmin,
-                            classAssignmentsById: state.classAssignmentsById,
-                            pendingInvitations: state.pendingInvitations,
-                            onAddClass: () =>
-                                showAddClassDialog(context, meeting.id),
-                            onEditMeeting: () =>
-                                showEditMeetingScreen(context, meeting),
-                            onDeleteMeeting: () =>
-                                showConfirmDeleteMeeting(context, meeting),
-                          );
-                        }
-
-                        return MeetingCard(
+                    delegate: SliverChildBuilderDelegate((context, index) {
+                      final meeting = filteredMeetings[index];
+                      if (meeting.kind == MeetingKind.sundaySchool) {
+                        final classes = visibleClasses
+                            .where((c) => c.meetingId == meeting.id)
+                            .toList();
+                        return GroupedMeetingClassesCard(
                           meeting: meeting,
+                          classes: classes,
                           isAdmin: widget.isAdmin,
-                          assignments:
-                              state.meetingAssignmentsById[meeting.id] ?? [],
-                          pendingInvitations: pendingInvitesForMeeting(
-                            state.pendingInvitations,
-                            meeting.id,
-                          ),
+                          classAssignmentsById: state.classAssignmentsById,
+                          pendingInvitations: state.pendingInvitations,
+                          onAddClass: () =>
+                              showAddClassDialog(context, meeting.id),
+                          onEditMeeting: () =>
+                              showEditMeetingScreen(context, meeting),
+                          onDeleteMeeting: () =>
+                              showConfirmDeleteMeeting(context, meeting),
                         );
-                      },
-                      childCount: filteredMeetings.length,
-                    ),
+                      }
+
+                      return MeetingCard(
+                        meeting: meeting,
+                        isAdmin: widget.isAdmin,
+                        assignments:
+                            state.meetingAssignmentsById[meeting.id] ?? [],
+                        pendingInvitations: pendingInvitesForMeeting(
+                          state.pendingInvitations,
+                          meeting.id,
+                        ),
+                      );
+                    }, childCount: filteredMeetings.length),
                   ),
                 ),
             ],
@@ -598,4 +606,3 @@ class _StatItem extends StatelessWidget {
     );
   }
 }
-

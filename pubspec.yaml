@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.2+9
+version: 1.0.2+10
 
 environment:
   sdk: ^3.9.0
@@ -28,6 +28,7 @@ environment:
 # the latest version available on pub.dev. To see which dependencies have newer
 # versions available, run `flutter pub outdated`.
 dependencies:
+  sentry_flutter: ^9.28.0
   flutter:
     sdk: flutter
 
@@ -44,10 +45,15 @@ dependencies:
   shared_preferences: ^2.3.2
   package_info_plus: ^8.3.1
   connectivity_plus: ^6.1.4
+  csv: ^6.0.0
   intl: ^0.20.2
   app_links: ^6.4.0
   excel: ^4.0.6
   file_picker: ^11.0.3
+  mobile_scanner: ^7.4.0
+  app_settings: 7.0.0
+  pdf: ^3.12.0
+  printing: ^5.14.3
   flutter_local_notifications: ^19.5.0
   flutter_timezone: ^5.1.0
   timezone: ^0.10.1
@@ -55,6 +61,7 @@ dependencies:
     sdk: flutter
 
 dev_dependencies:
+  sentry_dart_plugin: ^3.4.0
   flutter_test:
     sdk: flutter
 
@@ -78,6 +85,7 @@ flutter:
 
   assets:
     - assets/images/
+    - assets/fonts/
     - .env
 
   # To add assets to your application, add an assets section, like this:
@@ -110,3 +118,9 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+sentry:
+  upload_debug_symbols: true
+  upload_source_maps: true
+  project: linkapp
+  org: henarahaty

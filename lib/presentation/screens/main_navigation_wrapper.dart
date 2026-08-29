@@ -656,7 +656,7 @@ class _DesktopNavigationPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: 280,
-      color: Colors.white,
+      color: AppTheme.cardBackground,
       padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
       child: SafeArea(
         child: Column(

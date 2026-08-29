@@ -34,7 +34,7 @@ class AppScreen extends StatelessWidget {
       backgroundColor: AppTheme.background,
       appBar: showAppBar && title != null
           ? AppBar(
-              backgroundColor: Colors.white,
+              backgroundColor: AppTheme.cardBackground,
               surfaceTintColor: Colors.transparent,
               elevation: 0,
               scrolledUnderElevation: 0.5,
@@ -120,7 +120,7 @@ class AppStatCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppTheme.cardBackground,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: AppTheme.border.withValues(alpha: 0.6)),
         boxShadow: AppTheme.softShadow,
@@ -184,7 +184,7 @@ class AppActionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.white,
+      color: AppTheme.cardBackground,
       borderRadius: BorderRadius.circular(18),
       elevation: 0,
       shadowColor: Colors.transparent,
@@ -194,7 +194,7 @@ class AppActionTile extends StatelessWidget {
         child: Ink(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AppTheme.cardBackground,
             borderRadius: BorderRadius.circular(18),
             border: Border.all(color: AppTheme.border.withValues(alpha: 0.7)),
             boxShadow: AppTheme.softShadow,
@@ -283,7 +283,7 @@ class AppWelcomeHeader extends StatelessWidget {
             height: 74,
             padding: const EdgeInsets.all(6),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppTheme.cardBackground,
               borderRadius: BorderRadius.circular(18),
               border: Border.all(
                 color: Colors.white.withValues(alpha: 0.72),

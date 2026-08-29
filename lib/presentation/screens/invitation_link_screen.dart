@@ -258,7 +258,7 @@ class _InvitationLinkScreenState extends State<InvitationLinkScreen> {
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppTheme.cardBackground,
               borderRadius: BorderRadius.circular(18),
               border: Border.all(
                 color: AppTheme.border.withValues(alpha: 0.75),

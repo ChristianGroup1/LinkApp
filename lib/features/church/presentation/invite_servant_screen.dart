@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/models.dart';
 import '../../../data/repositories/database_repository.dart';
+import '../../../shared/ui/offline_editing.dart';
 import 'widgets/servants_widgets.dart';
 
 Future<bool?> openInviteServantScreen(BuildContext context) {
@@ -43,6 +44,9 @@ class _InviteServantScreenState extends State<InviteServantScreen> {
   String? _generatedInviteLink;
   bool _emailSent = false;
   Object? _loadError;
+  bool _isDirty = false;
+  bool _allowPop = false;
+  bool _discardDialogOpen = false;
 
   @override
   void initState() {
@@ -56,6 +60,25 @@ class _InviteServantScreenState extends State<InviteServantScreen> {
     _emailController.dispose();
     _phoneController.dispose();
     super.dispose();
+  }
+
+  void _markDirty() {
+    if (!_isDirty && mounted) setState(() => _isDirty = true);
+  }
+
+  Future<void> _handleBack() async {
+    if (_allowPop || !_isDirty || _generatedInviteLink != null) {
+      if (mounted) Navigator.pop(context, _generatedInviteLink != null);
+      return;
+    }
+    if (_discardDialogOpen) return;
+    _discardDialogOpen = true;
+    final discard = await confirmDiscardUnsavedChanges(context);
+    _discardDialogOpen = false;
+    if (discard && mounted) {
+      setState(() => _allowPop = true);
+      Navigator.pop(context, false);
+    }
   }
 
   Future<void> _loadTargets() async {
@@ -159,11 +182,13 @@ class _InviteServantScreenState extends State<InviteServantScreen> {
         _generatedInviteLink = result.data.inviteLink;
         _emailSent = emailSent;
         _isGenerating = false;
+        _isDirty = false;
+        _allowPop = true;
       });
       if (!result.syncedToServer) {
         _showSnack(
           'تم حفظ الدعوة محلياً. اتصل بالإنترنت للمزامنة.',
-          isError: true,
+          isOffline: true,
         );
       } else if (emailSent) {
         _showSnack('تم إرسال الدعوة على $email');
@@ -177,123 +202,147 @@ class _InviteServantScreenState extends State<InviteServantScreen> {
     }
   }
 
-  void _showSnack(String message, {bool isError = false}) {
+  void _showSnack(
+    String message, {
+    bool isError = false,
+    bool isOffline = false,
+  }) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message, style: GoogleFonts.cairo()),
-        backgroundColor: isError ? AppTheme.accentRed : Colors.green,
+        backgroundColor: isError
+            ? AppTheme.accentRed
+            : isOffline
+            ? AppTheme.accentOrange
+            : Colors.green,
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Scaffold(
-        backgroundColor: AppTheme.background,
-        appBar: AppBar(
-          backgroundColor: Colors.white,
-          surfaceTintColor: Colors.transparent,
-          elevation: 0,
-          title: Text(
-            _generatedInviteLink == null ? 'دعوة خادم جديد' : 'رابط الدعوة',
-            style: GoogleFonts.cairo(
-              color: AppTheme.textDark,
-              fontWeight: FontWeight.w900,
-              fontSize: 18,
+    return PopScope(
+      canPop: _allowPop || !_isDirty,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _handleBack();
+      },
+      child: Directionality(
+        textDirection: TextDirection.rtl,
+        child: Scaffold(
+          backgroundColor: AppTheme.background,
+          appBar: AppBar(
+            backgroundColor: AppTheme.cardBackground,
+            surfaceTintColor: Colors.transparent,
+            elevation: 0,
+            title: Text(
+              _generatedInviteLink == null ? 'دعوة خادم جديد' : 'رابط الدعوة',
+              style: GoogleFonts.cairo(
+                color: AppTheme.textDark,
+                fontWeight: FontWeight.w900,
+                fontSize: 18,
+              ),
+            ),
+            centerTitle: true,
+            leading: IconButton(
+              icon: Icon(Icons.arrow_back_rounded, color: AppTheme.textDark),
+              onPressed: _isGenerating ? null : _handleBack,
+            ),
+            bottom: PreferredSize(
+              preferredSize: const Size.fromHeight(1),
+              child: Container(
+                height: 1,
+                color: AppTheme.border.withValues(alpha: 0.7),
+              ),
             ),
           ),
-          centerTitle: true,
-          leading: IconButton(
-            icon: const Icon(
-              Icons.arrow_back_rounded,
-              color: AppTheme.textDark,
-            ),
-            onPressed: _isGenerating
-                ? null
-                : () => Navigator.pop(context, _generatedInviteLink != null),
-          ),
-          bottom: PreferredSize(
-            preferredSize: const Size.fromHeight(1),
-            child: Container(
-              height: 1,
-              color: AppTheme.border.withValues(alpha: 0.7),
-            ),
-          ),
-        ),
-        body: _isLoading
-            ? const Center(
-                child: CircularProgressIndicator(color: AppTheme.primary),
-              )
-            : _loadError != null
-            ? Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'فشل تحميل الاجتماعات والفصول',
-                        style: GoogleFonts.cairo(
-                          fontWeight: FontWeight.w800,
-                          color: AppTheme.accentRed,
+          body: Column(
+            children: [
+              const OfflineEditingNotice(),
+              Expanded(
+                child: _isLoading
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                          color: AppTheme.primary,
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      OutlinedButton(
-                        onPressed: _loadTargets,
-                        child: Text(
-                          'إعادة المحاولة',
-                          style: GoogleFonts.cairo(),
+                      )
+                    : _loadError != null
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'فشل تحميل الاجتماعات والفصول',
+                                style: GoogleFonts.cairo(
+                                  fontWeight: FontWeight.w800,
+                                  color: AppTheme.accentRed,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              OutlinedButton(
+                                onPressed: _loadTargets,
+                                child: Text(
+                                  'إعادة المحاولة',
+                                  style: GoogleFonts.cairo(),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-              )
-            : _generatedInviteLink != null
-            ? _buildSuccessBody()
-            : _buildFormBody(),
-        bottomNavigationBar: _generatedInviteLink != null
-            ? null
-            : SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                  child: FilledButton.icon(
-                    onPressed: _isGenerating ? null : _generateCode,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppTheme.primary,
-                      minimumSize: const Size.fromHeight(52),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                    ),
-                    icon: const Icon(
-                      Icons.link_rounded,
-                      size: 20,
-                      color: Colors.white,
-                    ),
-                    label: _isGenerating
-                        ? const SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : Text(
-                            'إنشاء رابط الدعوة',
-                            style: GoogleFonts.cairo(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w900,
-                              fontSize: 15,
+                      )
+                    : _generatedInviteLink != null
+                    ? _buildSuccessBody()
+                    : _buildFormBody(),
+              ),
+            ],
+          ),
+          bottomNavigationBar: _generatedInviteLink != null
+              ? null
+              : SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        UnsavedChangesNotice(isDirty: _isDirty),
+                        FilledButton.icon(
+                          onPressed: _isGenerating ? null : _generateCode,
+                          style: FilledButton.styleFrom(
+                            backgroundColor: AppTheme.primary,
+                            minimumSize: const Size.fromHeight(52),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
                             ),
                           ),
+                          icon: const Icon(
+                            Icons.link_rounded,
+                            size: 20,
+                            color: Colors.white,
+                          ),
+                          label: _isGenerating
+                              ? const SizedBox(
+                                  width: 22,
+                                  height: 22,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : Text(
+                                  'إنشاء رابط الدعوة',
+                                  style: GoogleFonts.cairo(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 15,
+                                  ),
+                                ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
+        ),
       ),
     );
   }
@@ -351,6 +400,7 @@ class _InviteServantScreenState extends State<InviteServantScreen> {
   Widget _buildFormBody() {
     return Form(
       key: _formKey,
+      onChanged: _markDirty,
       child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
         child: Column(
@@ -424,9 +474,10 @@ class _InviteServantScreenState extends State<InviteServantScreen> {
                   children: [
                     Expanded(
                       child: InkWell(
-                        onTap: () => setState(
-                          () => _selectedRole = AppRole.attendanceOfficer,
-                        ),
+                        onTap: () => setState(() {
+                          _selectedRole = AppRole.attendanceOfficer;
+                          _isDirty = true;
+                        }),
                         borderRadius: BorderRadius.circular(14),
                         child: Container(
                           padding: const EdgeInsets.symmetric(
@@ -484,8 +535,10 @@ class _InviteServantScreenState extends State<InviteServantScreen> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: InkWell(
-                        onTap: () =>
-                            setState(() => _selectedRole = AppRole.churchAdmin),
+                        onTap: () => setState(() {
+                          _selectedRole = AppRole.churchAdmin;
+                          _isDirty = true;
+                        }),
                         borderRadius: BorderRadius.circular(14),
                         child: Container(
                           padding: const EdgeInsets.symmetric(
@@ -561,6 +614,7 @@ class _InviteServantScreenState extends State<InviteServantScreen> {
                   onScopeChanged: (scope) => setState(() {
                     _assignmentScope = scope;
                     _selectedTargetId = null;
+                    _isDirty = true;
                   }),
                 ),
                 const SizedBox(height: 12),
@@ -570,8 +624,10 @@ class _InviteServantScreenState extends State<InviteServantScreen> {
                   classes: _classes,
                   directMeetings: _directMeetings,
                   groupedMeetings: _groupedMeetings,
-                  onChanged: (value) =>
-                      setState(() => _selectedTargetId = value),
+                  onChanged: (value) => setState(() {
+                    _selectedTargetId = value;
+                    _isDirty = true;
+                  }),
                 ),
               ],
             ),
@@ -603,8 +659,10 @@ class _InviteServantScreenState extends State<InviteServantScreen> {
                       color: AppTheme.textLight,
                     ),
                   ),
-                  onChanged: (value) =>
-                      setState(() => _canTakeAttendance = value),
+                  onChanged: (value) => setState(() {
+                    _canTakeAttendance = value;
+                    _isDirty = true;
+                  }),
                 ),
                 SwitchListTile.adaptive(
                   value: _canViewReports,
@@ -620,7 +678,10 @@ class _InviteServantScreenState extends State<InviteServantScreen> {
                       color: AppTheme.textLight,
                     ),
                   ),
-                  onChanged: (value) => setState(() => _canViewReports = value),
+                  onChanged: (value) => setState(() {
+                    _canViewReports = value;
+                    _isDirty = true;
+                  }),
                 ),
               ],
             ),
@@ -648,7 +709,7 @@ class _InviteServantScreenState extends State<InviteServantScreen> {
       labelText: label,
       prefixIcon: Icon(icon, size: 20, color: AppTheme.primary),
       filled: true,
-      fillColor: Colors.white,
+      fillColor: AppTheme.cardBackground,
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
@@ -678,7 +739,7 @@ class _HeroBanner extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppTheme.cardBackground,
               borderRadius: BorderRadius.circular(12),
             ),
             child: const Icon(Icons.person_add_alt_1, color: AppTheme.primary),
@@ -743,7 +804,7 @@ class _SectionCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppTheme.cardBackground,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppTheme.border.withValues(alpha: 0.75)),
       ),

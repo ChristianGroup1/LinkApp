@@ -242,7 +242,7 @@ class _AttendanceSessionCardState extends State<AttendanceSessionCard> {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppTheme.cardBackground,
         borderRadius: BorderRadius.circular(16),
         boxShadow: AppTheme.softShadow,
       ),
@@ -694,7 +694,7 @@ class _SessionTileState extends State<_SessionTile> {
           child: Ink(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppTheme.cardBackground,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
                 color: AppTheme.border.withValues(alpha: 0.75),

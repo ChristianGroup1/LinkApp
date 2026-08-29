@@ -29,12 +29,13 @@ class MeetingCard extends StatefulWidget {
 class _MeetingCardState extends State<MeetingCard> {
   @override
   Widget build(BuildContext context) {
-    final totalServants = widget.assignments.length + widget.pendingInvitations.length;
+    final totalServants =
+        widget.assignments.length + widget.pendingInvitations.length;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppTheme.cardBackground,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: AppTheme.border.withValues(alpha: 0.8)),
         boxShadow: [
@@ -121,14 +122,17 @@ class _MeetingCardState extends State<MeetingCard> {
                               children: [
                                 _MeetingMetaTag(
                                   icon: Icons.event_repeat_rounded,
-                                  label: 'كل يوم ${kWeekdaysAr[widget.meeting.weekday - 1]}',
+                                  label:
+                                      'كل يوم ${kWeekdaysAr[widget.meeting.weekday - 1]}',
                                   color: AppTheme.secondary,
                                   backgroundColor: AppTheme.secondaryLight,
                                 ),
-                                if (widget.meeting.attendanceReminderMinutes != null)
+                                if (widget.meeting.attendanceReminderMinutes !=
+                                    null)
                                   _MeetingMetaTag(
                                     icon: Icons.notifications_active_rounded,
-                                    label: 'تذكير ${_formatReminderTime(widget.meeting.attendanceReminderMinutes!)}',
+                                    label:
+                                        'تذكير ${_formatReminderTime(widget.meeting.attendanceReminderMinutes!)}',
                                     color: AppTheme.primary,
                                     backgroundColor: AppTheme.primaryLight,
                                   ),
@@ -143,14 +147,14 @@ class _MeetingCardState extends State<MeetingCard> {
                           borderRadius: BorderRadius.circular(10),
                           child: InkWell(
                             borderRadius: BorderRadius.circular(10),
-                            onTap: () => showEditMeetingScreen(
-                              context,
-                              widget.meeting,
-                            ),
+                            onTap: () =>
+                                showEditMeetingScreen(context, widget.meeting),
                             child: Container(
                               padding: const EdgeInsets.all(6),
                               decoration: BoxDecoration(
-                                color: AppTheme.primaryLight.withValues(alpha: 0.6),
+                                color: AppTheme.primaryLight.withValues(
+                                  alpha: 0.6,
+                                ),
                                 borderRadius: BorderRadius.circular(10),
                               ),
                               child: const Icon(
@@ -174,7 +178,9 @@ class _MeetingCardState extends State<MeetingCard> {
                             child: Container(
                               padding: const EdgeInsets.all(6),
                               decoration: BoxDecoration(
-                                color: AppTheme.accentRedLight.withValues(alpha: 0.6),
+                                color: AppTheme.accentRedLight.withValues(
+                                  alpha: 0.6,
+                                ),
                                 borderRadius: BorderRadius.circular(10),
                               ),
                               child: const Icon(
@@ -221,9 +227,14 @@ class _MeetingCardState extends State<MeetingCard> {
                       ),
                       const SizedBox(width: 8),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 7,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
-                          color: totalServants > 0 ? AppTheme.secondaryLight : AppTheme.accentRedLight,
+                          color: totalServants > 0
+                              ? AppTheme.secondaryLight
+                              : AppTheme.accentRedLight,
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
@@ -231,17 +242,23 @@ class _MeetingCardState extends State<MeetingCard> {
                           style: GoogleFonts.cairo(
                             fontSize: 10.5,
                             fontWeight: FontWeight.bold,
-                            color: totalServants > 0 ? AppTheme.secondary : AppTheme.accentRed,
+                            color: totalServants > 0
+                                ? AppTheme.secondary
+                                : AppTheme.accentRed,
                           ),
                         ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 8),
-                  if (widget.assignments.isEmpty && widget.pendingInvitations.isEmpty)
+                  if (widget.assignments.isEmpty &&
+                      widget.pendingInvitations.isEmpty)
                     Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 10,
+                        horizontal: 12,
+                      ),
                       decoration: BoxDecoration(
                         color: AppTheme.accentRedLight.withValues(alpha: 0.4),
                         borderRadius: BorderRadius.circular(12),
@@ -296,10 +313,8 @@ class _MeetingCardState extends State<MeetingCard> {
                     SizedBox(
                       width: double.infinity,
                       child: OutlinedButton.icon(
-                        onPressed: () => showAssignOfficerDialog(
-                          context,
-                          widget.meeting,
-                        ),
+                        onPressed: () =>
+                            showAssignOfficerDialog(context, widget.meeting),
                         icon: const Icon(
                           Icons.person_add_alt_1_rounded,
                           size: 17,
@@ -320,7 +335,9 @@ class _MeetingCardState extends State<MeetingCard> {
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14),
                           ),
-                          backgroundColor: AppTheme.primaryLight.withValues(alpha: 0.25),
+                          backgroundColor: AppTheme.primaryLight.withValues(
+                            alpha: 0.25,
+                          ),
                         ),
                       ),
                     ),
@@ -465,7 +482,7 @@ class _MeetingPersonTag extends StatelessWidget {
                   color: Colors.black.withValues(alpha: 0.06),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.close_rounded,
                   size: 12,
                   color: AppTheme.textLight,
@@ -478,4 +495,3 @@ class _MeetingPersonTag extends StatelessWidget {
     );
   }
 }
-

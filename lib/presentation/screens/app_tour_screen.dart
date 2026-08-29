@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../core/theme/app_theme.dart';
 import '../widgets/auth_widgets.dart';
 
 class AppTourScreen extends StatefulWidget {
@@ -194,7 +195,7 @@ class _AppTourScreenState extends State<AppTourScreen> {
                           Container(
                             padding: const EdgeInsets.all(24),
                             decoration: BoxDecoration(
-                              color: Colors.white,
+                              color: AppTheme.cardBackground,
                               borderRadius: BorderRadius.circular(28),
                               boxShadow: [
                                 BoxShadow(

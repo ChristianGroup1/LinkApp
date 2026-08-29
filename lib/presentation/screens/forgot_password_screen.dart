@@ -30,9 +30,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       );
       return;
     }
-    context.read<AuthBloc>().add(
-          PasswordResetEmailRequested(email: email),
-        );
+    context.read<AuthBloc>().add(PasswordResetEmailRequested(email: email));
   }
 
   @override
@@ -75,17 +73,14 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 const SizedBox(height: 12),
                 // Top App Logo Header
                 const Column(
-                  children: [
-                    AuthLogoMark(size: 130),
-                    SizedBox(height: 14),
-                  ],
+                  children: [AuthLogoMark(size: 130), SizedBox(height: 14)],
                 ),
                 const SizedBox(height: 24),
                 // Main Floating White Card
                 Container(
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: AppTheme.cardBackground,
                     borderRadius: BorderRadius.circular(28),
                     boxShadow: [
                       BoxShadow(
@@ -141,7 +136,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                               borderRadius: BorderRadius.circular(26),
                             ),
                             elevation: 4,
-                            shadowColor: const Color(0xFF2563EB).withValues(alpha: 0.35),
+                            shadowColor: const Color(
+                              0xFF2563EB,
+                            ).withValues(alpha: 0.35),
                           ),
                           child: isLoading
                               ? const SizedBox(

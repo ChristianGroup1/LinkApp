@@ -18,8 +18,10 @@ drop function if exists public.can_take_meeting_attendance cascade;
 drop function if exists public.can_access_member cascade;
 drop function if exists public.can_access_session cascade;
 drop function if exists public.can_take_session_attendance cascade;
+drop function if exists public.delete_church_for_last_admin(uuid) cascade;
 
 drop table if exists public.follow_ups cascade;
+drop table if exists public.support_tickets cascade;
 drop table if exists public.attendance_records cascade;
 drop table if exists public.attendance_sessions cascade;
 drop table if exists public.meeting_assignments cascade;
@@ -243,6 +245,29 @@ create table public.invitations (
   updated_at timestamptz not null default now()
 );
 
+-- 3.13 Support tickets
+create table public.support_tickets (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete set null,
+  church_id uuid references public.churches(id) on delete set null,
+  reporter_name text not null,
+  contact_email text,
+  category text not null check (
+    category in ('login', 'attendance', 'members', 'invitations', 'notifications', 'other')
+  ),
+  subject text not null check (char_length(btrim(subject)) between 3 and 120),
+  description text not null check (char_length(btrim(description)) between 10 and 4000),
+  status text not null default 'open' check (
+    status in ('open', 'in_progress', 'resolved', 'closed')
+  ),
+  admin_note text,
+  platform text not null,
+  app_version text,
+  build_number text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 -- ============================================================
 -- 4. TRIGGERS (auto-update updated_at)
 -- ============================================================
@@ -265,6 +290,7 @@ create trigger set_attendance_sessions_updated_at before update on public.attend
 create trigger set_attendance_records_updated_at before update on public.attendance_records for each row execute function public.set_updated_at();
 create trigger set_follow_ups_updated_at before update on public.follow_ups for each row execute function public.set_updated_at();
 create trigger set_invitations_updated_at before update on public.invitations for each row execute function public.set_updated_at();
+create trigger set_support_tickets_updated_at before update on public.support_tickets for each row execute function public.set_updated_at();
 
 -- ============================================================
 -- 5. INDEXES
@@ -280,6 +306,9 @@ create index if not exists idx_records_session_status on public.attendance_recor
 create index if not exists idx_records_member on public.attendance_records(member_id, status);
 create index if not exists idx_followups_member on public.follow_ups(member_id);
 create index if not exists idx_followups_church_date on public.follow_ups(church_id, follow_up_date);
+create index if not exists idx_support_tickets_status_created on public.support_tickets(status, created_at desc);
+create index if not exists idx_support_tickets_user_created on public.support_tickets(user_id, created_at desc);
+create index if not exists idx_support_tickets_church_created on public.support_tickets(church_id, created_at desc);
 
 -- ============================================================
 -- 6. SECURITY FUNCTIONS (RLS helpers)
@@ -314,6 +343,82 @@ as $$
       and p.role in ('super_admin', 'church_admin')
   );
 $$;
+
+create or replace function public.delete_church_for_last_admin(
+  p_requester_id uuid
+)
+returns uuid[]
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  target_church_id uuid;
+  church_user_ids uuid[];
+begin
+  select p.church_id
+  into target_church_id
+  from public.profiles p
+  where p.id = p_requester_id
+    and p.is_active
+    and p.role in ('church_admin', 'super_admin');
+
+  if target_church_id is null then
+    raise exception 'requester_is_not_active_admin';
+  end if;
+
+  perform 1 from public.churches
+  where id = target_church_id
+  for update;
+  perform 1 from public.profiles
+  where church_id = target_church_id
+  for update;
+
+  if exists (
+    select 1 from public.profiles p
+    where p.church_id = target_church_id
+      and p.id <> p_requester_id
+      and p.is_active
+      and p.role in ('church_admin', 'super_admin')
+  ) then
+    raise exception 'another_active_admin_exists';
+  end if;
+
+  select coalesce(array_agg(p.id order by p.id), array[]::uuid[])
+  into church_user_ids
+  from public.profiles p
+  where p.church_id = target_church_id;
+
+  delete from public.attendance_records where church_id = target_church_id;
+  delete from public.follow_ups where church_id = target_church_id;
+  delete from public.attendance_sessions where church_id = target_church_id;
+  delete from public.members where church_id = target_church_id;
+  delete from public.class_assignments where church_id = target_church_id;
+  delete from public.meeting_assignments where church_id = target_church_id;
+  delete from public.invitations where church_id = target_church_id;
+  delete from public.sunday_school_classes where church_id = target_church_id;
+  delete from public.meetings where church_id = target_church_id;
+  delete from public.support_tickets where church_id = target_church_id;
+
+  if to_regclass('public.app_usage_events') is not null then
+    execute 'delete from public.app_usage_events where church_id = $1'
+      using target_church_id;
+  end if;
+  if to_regclass('public.admin_audit_logs') is not null then
+    execute 'delete from public.admin_audit_logs where admin_user_id = any($1)'
+      using church_user_ids;
+  end if;
+
+  delete from public.profiles where church_id = target_church_id;
+  delete from public.churches where id = target_church_id;
+  return church_user_ids;
+end;
+$$;
+
+revoke all on function public.delete_church_for_last_admin(uuid)
+from public, anon, authenticated;
+grant execute on function public.delete_church_for_last_admin(uuid)
+to service_role;
 
 create or replace function public.ensure_church(church_name text)
 returns uuid
@@ -693,6 +798,7 @@ alter table public.attendance_sessions enable row level security;
 alter table public.attendance_records enable row level security;
 alter table public.follow_ups enable row level security;
 alter table public.invitations enable row level security;
+alter table public.support_tickets enable row level security;
 
 -- 8.1 Churches
 alter table public.churches enable row level security;
@@ -836,6 +942,20 @@ for all to authenticated using (
     where profiles.id = auth.uid()
     and profiles.church_id = invitations.church_id
     and (profiles.role = 'super_admin' or profiles.role = 'church_admin')
+  )
+);
+
+-- 8.13 Support tickets: users may submit, but only Link Control can read.
+revoke all on public.support_tickets from anon, authenticated;
+grant insert on public.support_tickets to authenticated;
+create policy "support_tickets_insert_own" on public.support_tickets
+for insert to authenticated
+with check (
+  user_id = auth.uid()
+  and church_id = public.current_church_id()
+  and exists (
+    select 1 from public.profiles p
+    where p.id = auth.uid() and p.is_active
   )
 );
 

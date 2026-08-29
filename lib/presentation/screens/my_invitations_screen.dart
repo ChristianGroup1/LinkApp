@@ -193,7 +193,7 @@ class _MyInvitationsScreenState extends State<MyInvitationsScreen>
       child: Scaffold(
         backgroundColor: const Color(0xFFF8FAFC),
         appBar: AppBar(
-          backgroundColor: Colors.white,
+          backgroundColor: AppTheme.cardBackground,
           elevation: 0,
           leading: IconButton(
             icon: const Icon(
@@ -325,7 +325,7 @@ class _MyInvitationsScreenState extends State<MyInvitationsScreen>
           margin: const EdgeInsets.only(bottom: 14),
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AppTheme.cardBackground,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(color: const Color(0xFFE2E8F0)),
             boxShadow: [

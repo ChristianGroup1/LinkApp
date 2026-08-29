@@ -573,7 +573,7 @@ class _ServantsPermissionsScreenState extends State<ServantsPermissionsScreen> {
       child: Scaffold(
         backgroundColor: AppTheme.background,
         appBar: AppBar(
-          backgroundColor: Colors.white,
+          backgroundColor: AppTheme.cardBackground,
           surfaceTintColor: Colors.transparent,
           elevation: 0,
           title: Text(

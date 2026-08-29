@@ -1,16 +1,20 @@
 import 'dart:async';
-import 'package:app_links/app_links.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
 
+import 'package:app_links/app_links.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
+
 import 'core/analytics/app_analytics_service.dart';
 import 'core/auth/password_recovery_link.dart';
 import 'core/navigation/app_route_observer.dart';
 import 'core/invitations/invitation_deep_link_listener.dart';
 import 'core/theme/app_theme.dart';
+import 'core/theme/theme_controller.dart';
 import 'data/offline/connectivity_service.dart';
 import 'data/offline/offline_sync_listener.dart';
 import 'data/repositories/database_repository.dart';
@@ -20,12 +24,37 @@ import 'presentation/screens/main_navigation_wrapper.dart';
 import 'presentation/screens/password_recovery_error_screen.dart';
 import 'presentation/widgets/auth_widgets.dart';
 
+const _defaultSentryDsn =
+    'https://19451a31a391220bacd022eb373720a2@o4511268451254272.ingest.de.sentry.io/4511985653973072';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  const definedSentryDsn = String.fromEnvironment(
+    'SENTRY_DSN',
+    defaultValue: _defaultSentryDsn,
+  );
+  const definedSentryEnvironment = String.fromEnvironment('SENTRY_ENVIRONMENT');
+
+  await SentryFlutter.init((options) {
+    options.dsn = definedSentryDsn;
+    options.environment = definedSentryEnvironment.isNotEmpty
+        ? definedSentryEnvironment
+        : (kReleaseMode ? 'production' : 'development');
+    options.sendDefaultPii = false;
+    options.enableLogs = false;
+    options.attachScreenshot = false;
+    options.tracesSampleRate = 0.2;
+    // Profiling is relative to sampled traces (4% of all transactions).
+    options.profilesSampleRate = 0.2;
+  }, appRunner: _startApp);
+}
+
+Future<void> _startApp() async {
   // 1) Compile-time defines (production CI / explicit --dart-define-from-file)
   // 2) Bundled .env asset (local dev — works without IDE flags)
   await dotenv.load(fileName: '.env', isOptional: true);
+  await ThemeController.instance.load();
 
   const definedSupabaseUrl = String.fromEnvironment(
     'SUPABASE_URL',
@@ -46,13 +75,15 @@ void main() async {
 
   if (supabaseUrl.isEmpty || supabaseAnonKey.isEmpty) {
     runApp(
-      const SupabaseConfigurationErrorApp(
-        message:
-            'Missing SUPABASE_URL or SUPABASE_ANON_KEY.\n\n'
-            '1) Copy .env.example to .env and add your Supabase keys\n'
-            '2) Run: flutter clean && flutter pub get\n'
-            '3) Full restart the app (not hot reload)\n\n'
-            'Production builds can also pass --dart-define-from-file=.env',
+      SentryWidget(
+        child: const SupabaseConfigurationErrorApp(
+          message:
+              'Missing SUPABASE_URL or SUPABASE_ANON_KEY.\n\n'
+              '1) Copy .env.example to .env and add your Supabase keys\n'
+              '2) Run: flutter clean && flutter pub get\n'
+              '3) Full restart the app (not hot reload)\n\n'
+              'Production builds can also pass --dart-define-from-file=.env',
+        ),
       ),
     );
     return;
@@ -63,10 +94,13 @@ void main() async {
       url: supabaseUrl,
       publishableKey: supabaseAnonKey,
     );
-  } catch (e) {
+  } catch (error, stackTrace) {
+    await Sentry.captureException(error, stackTrace: stackTrace);
     runApp(
-      SupabaseConfigurationErrorApp(
-        message: 'Supabase initialization failed: $e',
+      SentryWidget(
+        child: SupabaseConfigurationErrorApp(
+          message: 'Supabase initialization failed: $error',
+        ),
       ),
     );
     return;
@@ -82,12 +116,14 @@ void main() async {
   }
 
   runApp(
-    RepositoryProvider<DatabaseRepository>.value(
-      value: repository,
-      child: BlocProvider<AuthBloc>(
-        create: (context) =>
-            AuthBloc(repository: repository)..add(AuthCheckRequested()),
-        child: const MyApp(supabaseEnabled: true),
+    SentryWidget(
+      child: RepositoryProvider<DatabaseRepository>.value(
+        value: repository,
+        child: BlocProvider<AuthBloc>(
+          create: (context) =>
+              AuthBloc(repository: repository)..add(AuthCheckRequested()),
+          child: const MyApp(supabaseEnabled: true),
+        ),
       ),
     ),
   );
@@ -110,33 +146,42 @@ class SupabaseConfigurationErrorApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Link Church Management',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.platformTheme,
-      builder: _compactTextBuilder,
-      home: Directionality(
-        textDirection: TextDirection.rtl,
-        child: Scaffold(
-          backgroundColor: AppTheme.background,
-          body: Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Text(
-                message,
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 16),
+    return AnimatedBuilder(
+      animation: ThemeController.instance,
+      builder: (context, _) {
+        AppTheme.setBrightness(ThemeController.instance.resolvedBrightness);
+        return MaterialApp(
+          title: 'Link Church Management',
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.platformTheme,
+          darkTheme: AppTheme.platformDarkTheme,
+          themeMode: ThemeController.instance.themeMode,
+          builder: _compactTextBuilder,
+          home: Directionality(
+            textDirection: TextDirection.rtl,
+            child: Scaffold(
+              backgroundColor: AppTheme.background,
+              body: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(
+                    message,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 16),
+                  ),
+                ),
               ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
 
 class MyApp extends StatelessWidget {
   static final navigatorKey = GlobalKey<NavigatorState>();
+  static final _sentryNavigatorObserver = SentryNavigatorObserver();
 
   final bool supabaseEnabled;
 
@@ -144,34 +189,45 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      navigatorKey: navigatorKey,
-      navigatorObservers: [appRouteObserver],
-      title: 'Link Church Management',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.platformTheme,
-      localizationsDelegates: const [
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
-      supportedLocales: const [Locale('ar', 'EG')],
-      locale: const Locale('ar', 'EG'),
-      builder: _compactTextBuilder,
-      home: OfflineSyncListener(
-        child: InvitationDeepLinkListener(
-          child: AuthRecoveryListener(
-            enabled: supabaseEnabled,
-            child: BlocListener<AuthBloc, AuthState>(
-              listenWhen: (previous, current) => current is AuthUnauthenticated,
-              listener: (context, state) {
-                navigatorKey.currentState?.popUntil((route) => route.isFirst);
-              },
-              child: const AuthenticationGate(),
+    return AnimatedBuilder(
+      animation: ThemeController.instance,
+      builder: (context, _) {
+        AppTheme.setBrightness(ThemeController.instance.resolvedBrightness);
+        return MaterialApp(
+          navigatorKey: navigatorKey,
+          navigatorObservers: [appRouteObserver, _sentryNavigatorObserver],
+          title: 'Link Church Management',
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.platformTheme,
+          darkTheme: AppTheme.platformDarkTheme,
+          themeMode: ThemeController.instance.themeMode,
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: const [Locale('ar', 'EG')],
+          locale: const Locale('ar', 'EG'),
+          builder: _compactTextBuilder,
+          home: OfflineSyncListener(
+            child: InvitationDeepLinkListener(
+              child: AuthRecoveryListener(
+                enabled: supabaseEnabled,
+                child: BlocListener<AuthBloc, AuthState>(
+                  listenWhen: (previous, current) =>
+                      current is AuthUnauthenticated,
+                  listener: (context, state) {
+                    navigatorKey.currentState?.popUntil(
+                      (route) => route.isFirst,
+                    );
+                  },
+                  child: const AuthenticationGate(),
+                ),
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }

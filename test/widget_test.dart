@@ -1,13 +1,21 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:link/core/invitations/invitation_preview.dart';
+import 'package:link/core/theme/app_theme.dart';
+import 'package:link/core/theme/theme_controller.dart';
 import 'package:link/data/offline/invitation_create_result.dart';
 import 'package:link/data/offline/offline_save_result.dart';
 import 'package:link/data/models/models.dart';
 import 'package:link/data/repositories/database_repository.dart';
+import 'package:link/features/attendance/logic/attendance_bloc.dart'
+    as attendance;
+import 'package:link/features/meetings/logic/meetings_bloc.dart';
+import 'package:link/features/members/logic/members_bloc.dart';
 import 'package:link/logic/auth/auth_bloc.dart';
 import 'package:link/main.dart';
 import 'package:link/presentation/screens/app_tour_screen.dart';
@@ -22,6 +30,110 @@ Future<void> _settle(WidgetTester tester) async {
 }
 
 void main() {
+  test(
+    'meeting save completes only after success and reports confirmation',
+    () async {
+      final repository = TestRepository();
+      final bloc = MeetingsBloc(repository: repository);
+      addTearDown(bloc.close);
+      final completion = Completer<void>();
+      final loaded = bloc.stream.firstWhere(
+        (state) =>
+            state is MeetingsLoaded &&
+            state.flashMessage == 'تم إنشاء الاجتماع بنجاح',
+      );
+
+      bloc.add(
+        CreateNewMeeting(
+          name: 'Youth Meeting',
+          nameAr: 'اجتماع الشباب',
+          kind: MeetingKind.normal,
+          weekday: 5,
+          completion: completion,
+        ),
+      );
+
+      await completion.future;
+      final state = await loaded as MeetingsLoaded;
+      expect(
+        state.meetings.any((meeting) => meeting.nameAr == 'اجتماع الشباب'),
+        isTrue,
+      );
+    },
+  );
+
+  test('meeting save completion reports repository failure', () async {
+    final bloc = MeetingsBloc(repository: SaveFailureRepository());
+    addTearDown(bloc.close);
+    final completion = Completer<void>();
+    final errorState = bloc.stream.firstWhere(
+      (state) => state is MeetingsError,
+    );
+
+    bloc.add(
+      CreateNewMeeting(
+        name: 'Failed Meeting',
+        nameAr: 'اجتماع لن يحفظ',
+        kind: MeetingKind.normal,
+        weekday: 5,
+        completion: completion,
+      ),
+    );
+
+    await expectLater(completion.future, throwsA(isA<StateError>()));
+    expect((await errorState as MeetingsError).message, contains('تعذر الحفظ'));
+  });
+
+  test(
+    'member save completes only after success and reports confirmation',
+    () async {
+      final repository = TestRepository();
+      final bloc = MembersBloc(repository: repository);
+      addTearDown(bloc.close);
+      final completion = Completer<OfflineSaveResult<MemberEntity>>();
+      final loaded = bloc.stream.firstWhere(
+        (state) =>
+            state is MembersLoaded &&
+            state.flashMessage == 'تم إضافة العضو بنجاح',
+      );
+
+      bloc.add(
+        CreateMember(
+          fullName: 'عضو جديد',
+          scope: MemberScope.sundaySchoolClass,
+          sundaySchoolClassId: 'cls-1',
+          completion: completion,
+        ),
+      );
+
+      await completion.future;
+      final state = await loaded as MembersLoaded;
+      expect(
+        state.allMembers.any((member) => member.fullName == 'عضو جديد'),
+        isTrue,
+      );
+    },
+  );
+
+  test('member save completion reports repository failure', () async {
+    final bloc = MembersBloc(repository: SaveFailureRepository());
+    addTearDown(bloc.close);
+    final completion = Completer<OfflineSaveResult<MemberEntity>>();
+    final errorState = bloc.stream.firstWhere((state) => state is MembersError);
+
+    bloc.add(
+      CreateMember(
+        fullName: 'عضو لن يحفظ',
+        scope: MemberScope.sundaySchoolClass,
+        sundaySchoolClassId: 'cls-1',
+        completion: completion,
+      ),
+    );
+
+    await expectLater(completion.future, throwsA(isA<StateError>()));
+    expect((await errorState as MembersError).message, contains('تعذر الحفظ'));
+  });
+
   test('signs out the recovery session after updating the password', () async {
     final repository = TestRepository();
     final bloc = AuthBloc(repository: repository);
@@ -87,6 +199,203 @@ void main() {
 
     expect(repository.lastPasswordResetEmail, 'user@example.com');
   });
+
+  test(
+    'QR attendance marks scanned present, unscanned absent, and keeps excused',
+    () async {
+      final repository = TestRepository();
+      repository._members.addAll(const [
+        MemberEntity(
+          id: 'mem-2',
+          churchId: 'ch-1',
+          fullName: 'بولس مينا',
+          scope: MemberScope.sundaySchoolClass,
+          sundaySchoolClassId: 'cls-1',
+          isActive: true,
+        ),
+        MemberEntity(
+          id: 'mem-3',
+          churchId: 'ch-1',
+          fullName: 'مارك بطرس',
+          scope: MemberScope.sundaySchoolClass,
+          sundaySchoolClassId: 'cls-1',
+          isActive: true,
+        ),
+      ]);
+      final bloc = attendance.AttendanceBloc(repository: repository);
+      addTearDown(bloc.close);
+      final session = AttendanceSessionEntity(
+        id: 'session-qr-1',
+        churchId: 'ch-1',
+        meetingId: 'mtg-1',
+        classId: 'cls-1',
+        sessionDate: DateTime(2026, 8, 28),
+        weekNumber: 35,
+      );
+
+      bloc.add(attendance.LoadAttendanceSheet(session));
+      await bloc.stream.firstWhere(
+        (state) => state is attendance.AttendanceSheetLoaded,
+      );
+      bloc.add(
+        attendance.UpdateMemberStatus(
+          memberId: 'mem-2',
+          status: AttendanceStatus.present,
+        ),
+      );
+      await bloc.stream.firstWhere(
+        (state) =>
+            state is attendance.AttendanceSheetLoaded &&
+            state.statusMap['mem-2'] == AttendanceStatus.present,
+      );
+      bloc.add(
+        attendance.UpdateMemberStatus(
+          memberId: 'mem-3',
+          status: AttendanceStatus.excused,
+        ),
+      );
+      await bloc.stream.firstWhere(
+        (state) =>
+            state is attendance.AttendanceSheetLoaded &&
+            state.statusMap['mem-3'] == AttendanceStatus.excused,
+      );
+      bloc.add(
+        attendance.ApplyQrAttendanceScan({'mem-1'}, markUnscannedAbsent: true),
+      );
+
+      final saved =
+          await bloc.stream.firstWhere(
+                (state) =>
+                    state is attendance.AttendanceSheetLoaded &&
+                    state.justSaved,
+              )
+              as attendance.AttendanceSheetLoaded;
+
+      expect(saved.statusMap['mem-1'], AttendanceStatus.present);
+      expect(saved.statusMap['mem-2'], AttendanceStatus.absent);
+      expect(saved.statusMap['mem-3'], AttendanceStatus.excused);
+      expect(saved.isDirty, isFalse);
+      expect(
+        repository._records
+            .singleWhere((record) => record.memberId == 'mem-1')
+            .status,
+        AttendanceStatus.present,
+      );
+    },
+  );
+
+  test(
+    'offline attendance save is locally saved and no longer dirty',
+    () async {
+      final repository = TestRepository()..attendanceSavesToServer = false;
+      final bloc = attendance.AttendanceBloc(repository: repository);
+      addTearDown(bloc.close);
+      final session = AttendanceSessionEntity(
+        id: 'session-offline-1',
+        churchId: 'ch-1',
+        meetingId: 'mtg-1',
+        classId: 'cls-1',
+        sessionDate: DateTime(2026, 8, 29),
+        weekNumber: 35,
+      );
+
+      bloc.add(attendance.LoadAttendanceSheet(session));
+      await bloc.stream.firstWhere(
+        (state) => state is attendance.AttendanceSheetLoaded,
+      );
+      bloc.add(
+        attendance.UpdateMemberStatus(
+          memberId: 'mem-1',
+          status: AttendanceStatus.present,
+        ),
+      );
+      await bloc.stream.firstWhere(
+        (state) => state is attendance.AttendanceSheetLoaded && state.isDirty,
+      );
+      bloc.add(attendance.SaveAttendanceSheet());
+
+      final saved =
+          await bloc.stream.firstWhere(
+                (state) =>
+                    state is attendance.AttendanceSheetLoaded &&
+                    state.justSaved,
+              )
+              as attendance.AttendanceSheetLoaded;
+
+      expect(saved.isDirty, isFalse);
+      expect(saved.savedOffline, isTrue);
+      expect(
+        saved.flashMessage,
+        'تم الحفظ محلياً وسيتم المزامنة عند عودة الاتصال',
+      );
+    },
+  );
+
+  test(
+    'adding a saved member preserves the current attendance sheet state',
+    () async {
+      final repository = TestRepository();
+      final bloc = attendance.AttendanceBloc(repository: repository);
+      addTearDown(bloc.close);
+      final session = AttendanceSessionEntity(
+        id: 'session-preserved-1',
+        churchId: 'ch-1',
+        meetingId: 'mtg-1',
+        classId: 'cls-1',
+        sessionDate: DateTime(2026, 8, 29),
+        weekNumber: 35,
+      );
+
+      bloc.add(attendance.LoadAttendanceSheet(session));
+      await bloc.stream.firstWhere(
+        (state) => state is attendance.AttendanceSheetLoaded,
+      );
+      bloc.add(
+        attendance.UpdateMemberStatus(
+          memberId: 'mem-1',
+          status: AttendanceStatus.excused,
+        ),
+      );
+      await bloc.stream.firstWhere(
+        (state) =>
+            state is attendance.AttendanceSheetLoaded &&
+            state.statusMap['mem-1'] == AttendanceStatus.excused,
+      );
+      bloc.add(attendance.SearchSheetMembers('مريم'));
+      await bloc.stream.firstWhere(
+        (state) =>
+            state is attendance.AttendanceSheetLoaded &&
+            state.searchQuery == 'مريم',
+      );
+
+      bloc.add(
+        attendance.AddCreatedMemberToSheet(
+          member: const MemberEntity(
+            id: 'mem-new',
+            churchId: 'ch-1',
+            fullName: 'عضو جديد',
+            scope: MemberScope.sundaySchoolClass,
+            sundaySchoolClassId: 'cls-1',
+            isActive: true,
+          ),
+        ),
+      );
+      final state =
+          await bloc.stream.firstWhere(
+                (state) =>
+                    state is attendance.AttendanceSheetLoaded &&
+                    state.allMembers.any((member) => member.id == 'mem-new'),
+              )
+              as attendance.AttendanceSheetLoaded;
+
+      expect(state.session.id, session.id);
+      expect(state.searchQuery, 'مريم');
+      expect(state.statusMap['mem-1'], AttendanceStatus.excused);
+      expect(state.statusMap['mem-new'], AttendanceStatus.present);
+      expect(state.filteredMembers.map((member) => member.id), ['mem-1']);
+      expect(state.isDirty, isTrue);
+    },
+  );
 
   test(
     'tracks spotlight tour completion separately for each account',
@@ -344,7 +653,7 @@ void main() {
     await tester.tap(find.byIcon(Icons.groups_outlined));
     await _settle(tester);
     expect(find.text('الأعضاء'), findsAtLeastNWidgets(1));
-    expect(find.byTooltip('استيراد وتصدير Excel'), findsOneWidget);
+    expect(find.byTooltip('تصدير واستيراد الأعضاء'), findsOneWidget);
     expect(find.byTooltip('تعديل مريم جرجس'), findsOneWidget);
     expect(find.byTooltip('حذف مريم جرجس'), findsOneWidget);
 
@@ -368,6 +677,69 @@ void main() {
     await tester.tap(find.byIcon(Icons.person_outline_rounded));
     await _settle(tester);
     expect(find.text('إعدادات الحساب والخدمة'), findsOneWidget);
+    expect(find.text('Verify Sentry Setup'), findsOneWidget);
+
+    final themeSetting = find.text('مظهر التطبيق');
+    await tester.ensureVisible(themeSetting);
+    await tester.tap(themeSetting);
+    await _settle(tester);
+    final themeDialog = find.byType(AlertDialog);
+    expect(themeDialog, findsOneWidget);
+    await tester.tap(
+      find.descendant(of: themeDialog, matching: find.text('الوضع الداكن')),
+    );
+    await _settle(tester);
+    expect(ThemeController.instance.preference, AppThemePreference.dark);
+    expect(AppTheme.isDark, isTrue);
+    expect(AppTheme.cardBackground, const Color(0xFF111827));
+    expect(Theme.of(tester.element(themeDialog)).brightness, Brightness.dark);
+    await tester.tap(
+      find.descendant(
+        of: themeDialog,
+        matching: find.widgetWithText(TextButton, 'تم'),
+      ),
+    );
+    await _settle(tester);
+
+    await tester.tap(find.text('الإبلاغ عن مشكلة'));
+    await _settle(tester);
+    expect(find.text('عنوان المشكلة'), findsOneWidget);
+    expect(find.text('تفاصيل المشكلة'), findsOneWidget);
+    final supportFields = find.byType(TextFormField);
+    await tester.enterText(supportFields.at(0), 'مشكلة في الصفحة الرئيسية');
+    await tester.enterText(
+      supportFields.at(1),
+      'الصفحة الرئيسية لا تظهر بعد تنفيذ الخطوات المطلوبة.',
+    );
+    await tester.tap(find.widgetWithText(ElevatedButton, 'إرسال البلاغ'));
+    await _settle(tester);
+    expect(repository.lastSupportCategory, 'other');
+    expect(repository.lastSupportSubject, 'مشكلة في الصفحة الرئيسية');
+    expect(
+      repository.lastSupportDescription,
+      'الصفحة الرئيسية لا تظهر بعد تنفيذ الخطوات المطلوبة.',
+    );
+
+    final deleteAccount = find.text('حذف الحساب نهائياً');
+    await tester.ensureVisible(deleteAccount);
+    await tester.tap(deleteAccount);
+    await _settle(tester);
+
+    expect(find.textContaining('إذا كنت آخر مدير نشط'), findsOneWidget);
+    final destructiveButton = find.widgetWithText(
+      FilledButton,
+      'حذف نهائي لكل البيانات',
+    );
+    expect(tester.widget<FilledButton>(destructiveButton).onPressed, isNull);
+
+    await tester.enterText(find.byType(TextField).last, 'حذف');
+    await tester.pump();
+    expect(tester.widget<FilledButton>(destructiveButton).onPressed, isNotNull);
+    await tester.tap(find.widgetWithText(TextButton, 'إلغاء'));
+    await _settle(tester);
+
+    await ThemeController.instance.setPreference(AppThemePreference.system);
+    await tester.pump();
   });
 }
 
@@ -412,6 +784,10 @@ class RegistrationCaptureRepository extends TestRepository {
 
 class TestRepository implements DatabaseRepository {
   String? lastPasswordResetEmail;
+  String? lastSupportCategory;
+  String? lastSupportSubject;
+  String? lastSupportDescription;
+  bool attendanceSavesToServer = true;
   AppProfile? _profile = const AppProfile(
     id: 'prof-1',
     churchId: 'ch-1',
@@ -562,6 +938,17 @@ class TestRepository implements DatabaseRepository {
       phone: phone,
     );
     return _profile!;
+  }
+
+  @override
+  Future<void> submitSupportTicket({
+    required String category,
+    required String subject,
+    required String description,
+  }) async {
+    lastSupportCategory = category;
+    lastSupportSubject = subject;
+    lastSupportDescription = description;
   }
 
   @override
@@ -935,7 +1322,7 @@ class TestRepository implements DatabaseRepository {
         ),
       );
     });
-    return true;
+    return attendanceSavesToServer;
   }
 
   @override
@@ -1126,5 +1513,35 @@ class InvitationActionRepository extends TestRepository {
   Future<void> declineInvitationByToken(String inviteToken) async {
     declineCalls++;
     declined = true;
+  }
+}
+
+class SaveFailureRepository extends TestRepository {
+  @override
+  Future<OfflineSaveResult<MeetingEntity>> createMeeting({
+    required String name,
+    required String nameAr,
+    required MeetingKind kind,
+    required int weekday,
+    int? attendanceReminderMinutes,
+    String? description,
+  }) async {
+    throw StateError('تعذر الحفظ');
+  }
+
+  @override
+  Future<OfflineSaveResult<MemberEntity>> createMember({
+    DateTime? birthDate,
+    String? code,
+    required String fullName,
+    String? meetingId,
+    String? parentName,
+    String? parentPhone,
+    String? phone,
+    required MemberScope scope,
+    String? sundaySchoolClassId,
+    String? notes,
+  }) async {
+    throw StateError('تعذر الحفظ');
   }
 }

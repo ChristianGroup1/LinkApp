@@ -41,6 +41,8 @@
 	<false/>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>يتيح لك لينك اختيار ملفات استيراد بيانات الأعضاء من جهازك. لا يصل التطبيق إلى مكتبة الصور إلا إذا اخترت عنصراً منها بنفسك.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>يستخدم لينك الكاميرا لمسح رمز QR الخاص بالعضو وتسجيل حضوره في الكشف المفتوح.</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

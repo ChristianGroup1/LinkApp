@@ -4,19 +4,19 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:link/core/auth/account_deletion_errors.dart';
 
 void main() {
-  test('shows the server reason for a rejected account deletion', () {
+  test('shows the server reason when Auth cleanup is incomplete', () {
     final error = FunctionException(
-      status: 409,
+      status: 500,
       details: const {
         'error':
-            'لا يمكن حذف آخر مدير للكنيسة. عيّن مديرًا آخر أولًا ثم أعد المحاولة.',
+            'تم حذف بيانات الكنيسة، لكن تعذر إنهاء حذف بعض حسابات الدخول. تواصل مع الدعم.',
       },
-      reasonPhrase: 'Conflict',
+      reasonPhrase: 'Internal Server Error',
     );
 
     expect(
       accountDeletionErrorMessage(error),
-      'لا يمكن حذف آخر مدير للكنيسة. عيّن مديرًا آخر أولًا ثم أعد المحاولة.',
+      'تم حذف بيانات الكنيسة، لكن تعذر إنهاء حذف بعض حسابات الدخول. تواصل مع الدعم.',
     );
   });
 

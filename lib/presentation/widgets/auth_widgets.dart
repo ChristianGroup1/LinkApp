@@ -86,12 +86,12 @@ class AuthBackButton extends StatelessWidget {
     return Align(
       alignment: Alignment.centerRight,
       child: Material(
-        color: Colors.white,
+        color: AppTheme.cardBackground,
         elevation: 0,
         shadowColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(14),
-          side: const BorderSide(color: AppTheme.border),
+          side: BorderSide(color: AppTheme.border),
         ),
         child: InkWell(
           onTap: onPressed,
@@ -202,7 +202,7 @@ class AuthFormSection extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(22, 22, 22, 24),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppTheme.cardBackground,
         borderRadius: BorderRadius.circular(28),
         border: Border.all(color: AppTheme.border.withValues(alpha: 0.8)),
         boxShadow: [

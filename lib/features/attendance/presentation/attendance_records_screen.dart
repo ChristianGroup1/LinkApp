@@ -164,7 +164,7 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
+      backgroundColor: AppTheme.cardBackground,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -345,7 +345,7 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
                               ),
                             ],
                           ),
-                          const Icon(
+                          Icon(
                             Icons.edit_calendar_rounded,
                             color: AppTheme.textLight,
                             size: 18,
@@ -526,7 +526,7 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
       child: Scaffold(
         backgroundColor: AppTheme.background,
         appBar: AppBar(
-          backgroundColor: Colors.white,
+          backgroundColor: AppTheme.cardBackground,
           elevation: 0,
           title: Text(
             'السجلات',
@@ -665,7 +665,7 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
         : _classes.where((c) => c.meetingId == _selectedMeeting!.id).toList();
 
     return Container(
-      color: Colors.white,
+      color: AppTheme.cardBackground,
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
       child: Column(
         children: [

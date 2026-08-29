@@ -62,6 +62,13 @@ class MarkAllStatus extends AttendanceEvent {
   MarkAllStatus(this.status);
 }
 
+class ApplyQrAttendanceScan extends AttendanceEvent {
+  final Set<String> memberIds;
+  final bool markUnscannedAbsent;
+
+  ApplyQrAttendanceScan(this.memberIds, {this.markUnscannedAbsent = false});
+}
+
 class SaveAttendanceSheet extends AttendanceEvent {}
 
 class OnRealtimeRecordsUpdated extends AttendanceEvent {
@@ -69,20 +76,11 @@ class OnRealtimeRecordsUpdated extends AttendanceEvent {
   OnRealtimeRecordsUpdated(this.records);
 }
 
-class AddNewcomerToSheet extends AttendanceEvent {
-  final String fullName;
-  final String? code;
-  final String? phone;
-  final String? parentName;
-  final String? parentPhone;
+class AddCreatedMemberToSheet extends AttendanceEvent {
+  final MemberEntity member;
+  final bool savedOffline;
 
-  AddNewcomerToSheet({
-    required this.fullName,
-    this.code,
-    this.phone,
-    this.parentName,
-    this.parentPhone,
-  });
+  AddCreatedMemberToSheet({required this.member, this.savedOffline = false});
 }
 
 class ClearJustSavedFlag extends AttendanceEvent {}
@@ -117,6 +115,7 @@ class AttendanceSheetLoaded extends AttendanceState {
   final bool isSaving;
   final bool isDirty;
   final bool justSaved;
+  final bool savedOffline;
   final String? flashMessage;
 
   AttendanceSheetLoaded({
@@ -129,6 +128,7 @@ class AttendanceSheetLoaded extends AttendanceState {
     this.isSaving = false,
     this.isDirty = false,
     this.justSaved = false,
+    this.savedOffline = false,
     this.flashMessage,
   });
 
@@ -142,6 +142,7 @@ class AttendanceSheetLoaded extends AttendanceState {
     bool? isSaving,
     bool? isDirty,
     bool? justSaved,
+    bool? savedOffline,
     String? flashMessage,
     bool clearFlashMessage = false,
   }) {
@@ -155,8 +156,10 @@ class AttendanceSheetLoaded extends AttendanceState {
       isSaving: isSaving ?? this.isSaving,
       isDirty: isDirty ?? this.isDirty,
       justSaved: justSaved ?? this.justSaved,
-      flashMessage:
-          clearFlashMessage ? null : (flashMessage ?? this.flashMessage),
+      savedOffline: savedOffline ?? this.savedOffline,
+      flashMessage: clearFlashMessage
+          ? null
+          : (flashMessage ?? this.flashMessage),
     );
   }
 }
@@ -204,8 +207,7 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
         add(
           LoadAttendanceSheet(
             result.data,
-            flashMessage:
-                result.syncedToServer ? null : kOfflineSavedMessage,
+            flashMessage: result.syncedToServer ? null : kOfflineSavedMessage,
           ),
         );
       } catch (e) {
@@ -331,58 +333,33 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
       }
     });
 
-    on<AddNewcomerToSheet>((event, emit) async {
+    on<AddCreatedMemberToSheet>((event, emit) {
       final currentState = state;
       if (currentState is! AttendanceSheetLoaded) return;
 
-      try {
-        final result = await repository.createMember(
-          fullName: event.fullName,
-          scope: currentState.session.classId != null
-              ? MemberScope.sundaySchoolClass
-              : MemberScope.meeting,
-          sundaySchoolClassId: currentState.session.classId,
-          meetingId: currentState.session.classId == null
-              ? currentState.session.meetingId
-              : null,
-          phone: event.phone,
-          parentName: event.parentName,
-          parentPhone: event.parentPhone,
-          code: event.code,
-        );
-        final created = result.data;
+      final updatedMembers =
+          currentState.allMembers
+              .where((member) => member.id != event.member.id)
+              .toList()
+            ..add(event.member)
+            ..sort((a, b) => a.fullName.compareTo(b.fullName));
+      final newMap = Map<String, AttendanceStatus>.from(currentState.statusMap);
+      newMap[event.member.id] = AttendanceStatus.present;
 
-        final updatedMembers = List<MemberEntity>.from(currentState.allMembers)
-          ..add(created)
-          ..sort((a, b) => a.fullName.compareTo(b.fullName));
-
-        final newMap = Map<String, AttendanceStatus>.from(
-          currentState.statusMap,
-        );
-        newMap[created.id] = AttendanceStatus.present;
-
-        emit(
-          _applyFilters(
-            currentState.copyWith(
-              allMembers: updatedMembers,
-              statusMap: newMap,
-              isDirty: true,
-              justSaved: false,
-              flashMessage: result.syncedToServer
-                  ? 'تمت إضافة العضو وتحديده كحاضر'
-                  : 'تمت إضافة العضو وتحديده كحاضر — $kOfflineSavedMessage',
-            ),
+      emit(
+        _applyFilters(
+          currentState.copyWith(
+            allMembers: updatedMembers,
+            statusMap: newMap,
+            isDirty: true,
+            justSaved: false,
+            savedOffline: event.savedOffline,
+            flashMessage: event.savedOffline
+                ? 'تمت إضافة العضو وتحديده كحاضر — $kOfflineSavedMessage'
+                : 'تمت إضافة العضو وتحديده كحاضر',
           ),
-        );
-      } catch (e) {
-        emit(
-          _applyFilters(
-            currentState.copyWith(
-              flashMessage: 'فشل إضافة العضو: ${e.toString()}',
-            ),
-          ),
-        );
-      }
+        ),
+      );
     });
 
     on<ClearJustSavedFlag>((event, emit) {
@@ -412,6 +389,7 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
           statusMap: newMap,
           isDirty: true,
           justSaved: false,
+          savedOffline: false,
         );
         emit(_applyFilters(updated));
       }
@@ -447,8 +425,73 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
           statusMap: newMap,
           isDirty: true,
           justSaved: false,
+          savedOffline: false,
         );
         emit(_applyFilters(updated));
+      }
+    });
+
+    on<ApplyQrAttendanceScan>((event, emit) async {
+      final currentState = state;
+      if (currentState is! AttendanceSheetLoaded ||
+          (event.memberIds.isEmpty && !event.markUnscannedAbsent)) {
+        return;
+      }
+
+      final allowedIds = currentState.allMembers
+          .map((member) => member.id)
+          .toSet();
+      final scannedIds = event.memberIds.intersection(allowedIds);
+      if (scannedIds.isEmpty && !event.markUnscannedAbsent) return;
+
+      final newMap = Map<String, AttendanceStatus>.from(currentState.statusMap);
+      for (final memberId in allowedIds) {
+        if (scannedIds.contains(memberId)) {
+          newMap[memberId] = AttendanceStatus.present;
+        } else if (event.markUnscannedAbsent &&
+            newMap[memberId] != AttendanceStatus.excused) {
+          newMap[memberId] = AttendanceStatus.absent;
+        }
+      }
+
+      final savingState = currentState.copyWith(
+        statusMap: newMap,
+        isSaving: true,
+        isDirty: true,
+        justSaved: false,
+        savedOffline: false,
+      );
+      emit(_applyFilters(savingState));
+
+      try {
+        final savedToServer = await repository.saveAttendanceRecords(
+          sessionId: currentState.session.id,
+          statusesByMemberId: newMap,
+        );
+        emit(
+          _applyFilters(
+            savingState.copyWith(
+              isSaving: false,
+              // A recoverable offline save is already persisted locally and
+              // queued for sync, so it is safe to leave this screen.
+              isDirty: false,
+              justSaved: true,
+              savedOffline: !savedToServer,
+              flashMessage: savedToServer ? null : kOfflineSavedMessage,
+            ),
+          ),
+        );
+      } catch (error) {
+        emit(
+          _applyFilters(
+            savingState.copyWith(
+              isSaving: false,
+              isDirty: true,
+              flashMessage:
+                  'تم تحديد الحضور، لكن تعذر الحفظ: ${error.toString()}',
+            ),
+          ),
+        );
       }
     });
 
@@ -464,8 +507,11 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
           emit(
             currentState.copyWith(
               isSaving: false,
-              isDirty: !savedToServer,
+              // Local persistence counts as saved; server sync can happen
+              // later without keeping the form in a dirty state.
+              isDirty: false,
               justSaved: true,
+              savedOffline: !savedToServer,
               flashMessage: savedToServer ? null : kOfflineSavedMessage,
             ),
           );

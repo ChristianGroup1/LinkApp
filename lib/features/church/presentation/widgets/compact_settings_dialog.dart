@@ -32,7 +32,7 @@ Future<T?> showCompactSettingsDialog<T>({
                   constraints: BoxConstraints(maxWidth: maxWidth),
                   padding: const EdgeInsets.fromLTRB(14, 13, 14, 14),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: AppTheme.cardBackground,
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
                       color: AppTheme.border.withValues(alpha: 0.8),
@@ -87,7 +87,7 @@ Future<T?> showCompactSettingsDialog<T>({
                             tooltip: 'إغلاق',
                             visualDensity: VisualDensity.compact,
                             onPressed: () => Navigator.pop(dialogContext),
-                            icon: const Icon(
+                            icon: Icon(
                               Icons.close_rounded,
                               color: AppTheme.textLight,
                               size: 20,
@@ -155,7 +155,7 @@ class CompactDialogActions extends StatelessWidget {
             onPressed: isLoading ? null : () => Navigator.pop(context),
             style: OutlinedButton.styleFrom(
               foregroundColor: AppTheme.textLight,
-              side: const BorderSide(color: AppTheme.border),
+              side: BorderSide(color: AppTheme.border),
               padding: const EdgeInsets.symmetric(vertical: 9),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),

@@ -229,7 +229,7 @@ class _InAppSpotlightOverlayState extends State<InAppSpotlightOverlay> {
               child: Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: AppTheme.cardBackground,
                   borderRadius: BorderRadius.circular(24),
                   boxShadow: [
                     BoxShadow(

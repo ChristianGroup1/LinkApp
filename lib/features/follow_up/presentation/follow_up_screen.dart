@@ -46,9 +46,7 @@ class _FollowUpScreenState extends State<FollowUpScreen>
     final followUpBloc = _followUpBloc;
     if (followUpBloc == null) {
       return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(color: AppTheme.primary),
-        ),
+        body: Center(child: CircularProgressIndicator(color: AppTheme.primary)),
       );
     }
 
@@ -58,7 +56,9 @@ class _FollowUpScreenState extends State<FollowUpScreen>
         listenWhen: (previous, current) =>
             current is FollowUpDataLoaded && current.flashMessage != null,
         listener: (context, state) {
-          if (state is! FollowUpDataLoaded || state.flashMessage == null) return;
+          if (state is! FollowUpDataLoaded || state.flashMessage == null) {
+            return;
+          }
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(state.flashMessage!, style: GoogleFonts.cairo()),
@@ -68,9 +68,9 @@ class _FollowUpScreenState extends State<FollowUpScreen>
           context.read<FollowUpBloc>().add(ClearFollowUpFlashMessage());
         },
         child: Scaffold(
-        backgroundColor: AppTheme.background,
-        appBar: AppBar(
-            backgroundColor: Colors.white,
+          backgroundColor: AppTheme.background,
+          appBar: AppBar(
+            backgroundColor: AppTheme.cardBackground,
             elevation: 0,
             title: Text(
               'متابعة الغياب',
@@ -175,7 +175,7 @@ class _FollowUpScreenState extends State<FollowUpScreen>
           margin: const EdgeInsets.only(bottom: 12),
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AppTheme.cardBackground,
             borderRadius: BorderRadius.circular(16),
             boxShadow: AppTheme.softShadow,
           ),
@@ -318,7 +318,7 @@ class _FollowUpScreenState extends State<FollowUpScreen>
           margin: const EdgeInsets.only(bottom: 12),
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AppTheme.cardBackground,
             borderRadius: BorderRadius.circular(16),
             boxShadow: AppTheme.softShadow,
           ),

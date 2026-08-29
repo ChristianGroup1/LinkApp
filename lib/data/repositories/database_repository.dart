@@ -1,7 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/auth/retry_nullable_load.dart';
 import '../models/models.dart';
 import '../../core/auth/account_deletion_errors.dart';
 import '../../core/auth/password_recovery_link.dart';
@@ -51,6 +54,11 @@ abstract class DatabaseRepository {
   Future<AppProfile> updateCurrentProfile({
     required String fullName,
     String? phone,
+  });
+  Future<void> submitSupportTicket({
+    required String category,
+    required String subject,
+    required String description,
   });
   Future<void> deleteCurrentAccount();
   Future<void> signOut();
@@ -398,13 +406,38 @@ class SupabaseRepository implements DatabaseRepository {
     String email,
     String password,
   ) async {
-    final response = await _client.auth.signInWithPassword(
-      email: email.trim(),
-      password: password,
-    );
+    debugPrint('[Auth] Starting password sign-in');
+    late final AuthResponse response;
+    try {
+      response = await _client.auth
+          .signInWithPassword(email: email.trim(), password: password)
+          .timeout(const Duration(seconds: 15));
+    } on TimeoutException {
+      debugPrint('[Auth] Password sign-in timed out');
+      throw Exception(
+        'استغرق تسجيل الدخول وقتًا أطول من المعتاد. تحقق من الإنترنت وحاول مرة أخرى.',
+      );
+    }
     if (response.user != null) {
-      final profile = await getCurrentProfile();
+      debugPrint('[Auth] Credentials accepted; loading profile');
+      AppProfile? profile;
+      try {
+        profile = await retryNullableLoad<AppProfile>(
+          load: () => _getCurrentProfile(throwOnRecoverableError: true),
+        );
+      } catch (error) {
+        debugPrint('[Auth] Profile loading failed after retries: $error');
+        if (_isRecoverableOfflineError(error)) {
+          // Keep the accepted Supabase session. A second attempt can load the
+          // profile without forcing the user through a false password error.
+          throw Exception(
+            'تم قبول بيانات الدخول، لكن الاتصال انقطع أثناء تحميل الحساب. حاول مرة أخرى عند استقرار الإنترنت.',
+          );
+        }
+        rethrow;
+      }
       if (profile == null) {
+        debugPrint('[Auth] No profile exists for the authenticated user');
         await _client.auth.signOut();
         throw Exception(
           'تم قبول بيانات الدخول، لكن الحساب غير مربوط بملف خادم داخل الكنيسة. اطلب من مسؤول الكنيسة إعادة دعوتك أو إصلاح حسابك.',
@@ -415,6 +448,7 @@ class SupabaseRepository implements DatabaseRepository {
         throw Exception('تم إيقاف حسابك. راجع مسؤول الكنيسة لإعادة تفعيله.');
       }
       unawaited(warmOfflineCache());
+      debugPrint('[Auth] Profile loaded; authentication completed');
       return profile;
     }
     return null;
@@ -882,6 +916,72 @@ class SupabaseRepository implements DatabaseRepository {
   }
 
   @override
+  Future<void> submitSupportTicket({
+    required String category,
+    required String subject,
+    required String description,
+  }) async {
+    final user = _client.auth.currentUser;
+    if (user == null) throw Exception('سجّل الدخول أولاً لإرسال البلاغ.');
+
+    await OfflineNetworkPolicy.ensureReady();
+    if (OfflineNetworkPolicy.isConnectivityOffline) {
+      throw Exception('إرسال البلاغ يحتاج اتصالًا بالإنترنت.');
+    }
+
+    final profile = await getCurrentProfile();
+    if (profile?.churchId == null) {
+      throw Exception('تعذر تحديد بيانات حسابك لإرسال البلاغ.');
+    }
+
+    try {
+      final packageInfo = await PackageInfo.fromPlatform();
+      await _client
+          .from('support_tickets')
+          .insert({
+            'user_id': user.id,
+            'church_id': profile!.churchId,
+            'reporter_name': profile.fullName,
+            'contact_email': profile.email ?? user.email,
+            'category': category,
+            'subject': subject.trim(),
+            'description': description.trim(),
+            'platform': _supportPlatformName,
+            'app_version': packageInfo.version,
+            'build_number': packageInfo.buildNumber,
+          })
+          .timeout(OfflineNetworkPolicy.requestTimeout);
+      debugPrint('[Support] Ticket submitted successfully');
+    } on PostgrestException catch (error) {
+      debugPrint('[Support] Database rejected ticket: ${error.code}');
+      if (error.code == '42P01') {
+        throw Exception('خدمة البلاغات لم تُفعّل على الخادم بعد.');
+      }
+      throw Exception('تعذر إرسال البلاغ الآن. حاول مرة أخرى.');
+    } on TimeoutException {
+      throw Exception('استغرق إرسال البلاغ وقتًا طويلًا. حاول مرة أخرى.');
+    } catch (error) {
+      debugPrint('[Support] Ticket submission failed: $error');
+      if (_isRecoverableOfflineError(error)) {
+        throw Exception('تعذر الاتصال بالخادم. تحقق من الإنترنت وحاول مجددًا.');
+      }
+      rethrow;
+    }
+  }
+
+  String get _supportPlatformName {
+    if (kIsWeb) return 'web';
+    return switch (defaultTargetPlatform) {
+      TargetPlatform.android => 'android',
+      TargetPlatform.iOS => 'ios',
+      TargetPlatform.windows => 'windows',
+      TargetPlatform.macOS => 'macos',
+      TargetPlatform.linux => 'linux',
+      TargetPlatform.fuchsia => 'fuchsia',
+    };
+  }
+
+  @override
   Future<void> deleteCurrentAccount() async {
     if (_client.auth.currentUser == null) {
       throw Exception('لا يوجد حساب مسجل دخول');
@@ -916,7 +1016,11 @@ class SupabaseRepository implements DatabaseRepository {
   }
 
   @override
-  Future<AppProfile?> getCurrentProfile() async {
+  Future<AppProfile?> getCurrentProfile() => _getCurrentProfile();
+
+  Future<AppProfile?> _getCurrentProfile({
+    bool throwOnRecoverableError = false,
+  }) async {
     final user = _client.auth.currentUser;
     if (user == null) return null;
 
@@ -954,7 +1058,9 @@ class SupabaseRepository implements DatabaseRepository {
     } catch (error) {
       final cached = await _readCachedProfileForCurrentUser();
       if (cached != null) return cached;
-      if (_isRecoverableOfflineError(error)) return null;
+      if (_isRecoverableOfflineError(error) && !throwOnRecoverableError) {
+        return null;
+      }
       rethrow;
     }
   }

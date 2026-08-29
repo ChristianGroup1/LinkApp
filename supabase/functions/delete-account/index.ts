@@ -78,14 +78,68 @@ Deno.serve(async (req) => {
       }
 
       if ((count ?? 0) === 0) {
-        return json(
-          {
-            error:
-              'لا يمكن حذف آخر مدير للكنيسة. عيّن مديرًا آخر أولًا ثم أعد المحاولة.',
-            code: 'last_church_admin',
-          },
-          409,
+        const { data: churchUserIds, error: churchDeletionError } =
+          await adminClient.rpc('delete_church_for_last_admin', {
+            p_requester_id: user.id,
+          })
+
+        if (churchDeletionError) {
+          console.error('Full church deletion failed', {
+            userId: user.id,
+            message: churchDeletionError.message,
+          })
+          return json(
+            {
+              error:
+                'تعذر حذف الكنيسة وبياناتها. تأكد من تشغيل تحديث قاعدة البيانات الخاص بحذف آخر مدير.',
+              code: 'church_delete_failed',
+            },
+            409,
+          )
+        }
+
+        const linkedUserIds = Array.isArray(churchUserIds)
+          ? churchUserIds.filter(
+            (candidate): candidate is string => typeof candidate === 'string',
+          )
+          : []
+        const uniqueUserIds = [...new Set([...linkedUserIds, user.id])]
+        // Delete the requester's Auth account last so its current session is
+        // available until all other linked accounts have been processed.
+        uniqueUserIds.sort((left, right) =>
+          left === user.id ? 1 : right === user.id ? -1 : 0
         )
+
+        const failedUserIds: string[] = []
+        for (const linkedUserId of uniqueUserIds) {
+          const { error: authDeletionError } =
+            await adminClient.auth.admin.deleteUser(linkedUserId, false)
+          if (authDeletionError) {
+            failedUserIds.push(linkedUserId)
+            console.error('Linked Auth account deletion failed', {
+              userId: linkedUserId,
+              message: authDeletionError.message,
+            })
+          }
+        }
+
+        if (failedUserIds.length > 0) {
+          return json(
+            {
+              error:
+                'تم حذف بيانات الكنيسة، لكن تعذر إنهاء حذف بعض حسابات الدخول. تواصل مع الدعم.',
+              code: 'auth_cleanup_incomplete',
+              failed_accounts: failedUserIds.length,
+            },
+            500,
+          )
+        }
+
+        return json({
+          success: true,
+          deleted_church: true,
+          deleted_users: uniqueUserIds.length,
+        })
       }
     }
 

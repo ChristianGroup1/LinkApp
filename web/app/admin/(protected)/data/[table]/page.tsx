@@ -11,6 +11,19 @@ function displayValue(value: unknown) {
   if (typeof value === 'boolean') return value ? 'نعم' : 'لا';
   if (typeof value === 'object') return JSON.stringify(value);
   const text = String(value);
+  const supportLabels: Record<string, string> = {
+    open: 'جديد',
+    in_progress: 'قيد المتابعة',
+    resolved: 'تم الحل',
+    closed: 'مغلق',
+    login: 'تسجيل الدخول والحساب',
+    attendance: 'الحضور والغياب',
+    members: 'الأعضاء والاستيراد',
+    invitations: 'الدعوات والصلاحيات',
+    notifications: 'الإشعارات والتذكيرات',
+    other: 'مشكلة أخرى',
+  };
+  if (supportLabels[text]) return supportLabels[text];
   if (/^\d{4}-\d{2}-\d{2}T/.test(text)) return new Date(text).toLocaleString('ar-EG');
   return text.length > 42 ? `${text.slice(0, 39)}…` : text;
 }

@@ -34,7 +34,7 @@ class PasswordRecoveryErrorScreen extends StatelessWidget {
                     vertical: 30,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: AppTheme.cardBackground,
                     borderRadius: BorderRadius.circular(28),
                     border: Border.all(
                       color: AppTheme.border.withValues(alpha: 0.7),
@@ -138,7 +138,7 @@ class PasswordRecoveryErrorScreen extends StatelessWidget {
                         onPressed: () => Navigator.of(
                           context,
                         ).popUntil((route) => route.isFirst),
-                        icon: const Icon(
+                        icon: Icon(
                           Icons.arrow_back_rounded,
                           size: 18,
                           color: AppTheme.textLight,

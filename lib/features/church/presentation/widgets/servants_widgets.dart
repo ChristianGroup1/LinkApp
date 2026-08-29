@@ -139,7 +139,7 @@ class ServantsHeroHeader extends StatelessWidget {
               child: Ink(
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: AppTheme.cardBackground,
                   borderRadius: BorderRadius.circular(14),
                   boxShadow: [
                     BoxShadow(
@@ -259,14 +259,14 @@ class ServantsSearchBox extends StatelessWidget {
                   controller.clear();
                   onChanged('');
                 },
-                icon: const Icon(
+                icon: Icon(
                   Icons.clear_rounded,
                   size: 18,
                   color: AppTheme.textLight,
                 ),
               ),
         filled: true,
-        fillColor: Colors.white,
+        fillColor: AppTheme.cardBackground,
         contentPadding: const EdgeInsets.symmetric(
           vertical: 12,
           horizontal: 16,
@@ -322,7 +322,7 @@ class ServantsFilterChip extends StatelessWidget {
       selected: selected,
       onSelected: (_) => onTap(),
       selectedColor: AppTheme.primary,
-      backgroundColor: Colors.white,
+      backgroundColor: AppTheme.cardBackground,
       side: BorderSide(
         color: selected
             ? AppTheme.primary
@@ -414,7 +414,7 @@ class ServantsEmptyState extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppTheme.cardBackground,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: AppTheme.border.withValues(alpha: 0.8)),
       ),
@@ -862,7 +862,7 @@ class ServantsAssignmentChip extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(7),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppTheme.cardBackground,
               borderRadius: BorderRadius.circular(9),
             ),
             child: Icon(
@@ -1314,7 +1314,7 @@ class ServantsPendingInvitationsSection extends StatelessWidget {
           margin: const EdgeInsets.only(bottom: 12),
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AppTheme.cardBackground,
             borderRadius: BorderRadius.circular(18),
             border: Border.all(color: AppTheme.border.withValues(alpha: 0.7)),
             boxShadow: [

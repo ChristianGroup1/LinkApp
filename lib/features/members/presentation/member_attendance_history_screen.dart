@@ -74,19 +74,17 @@ class _MemberAttendanceHistoryScreenState
             '${entry.sessionDate.day}/${entry.sessionDate.month}/${entry.sessionDate.year}';
         final matchDate = dateStr.contains(query);
 
-        if (!matchRegister &&
-            !matchDestination &&
-            !matchNotes &&
-            !matchDate) {
+        if (!matchRegister && !matchDestination && !matchNotes && !matchDate) {
           return false;
         }
       }
 
       return true;
-    }).toList()
-      ..sort((a, b) => _sortNewestFirst
+    }).toList()..sort(
+      (a, b) => _sortNewestFirst
           ? b.sessionDate.compareTo(a.sessionDate)
-          : a.sessionDate.compareTo(b.sessionDate));
+          : a.sessionDate.compareTo(b.sessionDate),
+    );
   }
 
   @override
@@ -140,7 +138,7 @@ class _MemberAttendanceHistoryScreenState
               margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: AppTheme.cardBackground,
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: AppTheme.softShadow,
                 border: Border.all(
@@ -213,7 +211,8 @@ class _MemberAttendanceHistoryScreenState
                     onChanged: (_) => setState(() {}),
                     style: GoogleFonts.cairo(fontSize: 13.5),
                     decoration: InputDecoration(
-                      hintText: 'ابحث باسم السجل، الاجتماع، التاريخ أو الملاحظات...',
+                      hintText:
+                          'ابحث باسم السجل، الاجتماع، التاريخ أو الملاحظات...',
                       hintStyle: GoogleFonts.cairo(
                         color: AppTheme.textLight.withValues(alpha: 0.7),
                         fontSize: 12.5,
@@ -233,7 +232,7 @@ class _MemberAttendanceHistoryScreenState
                             )
                           : null,
                       filled: true,
-                      fillColor: Colors.white,
+                      fillColor: AppTheme.cardBackground,
                       contentPadding: const EdgeInsets.symmetric(
                         horizontal: 14,
                         vertical: 12,
@@ -262,14 +261,23 @@ class _MemberAttendanceHistoryScreenState
                       children: [
                         _buildFilterChip('الكل ($total)', 'all'),
                         const SizedBox(width: 6),
-                        _buildFilterChip('حاضر ($presentCount)', 'present',
-                            color: AppTheme.secondary),
+                        _buildFilterChip(
+                          'حاضر ($presentCount)',
+                          'present',
+                          color: AppTheme.secondary,
+                        ),
                         const SizedBox(width: 6),
-                        _buildFilterChip('غاب ($absentCount)', 'absent',
-                            color: AppTheme.accentRed),
+                        _buildFilterChip(
+                          'غاب ($absentCount)',
+                          'absent',
+                          color: AppTheme.accentRed,
+                        ),
                         const SizedBox(width: 6),
-                        _buildFilterChip('معتذر ($excusedCount)', 'excused',
-                            color: AppTheme.accentOrange),
+                        _buildFilterChip(
+                          'معتذر ($excusedCount)',
+                          'excused',
+                          color: AppTheme.accentOrange,
+                        ),
                         const SizedBox(width: 10),
                         InkWell(
                           onTap: () {
@@ -284,11 +292,9 @@ class _MemberAttendanceHistoryScreenState
                               vertical: 6,
                             ),
                             decoration: BoxDecoration(
-                              color: Colors.white,
+                              color: AppTheme.cardBackground,
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: AppTheme.border,
-                              ),
+                              border: Border.all(color: AppTheme.border),
                             ),
                             child: Row(
                               children: [
@@ -419,7 +425,7 @@ class _MemberAttendanceHistoryScreenState
         }
       },
       selectedColor: activeColor,
-      backgroundColor: Colors.white,
+      backgroundColor: AppTheme.cardBackground,
       side: BorderSide(
         color: isSelected
             ? activeColor
@@ -441,23 +447,23 @@ class _MemberAttendanceHistoryScreenState
   Widget _buildAttendanceCard(MemberAttendanceHistoryEntry entry) {
     final statusDetails = switch (entry.status) {
       AttendanceStatus.present => (
-          label: 'حاضر',
-          icon: Icons.check_circle_rounded,
-          color: AppTheme.secondary,
-          bg: AppTheme.secondary.withValues(alpha: 0.08),
-        ),
+        label: 'حاضر',
+        icon: Icons.check_circle_rounded,
+        color: AppTheme.secondary,
+        bg: AppTheme.secondary.withValues(alpha: 0.08),
+      ),
       AttendanceStatus.absent => (
-          label: 'غائب',
-          icon: Icons.cancel_rounded,
-          color: AppTheme.accentRed,
-          bg: AppTheme.accentRed.withValues(alpha: 0.08),
-        ),
+        label: 'غائب',
+        icon: Icons.cancel_rounded,
+        color: AppTheme.accentRed,
+        bg: AppTheme.accentRed.withValues(alpha: 0.08),
+      ),
       AttendanceStatus.excused => (
-          label: 'معتذر',
-          icon: Icons.info_rounded,
-          color: AppTheme.accentOrange,
-          bg: AppTheme.accentOrange.withValues(alpha: 0.08),
-        ),
+        label: 'معتذر',
+        icon: Icons.info_rounded,
+        color: AppTheme.accentOrange,
+        bg: AppTheme.accentOrange.withValues(alpha: 0.08),
+      ),
     };
 
     final meeting = widget.meetings
@@ -487,11 +493,9 @@ class _MemberAttendanceHistoryScreenState
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppTheme.cardBackground,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppTheme.border.withValues(alpha: 0.6),
-        ),
+        border: Border.all(color: AppTheme.border.withValues(alpha: 0.6)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.025),
@@ -562,7 +566,9 @@ class _MemberAttendanceHistoryScreenState
                         ),
                         const SizedBox(width: 6),
                         Text(
-                          dayName.isNotEmpty ? '$dayName • $dateFormatted' : dateFormatted,
+                          dayName.isNotEmpty
+                              ? '$dayName • $dateFormatted'
+                              : dateFormatted,
                           style: GoogleFonts.cairo(
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
@@ -615,7 +621,7 @@ class _MemberAttendanceHistoryScreenState
               ),
               child: Row(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.note_alt_outlined,
                     size: 15,
                     color: AppTheme.textLight,

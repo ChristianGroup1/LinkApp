@@ -193,7 +193,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                 Container(
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: AppTheme.cardBackground,
                     borderRadius: BorderRadius.circular(28),
                     boxShadow: [
                       BoxShadow(

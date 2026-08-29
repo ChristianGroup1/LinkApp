@@ -140,9 +140,7 @@ class _WeeklyAttendanceScreenState extends State<WeeklyAttendanceScreen> {
     final attendanceBloc = _attendanceBloc;
     if (attendanceBloc == null) {
       return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(color: AppTheme.primary),
-        ),
+        body: Center(child: CircularProgressIndicator(color: AppTheme.primary)),
       );
     }
 
@@ -168,7 +166,7 @@ class _WeeklyAttendanceScreenState extends State<WeeklyAttendanceScreen> {
                 child: Scaffold(
                   backgroundColor: AppTheme.background,
                   appBar: AppBar(
-                    backgroundColor: Colors.white,
+                    backgroundColor: AppTheme.cardBackground,
                     elevation: 0,
                     title: Text(
                       'تسجيل الحضور الأسبوعي',
@@ -187,7 +185,8 @@ class _WeeklyAttendanceScreenState extends State<WeeklyAttendanceScreen> {
                             context.read<ChurchBloc>().add(LoadChurchContext());
                           },
                         )
-                      : churchState is! ChurchContextLoaded || _isLoadingDropdowns
+                      : churchState is! ChurchContextLoaded ||
+                            _isLoadingDropdowns
                       ? const Center(
                           child: CircularProgressIndicator(
                             color: AppTheme.primary,
@@ -288,7 +287,9 @@ class _WeeklyAttendanceScreenState extends State<WeeklyAttendanceScreen> {
       });
       if (!result.syncedToServer) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('تم الحفظ محلياً وسيتم المزامنة عند عودة الاتصال')),
+          const SnackBar(
+            content: Text('تم الحفظ محلياً وسيتم المزامنة عند عودة الاتصال'),
+          ),
         );
       }
       Navigator.push(

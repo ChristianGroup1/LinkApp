@@ -85,9 +85,11 @@ class AppErrorState extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(28),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AppTheme.cardBackground,
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: AppTheme.accentRed.withValues(alpha: 0.15)),
+            border: Border.all(
+              color: AppTheme.accentRed.withValues(alpha: 0.15),
+            ),
             boxShadow: AppTheme.softShadow,
           ),
           child: Column(

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -5,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../core/notifications/meeting_reminder_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/models.dart';
+import '../../../shared/ui/offline_editing.dart';
 import '../logic/meetings_bloc.dart';
 import 'widgets/meeting_dialogs.dart';
 
@@ -29,6 +32,9 @@ class _AddEditMeetingScreenState extends State<AddEditMeetingScreen> {
   TimeOfDay _reminderTime = const TimeOfDay(hour: 18, minute: 0);
   bool _isSaving = false;
   bool _isTestingNotification = false;
+  bool _isDirty = false;
+  bool _allowPop = false;
+  bool _discardDialogOpen = false;
 
   bool get _isEdit => widget.meeting != null;
 
@@ -55,13 +61,37 @@ class _AddEditMeetingScreenState extends State<AddEditMeetingScreen> {
         _reminderTime = const TimeOfDay(hour: 18, minute: 0);
       }
     }
+    _nameController.addListener(_markDirty);
   }
 
   @override
   void dispose() {
+    _nameController.removeListener(_markDirty);
     _nameController.dispose();
     _classController.dispose();
     super.dispose();
+  }
+
+  void _markDirty() {
+    if (!_isDirty && !_isSaving && mounted) {
+      setState(() => _isDirty = true);
+    }
+  }
+
+  Future<void> _handleBack() async {
+    if (_isSaving) return;
+    if (_allowPop || !_isDirty) {
+      if (mounted) Navigator.pop(context);
+      return;
+    }
+    if (_discardDialogOpen) return;
+    _discardDialogOpen = true;
+    final discard = await confirmDiscardUnsavedChanges(context);
+    _discardDialogOpen = false;
+    if (discard && mounted) {
+      setState(() => _allowPop = true);
+      Navigator.pop(context);
+    }
   }
 
   void _addClassName() {
@@ -70,6 +100,7 @@ class _AddEditMeetingScreenState extends State<AddEditMeetingScreen> {
     setState(() {
       _classNames.add(name);
       _classController.clear();
+      _isDirty = true;
     });
   }
 
@@ -82,7 +113,10 @@ class _AddEditMeetingScreenState extends State<AddEditMeetingScreen> {
       confirmText: 'اختيار',
     );
     if (selected != null && mounted) {
-      setState(() => _reminderTime = selected);
+      setState(() {
+        _reminderTime = selected;
+        _isDirty = true;
+      });
     }
   }
 
@@ -122,7 +156,8 @@ class _AddEditMeetingScreenState extends State<AddEditMeetingScreen> {
     );
   }
 
-  void _submit() {
+  Future<void> _submit() async {
+    if (_isSaving) return;
     if (!_formKey.currentState!.validate()) return;
 
     final name = _nameController.text.trim();
@@ -142,6 +177,7 @@ class _AddEditMeetingScreenState extends State<AddEditMeetingScreen> {
 
     setState(() => _isSaving = true);
     final bloc = context.read<MeetingsBloc>();
+    final completion = Completer<void>();
 
     if (_isEdit) {
       bloc.add(
@@ -155,6 +191,7 @@ class _AddEditMeetingScreenState extends State<AddEditMeetingScreen> {
               ? _reminderTime.hour * 60 + _reminderTime.minute
               : null,
           description: widget.meeting?.description,
+          completion: completion,
         ),
       );
     } else {
@@ -178,374 +215,428 @@ class _AddEditMeetingScreenState extends State<AddEditMeetingScreen> {
                     )
                     .toList()
               : const [],
+          completion: completion,
         ),
       );
     }
 
-    Navigator.pop(context);
+    try {
+      await completion.future;
+      if (!mounted) return;
+      setState(() {
+        _isSaving = false;
+        _isDirty = false;
+        _allowPop = true;
+      });
+      Navigator.pop(context, true);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _isSaving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _isEdit
+                ? 'تعذّر حفظ تعديلات الاجتماع: $error'
+                : 'تعذّر إضافة الاجتماع: $error',
+            style: GoogleFonts.cairo(),
+          ),
+          backgroundColor: AppTheme.accentRed,
+        ),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Scaffold(
-        backgroundColor: AppTheme.background,
-        appBar: AppBar(
-          backgroundColor: Colors.white,
-          surfaceTintColor: Colors.transparent,
-          elevation: 0,
-          title: Text(
-            _isEdit ? 'تعديل الاجتماع' : 'إضافة اجتماع جديد',
-            style: GoogleFonts.cairo(
-              color: AppTheme.textDark,
-              fontWeight: FontWeight.w900,
-              fontSize: 18,
+    return PopScope(
+      canPop: !_isSaving && (_allowPop || !_isDirty),
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _handleBack();
+      },
+      child: Directionality(
+        textDirection: TextDirection.rtl,
+        child: Scaffold(
+          backgroundColor: AppTheme.background,
+          appBar: AppBar(
+            backgroundColor: AppTheme.cardBackground,
+            surfaceTintColor: Colors.transparent,
+            elevation: 0,
+            title: Text(
+              _isEdit ? 'تعديل الاجتماع' : 'إضافة اجتماع جديد',
+              style: GoogleFonts.cairo(
+                color: AppTheme.textDark,
+                fontWeight: FontWeight.w900,
+                fontSize: 18,
+              ),
+            ),
+            centerTitle: true,
+            leading: IconButton(
+              icon: Icon(Icons.arrow_back_rounded, color: AppTheme.textDark),
+              onPressed: _isSaving ? null : _handleBack,
+            ),
+            bottom: PreferredSize(
+              preferredSize: const Size.fromHeight(1),
+              child: Container(
+                height: 1,
+                color: AppTheme.border.withValues(alpha: 0.7),
+              ),
             ),
           ),
-          centerTitle: true,
-          leading: IconButton(
-            icon: const Icon(
-              Icons.arrow_back_rounded,
-              color: AppTheme.textDark,
-            ),
-            onPressed: _isSaving ? null : () => Navigator.pop(context),
-          ),
-          bottom: PreferredSize(
-            preferredSize: const Size.fromHeight(1),
-            child: Container(
-              height: 1,
-              color: AppTheme.border.withValues(alpha: 0.7),
-            ),
-          ),
-        ),
-        body: Form(
-          key: _formKey,
-          child: Column(
-            children: [
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _MeetingFormHero(isEdit: _isEdit),
-                      const SizedBox(height: 16),
-                      _FormSectionCard(
-                        title: 'بيانات الاجتماع',
-                        icon: Icons.event_note_rounded,
+          body: AbsorbPointer(
+            absorbing: _isSaving,
+            child: Form(
+              key: _formKey,
+              onChanged: _markDirty,
+              child: Column(
+                children: [
+                  const OfflineEditingNotice(),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          TextFormField(
-                            controller: _nameController,
-                            style: GoogleFonts.cairo(),
-                            decoration: meetingFormInputDecoration(
-                              'اسم الاجتماع*',
-                              Icons.title_rounded,
-                            ),
-                            validator: (value) {
-                              if (value == null || value.trim().isEmpty) {
-                                return 'اكتب اسم الاجتماع أولاً';
-                              }
-                              return null;
-                            },
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      _FormSectionCard(
-                        title: 'موعد الاجتماع',
-                        icon: Icons.calendar_month_rounded,
-                        children: [
-                          Text(
-                            'اختر يوم الاجتماع الأسبوعي',
-                            style: GoogleFonts.cairo(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              color: AppTheme.textLight,
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: List.generate(7, (index) {
-                              final day = index + 1;
-                              final selected = _selectedWeekday == day;
-                              return Material(
-                                color: Colors.transparent,
-                                child: InkWell(
-                                  onTap: () =>
-                                      setState(() => _selectedWeekday = day),
-                                  borderRadius: BorderRadius.circular(12),
-                                  child: Ink(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 9,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: selected
-                                          ? AppTheme.primary
-                                          : AppTheme.surfaceMuted,
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(
-                                        color: selected
-                                            ? AppTheme.primary
-                                            : AppTheme.border.withValues(
-                                                alpha: 0.7,
-                                              ),
-                                      ),
-                                    ),
-                                    child: Text(
-                                      kWeekdaysAr[index],
-                                      style: GoogleFonts.cairo(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w800,
-                                        color: selected
-                                            ? Colors.white
-                                            : AppTheme.textDark,
-                                      ),
-                                    ),
-                                  ),
+                          _MeetingFormHero(isEdit: _isEdit),
+                          const SizedBox(height: 16),
+                          _FormSectionCard(
+                            title: 'بيانات الاجتماع',
+                            icon: Icons.event_note_rounded,
+                            children: [
+                              TextFormField(
+                                controller: _nameController,
+                                style: GoogleFonts.cairo(),
+                                decoration: meetingFormInputDecoration(
+                                  'اسم الاجتماع*',
+                                  Icons.title_rounded,
                                 ),
-                              );
-                            }),
+                                validator: (value) {
+                                  if (value == null || value.trim().isEmpty) {
+                                    return 'اكتب اسم الاجتماع أولاً';
+                                  }
+                                  return null;
+                                },
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 18),
-                          Divider(
-                            color: AppTheme.border.withValues(alpha: 0.75),
-                          ),
-                          const SizedBox(height: 6),
-                          _OptionTile(
-                            icon: Icons.notifications_active_outlined,
-                            title: 'تذكير تسجيل الحضور والغياب',
-                            subtitle:
-                                'يصل أسبوعيًا لكل خادم لديه صلاحية أخذ الحضور',
-                            value: _reminderEnabled,
-                            onChanged: (value) =>
-                                setState(() => _reminderEnabled = value),
-                          ),
-                          if (_reminderEnabled) ...[
-                            const SizedBox(height: 12),
-                            Material(
-                              color: AppTheme.accentOrangeLight,
-                              borderRadius: BorderRadius.circular(14),
-                              child: InkWell(
-                                onTap: _pickReminderTime,
-                                borderRadius: BorderRadius.circular(14),
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 14,
-                                    vertical: 12,
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      const Icon(
-                                        Icons.alarm_rounded,
-                                        color: AppTheme.accentOrange,
-                                      ),
-                                      const SizedBox(width: 10),
-                                      Expanded(
+                          const SizedBox(height: 12),
+                          _FormSectionCard(
+                            title: 'موعد الاجتماع',
+                            icon: Icons.calendar_month_rounded,
+                            children: [
+                              Text(
+                                'اختر يوم الاجتماع الأسبوعي',
+                                style: GoogleFonts.cairo(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppTheme.textLight,
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: List.generate(7, (index) {
+                                  final day = index + 1;
+                                  final selected = _selectedWeekday == day;
+                                  return Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
+                                      onTap: () => setState(() {
+                                        _selectedWeekday = day;
+                                        _isDirty = true;
+                                      }),
+                                      borderRadius: BorderRadius.circular(12),
+                                      child: Ink(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 9,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: selected
+                                              ? AppTheme.primary
+                                              : AppTheme.surfaceMuted,
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                          border: Border.all(
+                                            color: selected
+                                                ? AppTheme.primary
+                                                : AppTheme.border.withValues(
+                                                    alpha: 0.7,
+                                                  ),
+                                          ),
+                                        ),
                                         child: Text(
-                                          'وقت التنبيه',
+                                          kWeekdaysAr[index],
                                           style: GoogleFonts.cairo(
-                                            color: AppTheme.textDark,
+                                            fontSize: 12,
                                             fontWeight: FontWeight.w800,
+                                            color: selected
+                                                ? Colors.white
+                                                : AppTheme.textDark,
                                           ),
                                         ),
                                       ),
-                                      Text(
-                                        _reminderTime.format(context),
-                                        style: GoogleFonts.cairo(
-                                          color: AppTheme.accentOrange,
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w900,
+                                    ),
+                                  );
+                                }),
+                              ),
+                              const SizedBox(height: 18),
+                              Divider(
+                                color: AppTheme.border.withValues(alpha: 0.75),
+                              ),
+                              const SizedBox(height: 6),
+                              _OptionTile(
+                                icon: Icons.notifications_active_outlined,
+                                title: 'تذكير تسجيل الحضور والغياب',
+                                subtitle:
+                                    'يصل أسبوعيًا لكل خادم لديه صلاحية أخذ الحضور',
+                                value: _reminderEnabled,
+                                onChanged: (value) => setState(() {
+                                  _reminderEnabled = value;
+                                  _isDirty = true;
+                                }),
+                              ),
+                              if (_reminderEnabled) ...[
+                                const SizedBox(height: 12),
+                                Material(
+                                  color: AppTheme.accentOrangeLight,
+                                  borderRadius: BorderRadius.circular(14),
+                                  child: InkWell(
+                                    onTap: _pickReminderTime,
+                                    borderRadius: BorderRadius.circular(14),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 14,
+                                        vertical: 12,
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          const Icon(
+                                            Icons.alarm_rounded,
+                                            color: AppTheme.accentOrange,
+                                          ),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: Text(
+                                              'وقت التنبيه',
+                                              style: GoogleFonts.cairo(
+                                                color: AppTheme.textDark,
+                                                fontWeight: FontWeight.w800,
+                                              ),
+                                            ),
+                                          ),
+                                          Text(
+                                            _reminderTime.format(context),
+                                            style: GoogleFonts.cairo(
+                                              color: AppTheme.accentOrange,
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w900,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 4),
+                                          const Icon(
+                                            Icons.chevron_left_rounded,
+                                            color: AppTheme.accentOrange,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                OutlinedButton.icon(
+                                  onPressed: _isTestingNotification
+                                      ? null
+                                      : _testNotification,
+                                  icon: _isTestingNotification
+                                      ? const SizedBox.square(
+                                          dimension: 18,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
+                                        )
+                                      : const Icon(
+                                          Icons.notifications_active_rounded,
+                                          size: 18,
+                                        ),
+                                  label: Text(
+                                    'اختبار الإشعار التجريبي الآن 🔔',
+                                    style: GoogleFonts.cairo(
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: AppTheme.primary,
+                                    side: const BorderSide(
+                                      color: AppTheme.primary,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                          if (!_isEdit) ...[
+                            const SizedBox(height: 12),
+                            _FormSectionCard(
+                              title: 'تقسيم الاجتماع',
+                              icon: Icons.account_tree_rounded,
+                              children: [
+                                _OptionTile(
+                                  icon: Icons.class_rounded,
+                                  title: 'الاجتماع يحتوي على فصول',
+                                  subtitle:
+                                      'فعّل الخيار لو الاجتماع منقسم لفصول',
+                                  value: _hasClasses,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _hasClasses = value;
+                                      if (!value) _classNames.clear();
+                                      _isDirty = true;
+                                    });
+                                  },
+                                ),
+                                if (_hasClasses) ...[
+                                  const SizedBox(height: 14),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: TextField(
+                                          controller: _classController,
+                                          style: GoogleFonts.cairo(),
+                                          decoration:
+                                              meetingFormInputDecoration(
+                                                'اسم الفصل',
+                                                Icons.class_rounded,
+                                              ),
+                                          onSubmitted: (_) => _addClassName(),
                                         ),
                                       ),
-                                      const SizedBox(width: 4),
-                                      const Icon(
-                                        Icons.chevron_left_rounded,
-                                        color: AppTheme.accentOrange,
+                                      const SizedBox(width: 8),
+                                      IconButton.filled(
+                                        onPressed: _addClassName,
+                                        icon: const Icon(Icons.add_rounded),
+                                        style: IconButton.styleFrom(
+                                          backgroundColor: AppTheme.primary,
+                                          foregroundColor: Colors.white,
+                                          minimumSize: const Size(46, 46),
+                                        ),
                                       ),
                                     ],
                                   ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            OutlinedButton.icon(
-                              onPressed: _isTestingNotification
-                                  ? null
-                                  : _testNotification,
-                              icon: _isTestingNotification
-                                  ? const SizedBox.square(
-                                      dimension: 18,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
+                                  const SizedBox(height: 10),
+                                  if (_classNames.isEmpty)
+                                    Container(
+                                      width: double.infinity,
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: AppTheme.surfaceMuted,
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Text(
+                                        'أضف فصلاً واحداً على الأقل.',
+                                        textAlign: TextAlign.center,
+                                        style: GoogleFonts.cairo(
+                                          fontSize: 12,
+                                          color: AppTheme.textLight,
+                                        ),
                                       ),
                                     )
-                                  : const Icon(
-                                      Icons.notifications_active_rounded,
-                                      size: 18,
+                                  else
+                                    Wrap(
+                                      spacing: 8,
+                                      runSpacing: 8,
+                                      children: _classNames.map((name) {
+                                        return _GroupTag(
+                                          label: name,
+                                          onRemove: () {
+                                            setState(() {
+                                              _classNames.remove(name);
+                                              _isDirty = true;
+                                            });
+                                          },
+                                        );
+                                      }).toList(),
                                     ),
-                              label: Text(
-                                'اختبار الإشعار التجريبي الآن 🔔',
-                                style: GoogleFonts.cairo(
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 12,
-                                ),
-                              ),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: AppTheme.primary,
-                                side: const BorderSide(color: AppTheme.primary),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
+                                ],
+                              ],
                             ),
                           ],
                         ],
                       ),
-                      if (!_isEdit) ...[
-                        const SizedBox(height: 12),
-                        _FormSectionCard(
-                          title: 'تقسيم الاجتماع',
-                          icon: Icons.account_tree_rounded,
-                          children: [
-                            _OptionTile(
-                              icon: Icons.class_rounded,
-                              title: 'الاجتماع يحتوي على فصول',
-                              subtitle: 'فعّل الخيار لو الاجتماع منقسم لفصول',
-                              value: _hasClasses,
-                              onChanged: (value) {
-                                setState(() {
-                                  _hasClasses = value;
-                                  if (!value) _classNames.clear();
-                                });
-                              },
-                            ),
-                            if (_hasClasses) ...[
-                              const SizedBox(height: 14),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: TextField(
-                                      controller: _classController,
-                                      style: GoogleFonts.cairo(),
-                                      decoration: meetingFormInputDecoration(
-                                        'اسم الفصل',
-                                        Icons.class_rounded,
-                                      ),
-                                      onSubmitted: (_) => _addClassName(),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  IconButton.filled(
-                                    onPressed: _addClassName,
-                                    icon: const Icon(Icons.add_rounded),
-                                    style: IconButton.styleFrom(
-                                      backgroundColor: AppTheme.primary,
-                                      foregroundColor: Colors.white,
-                                      minimumSize: const Size(46, 46),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 10),
-                              if (_classNames.isEmpty)
-                                Container(
-                                  width: double.infinity,
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: AppTheme.surfaceMuted,
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Text(
-                                    'أضف فصلاً واحداً على الأقل.',
-                                    textAlign: TextAlign.center,
-                                    style: GoogleFonts.cairo(
-                                      fontSize: 12,
-                                      color: AppTheme.textLight,
-                                    ),
-                                  ),
-                                )
-                              else
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: _classNames.map((name) {
-                                    return _GroupTag(
-                                      label: name,
-                                      onRemove: () {
-                                        setState(
-                                          () => _classNames.remove(name),
-                                        );
-                                      },
-                                    );
-                                  }).toList(),
-                                ),
-                            ],
-                          ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+                    decoration: BoxDecoration(
+                      color: AppTheme.cardBackground,
+                      border: Border(
+                        top: BorderSide(
+                          color: AppTheme.border.withValues(alpha: 0.75),
+                        ),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.04),
+                          blurRadius: 12,
+                          offset: const Offset(0, -4),
                         ),
                       ],
-                    ],
-                  ),
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  border: Border(
-                    top: BorderSide(
-                      color: AppTheme.border.withValues(alpha: 0.75),
                     ),
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.04),
-                      blurRadius: 12,
-                      offset: const Offset(0, -4),
-                    ),
-                  ],
-                ),
-                child: SafeArea(
-                  top: false,
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.icon(
-                      onPressed: _isSaving ? null : _submit,
-                      icon: _isSaving
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
+                    child: SafeArea(
+                      top: false,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          UnsavedChangesNotice(isDirty: _isDirty),
+                          SizedBox(
+                            width: double.infinity,
+                            child: FilledButton.icon(
+                              onPressed: _isSaving ? null : _submit,
+                              icon: _isSaving
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : Icon(
+                                      _isEdit
+                                          ? Icons.save_rounded
+                                          : Icons.add_rounded,
+                                    ),
+                              label: Text(
+                                _isEdit ? 'حفظ التعديلات' : 'إضافة الاجتماع',
+                                style: GoogleFonts.cairo(
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 15,
+                                ),
                               ),
-                            )
-                          : Icon(
-                              _isEdit ? Icons.save_rounded : Icons.add_rounded,
+                              style: FilledButton.styleFrom(
+                                backgroundColor: AppTheme.primary,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 14,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                              ),
                             ),
-                      label: Text(
-                        _isEdit ? 'حفظ التعديلات' : 'إضافة الاجتماع',
-                        style: GoogleFonts.cairo(
-                          fontWeight: FontWeight.w900,
-                          fontSize: 15,
-                        ),
-                      ),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppTheme.primary,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
-                ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -638,7 +729,7 @@ class _FormSectionCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppTheme.cardBackground,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppTheme.border.withValues(alpha: 0.75)),
         boxShadow: AppTheme.softShadow,

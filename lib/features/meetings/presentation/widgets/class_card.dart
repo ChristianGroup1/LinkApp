@@ -46,7 +46,7 @@ class GroupedMeetingClassesCard extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppTheme.cardBackground,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: AppTheme.border.withValues(alpha: 0.8)),
         boxShadow: [
@@ -127,7 +127,10 @@ class GroupedMeetingClassesCard extends StatelessWidget {
                                 ),
                                 const SizedBox(width: 6),
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 7,
+                                    vertical: 2,
+                                  ),
                                   decoration: BoxDecoration(
                                     color: AppTheme.primaryLight,
                                     borderRadius: BorderRadius.circular(10),
@@ -146,7 +149,8 @@ class GroupedMeetingClassesCard extends StatelessWidget {
                             const SizedBox(height: 6),
                             _MeetingMetaTag(
                               icon: Icons.event_repeat_rounded,
-                              label: 'كل يوم ${kWeekdaysAr[meeting.weekday - 1]}',
+                              label:
+                                  'كل يوم ${kWeekdaysAr[meeting.weekday - 1]}',
                               color: AppTheme.primary,
                               backgroundColor: AppTheme.primaryLight,
                             ),
@@ -163,7 +167,9 @@ class GroupedMeetingClassesCard extends StatelessWidget {
                             child: Container(
                               padding: const EdgeInsets.all(6),
                               decoration: BoxDecoration(
-                                color: AppTheme.primaryLight.withValues(alpha: 0.6),
+                                color: AppTheme.primaryLight.withValues(
+                                  alpha: 0.6,
+                                ),
                                 borderRadius: BorderRadius.circular(10),
                               ),
                               child: const Icon(
@@ -184,7 +190,9 @@ class GroupedMeetingClassesCard extends StatelessWidget {
                             child: Container(
                               padding: const EdgeInsets.all(6),
                               decoration: BoxDecoration(
-                                color: AppTheme.accentRedLight.withValues(alpha: 0.6),
+                                color: AppTheme.accentRedLight.withValues(
+                                  alpha: 0.6,
+                                ),
                                 borderRadius: BorderRadius.circular(10),
                               ),
                               child: const Icon(
@@ -198,7 +206,8 @@ class GroupedMeetingClassesCard extends StatelessWidget {
                       ],
                     ],
                   ),
-                  if (meeting.description != null && meeting.description!.trim().isNotEmpty) ...[
+                  if (meeting.description != null &&
+                      meeting.description!.trim().isNotEmpty) ...[
                     const SizedBox(height: 12),
                     Container(
                       width: double.infinity,
@@ -230,9 +239,14 @@ class GroupedMeetingClassesCard extends StatelessWidget {
                       ),
                       const SizedBox(width: 8),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 7,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
-                          color: totalServants > 0 ? AppTheme.primaryLight : AppTheme.accentRedLight,
+                          color: totalServants > 0
+                              ? AppTheme.primaryLight
+                              : AppTheme.accentRedLight,
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
@@ -240,7 +254,9 @@ class GroupedMeetingClassesCard extends StatelessWidget {
                           style: GoogleFonts.cairo(
                             fontSize: 10.5,
                             fontWeight: FontWeight.bold,
-                            color: totalServants > 0 ? AppTheme.primary : AppTheme.accentRed,
+                            color: totalServants > 0
+                                ? AppTheme.primary
+                                : AppTheme.accentRed,
                           ),
                         ),
                       ),
@@ -250,7 +266,10 @@ class GroupedMeetingClassesCard extends StatelessWidget {
                   if (aggregatedAssignments.isEmpty && meetingPending.isEmpty)
                     Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 10,
+                        horizontal: 12,
+                      ),
                       decoration: BoxDecoration(
                         color: AppTheme.accentRedLight.withValues(alpha: 0.4),
                         borderRadius: BorderRadius.circular(12),
@@ -315,11 +334,18 @@ class GroupedMeetingClassesCard extends StatelessWidget {
                         TextButton.icon(
                           onPressed: onAddClass,
                           style: TextButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 4,
+                            ),
                             minimumSize: Size.zero,
                             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           ),
-                          icon: const Icon(Icons.add_circle_outline_rounded, size: 16, color: AppTheme.primary),
+                          icon: const Icon(
+                            Icons.add_circle_outline_rounded,
+                            size: 16,
+                            color: AppTheme.primary,
+                          ),
                           label: Text(
                             'إضافة فصل',
                             style: GoogleFonts.cairo(
@@ -398,8 +424,10 @@ class _ClassCardState extends State<ClassCard> {
 
   @override
   Widget build(BuildContext context) {
-    final classPending =
-        pendingInvitesForClass(widget.pendingInvitations, widget.cls.id);
+    final classPending = pendingInvitesForClass(
+      widget.pendingInvitations,
+      widget.cls.id,
+    );
     final totalServants = widget.assignments.length + classPending.length;
 
     return AnimatedContainer(
@@ -407,7 +435,9 @@ class _ClassCardState extends State<ClassCard> {
       curve: Curves.easeInOut,
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
-        color: _expanded ? Colors.white : AppTheme.surfaceMuted.withValues(alpha: 0.5),
+        color: _expanded
+            ? Colors.white
+            : AppTheme.surfaceMuted.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: _expanded
@@ -431,7 +461,9 @@ class _ClassCardState extends State<ClassCard> {
                       width: 38,
                       height: 38,
                       decoration: BoxDecoration(
-                        color: _expanded ? AppTheme.primary : AppTheme.primaryLight,
+                        color: _expanded
+                            ? AppTheme.primary
+                            : AppTheme.primaryLight,
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Icon(
@@ -555,7 +587,7 @@ class _ClassCardState extends State<ClassCard> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Divider(height: 1, color: AppTheme.border),
+                  Divider(height: 1, color: AppTheme.border),
                   const SizedBox(height: 10),
                   Text(
                     'خدام الفصل المعينين',
@@ -569,7 +601,10 @@ class _ClassCardState extends State<ClassCard> {
                   if (widget.assignments.isEmpty && classPending.isEmpty)
                     Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 8,
+                        horizontal: 10,
+                      ),
                       decoration: BoxDecoration(
                         color: AppTheme.accentRedLight.withValues(alpha: 0.3),
                         borderRadius: BorderRadius.circular(10),
@@ -611,8 +646,12 @@ class _ClassCardState extends State<ClassCard> {
                     SizedBox(
                       width: double.infinity,
                       child: OutlinedButton.icon(
-                        onPressed: () => showAssignLeaderDialog(context, widget.cls),
-                        icon: const Icon(Icons.person_add_alt_1_rounded, size: 16),
+                        onPressed: () =>
+                            showAssignLeaderDialog(context, widget.cls),
+                        icon: const Icon(
+                          Icons.person_add_alt_1_rounded,
+                          size: 16,
+                        ),
                         label: Text(
                           'تعيين خادم للفصل',
                           style: GoogleFonts.cairo(
@@ -629,7 +668,9 @@ class _ClassCardState extends State<ClassCard> {
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          backgroundColor: AppTheme.primaryLight.withValues(alpha: 0.2),
+                          backgroundColor: AppTheme.primaryLight.withValues(
+                            alpha: 0.2,
+                          ),
                         ),
                       ),
                     ),
@@ -865,7 +906,7 @@ class _MeetingPersonTag extends StatelessWidget {
                   color: Colors.black.withValues(alpha: 0.06),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.close_rounded,
                   size: 12,
                   color: AppTheme.textLight,
@@ -878,4 +919,3 @@ class _MeetingPersonTag extends StatelessWidget {
     );
   }
 }
-

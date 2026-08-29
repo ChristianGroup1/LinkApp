@@ -4,10 +4,7 @@ class PendingMeetingInviteDisplay {
   final HelperInvitation invite;
   final String? className;
 
-  const PendingMeetingInviteDisplay({
-    required this.invite,
-    this.className,
-  });
+  const PendingMeetingInviteDisplay({required this.invite, this.className});
 }
 
 List<HelperInvitation> pendingInvitesForMeeting(
@@ -61,9 +58,8 @@ List<PendingMeetingInviteDisplay> pendingInvitesForSundaySchoolMeeting(
 ) {
   final classIds = classes.map((cls) => cls.id).toSet();
   final classNameById = {
-    for (final cls in classes) cls.id: cls.nameAr.trim().isNotEmpty
-        ? cls.nameAr
-        : cls.name,
+    for (final cls in classes)
+      cls.id: cls.nameAr.trim().isNotEmpty ? cls.nameAr : cls.name,
   };
   final result = <PendingMeetingInviteDisplay>[];
   final seen = <String>{};

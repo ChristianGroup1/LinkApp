@@ -99,6 +99,13 @@ export const adminTables = {
     insertTemplate: { church_id: '', full_name: '', email: '', role: 'attendance_officer', code: '', invite_token: '', is_used: false },
     orderBy: 'created_at',
   },
+  support_tickets: {
+    table: 'support_tickets', label: 'بلاغات المشاكل', description: 'البلاغات المرسلة من داخل التطبيق ومتابعة حالتها.',
+    visibleColumns: ['status', 'category', 'subject', 'description', 'reporter_name', 'contact_email', 'platform', 'app_version', 'build_number', 'created_at'],
+    searchableColumns: ['subject', 'description', 'reporter_name', 'contact_email'],
+    editableColumns: ['status', 'admin_note'],
+    insertTemplate: {}, orderBy: 'created_at', canInsert: false, canDelete: false,
+  },
   app_usage_events: {
     table: 'app_usage_events', label: 'نشاط التطبيق', description: 'أحداث فتح التطبيق وتسجيل الدخول حسب المنصة والإصدار.',
     visibleColumns: ['event_name', 'platform', 'app_version', 'user_id', 'church_id', 'occurred_at'],
@@ -118,4 +125,3 @@ export type AdminTableKey = keyof typeof adminTables;
 export function isAdminTable(value: string): value is AdminTableKey {
   return Object.hasOwn(adminTables, value);
 }
-

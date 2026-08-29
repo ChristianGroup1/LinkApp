@@ -54,7 +54,7 @@ class AttendanceBody extends StatelessWidget {
             margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppTheme.cardBackground,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: AppTheme.border.withValues(alpha: 0.7)),
               boxShadow: AppTheme.softShadow,
@@ -121,7 +121,7 @@ class AttendanceBody extends StatelessWidget {
               selectedMeetingClasses.isNotEmpty)
             Container(
               margin: const EdgeInsets.only(top: 10),
-              color: Colors.white,
+              color: AppTheme.cardBackground,
               width: double.infinity,
               child: TabBar(
                 indicatorColor: AppTheme.primary,

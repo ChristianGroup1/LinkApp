@@ -30,6 +30,7 @@ class CreateNewMeeting extends MeetingsEvent {
   final int? attendanceReminderMinutes;
   final String? description;
   final List<NewMeetingClassDraft> classes;
+  final Completer<void>? completion;
   CreateNewMeeting({
     required this.name,
     required this.nameAr,
@@ -38,6 +39,7 @@ class CreateNewMeeting extends MeetingsEvent {
     this.attendanceReminderMinutes,
     this.description,
     this.classes = const [],
+    this.completion,
   });
 }
 
@@ -49,6 +51,7 @@ class UpdateExistingMeeting extends MeetingsEvent {
   final bool isActive;
   final int? attendanceReminderMinutes;
   final String? description;
+  final Completer<void>? completion;
   UpdateExistingMeeting({
     required this.id,
     required this.name,
@@ -57,6 +60,7 @@ class UpdateExistingMeeting extends MeetingsEvent {
     required this.isActive,
     this.attendanceReminderMinutes,
     this.description,
+    this.completion,
   });
 }
 
@@ -243,10 +247,14 @@ class MeetingsBloc extends Bloc<MeetingsEvent, MeetingsState> {
         }
         add(
           LoadMeetingsAndClasses(
-            flashMessage: synced ? null : kOfflineSavedMessage,
+            flashMessage: synced
+                ? 'تم إنشاء الاجتماع بنجاح'
+                : kOfflineSavedMessage,
           ),
         );
-      } catch (e) {
+        event.completion?.complete();
+      } catch (e, stackTrace) {
+        event.completion?.completeError(e, stackTrace);
         if (previous is MeetingsLoaded) {
           emit(
             previous.copyWith(
@@ -273,10 +281,14 @@ class MeetingsBloc extends Bloc<MeetingsEvent, MeetingsState> {
         );
         add(
           LoadMeetingsAndClasses(
-            flashMessage: result.syncedToServer ? null : kOfflineSavedMessage,
+            flashMessage: result.syncedToServer
+                ? 'تم حفظ تعديلات الاجتماع بنجاح'
+                : kOfflineSavedMessage,
           ),
         );
-      } catch (e) {
+        event.completion?.complete();
+      } catch (e, stackTrace) {
+        event.completion?.completeError(e, stackTrace);
         if (previous is MeetingsLoaded) {
           emit(
             previous.copyWith(

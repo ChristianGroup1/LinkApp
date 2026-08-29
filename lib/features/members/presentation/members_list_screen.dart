@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:printing/printing.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/models.dart';
@@ -9,6 +10,7 @@ import '../../../data/repositories/database_repository.dart';
 import '../../../logic/home/home_bloc.dart';
 import '../../../shared/ui/app_states.dart';
 import '../data/member_excel_service.dart';
+import '../data/member_qr_pdf_service.dart';
 import '../logic/members_bloc.dart';
 import 'add_edit_member_screen.dart';
 import 'member_details_screen.dart';
@@ -29,6 +31,8 @@ class _MembersListScreenState extends State<MembersListScreen> {
   bool _dropdownsLoaded = false;
   bool _excelBusy = false;
   final _excelService = MemberExcelService();
+  final _importWriter = MemberImportWriter();
+  final _qrPdfService = MemberQrPdfService();
 
   List<SundaySchoolClassEntity> _classes = [];
   List<MeetingEntity> _meetings = [];
@@ -120,7 +124,7 @@ class _MembersListScreenState extends State<MembersListScreen> {
                 return Scaffold(
                   backgroundColor: AppTheme.background,
                   appBar: AppBar(
-                    backgroundColor: Colors.white,
+                    backgroundColor: AppTheme.cardBackground,
                     surfaceTintColor: Colors.transparent,
                     elevation: 0,
                     title: Text(
@@ -146,7 +150,7 @@ class _MembersListScreenState extends State<MembersListScreen> {
                         )
                       else
                         PopupMenuButton<_MemberExcelAction>(
-                          tooltip: 'استيراد وتصدير Excel',
+                          tooltip: 'تصدير واستيراد الأعضاء',
                           icon: const Icon(Icons.table_view_outlined),
                           onSelected: (action) => _handleExcelAction(
                             context,
@@ -157,7 +161,12 @@ class _MembersListScreenState extends State<MembersListScreen> {
                             _excelMenuItem(
                               _MemberExcelAction.export,
                               Icons.file_download_outlined,
-                              'تصدير الأعضاء',
+                              'تصدير الأعضاء Excel',
+                            ),
+                            _excelMenuItem(
+                              _MemberExcelAction.qrPdf,
+                              Icons.qr_code_2_rounded,
+                              'تصدير بطاقات QR (PDF)',
                             ),
                             if (canManage) ...[
                               _excelMenuItem(
@@ -168,7 +177,7 @@ class _MembersListScreenState extends State<MembersListScreen> {
                               _excelMenuItem(
                                 _MemberExcelAction.import,
                                 Icons.file_upload_outlined,
-                                'استيراد أعضاء',
+                                'استيراد أعضاء Excel / CSV',
                               ),
                             ],
                           ],
@@ -369,7 +378,7 @@ class _MembersListScreenState extends State<MembersListScreen> {
                                                   _searchController.clear();
                                                   _applyFilter(context);
                                                 },
-                                                icon: const Icon(
+                                                icon: Icon(
                                                   Icons.clear_rounded,
                                                   size: 18,
                                                   color: AppTheme.textLight,
@@ -377,7 +386,7 @@ class _MembersListScreenState extends State<MembersListScreen> {
                                               )
                                             : null,
                                         filled: true,
-                                        fillColor: Colors.white,
+                                        fillColor: AppTheme.cardBackground,
                                         contentPadding:
                                             const EdgeInsets.symmetric(
                                               horizontal: 16,
@@ -457,7 +466,7 @@ class _MembersListScreenState extends State<MembersListScreen> {
                                           horizontal: 12,
                                         ),
                                         decoration: BoxDecoration(
-                                          color: Colors.white,
+                                          color: AppTheme.cardBackground,
                                           borderRadius: BorderRadius.circular(
                                             14,
                                           ),
@@ -512,7 +521,7 @@ class _MembersListScreenState extends State<MembersListScreen> {
                                           horizontal: 12,
                                         ),
                                         decoration: BoxDecoration(
-                                          color: Colors.white,
+                                          color: AppTheme.cardBackground,
                                           borderRadius: BorderRadius.circular(
                                             14,
                                           ),
@@ -727,7 +736,7 @@ class _MembersListScreenState extends State<MembersListScreen> {
         _applyFilter(context);
       },
       selectedColor: AppTheme.primary,
-      backgroundColor: Colors.white,
+      backgroundColor: AppTheme.cardBackground,
       side: BorderSide(
         color: isSelected
             ? AppTheme.primary
@@ -777,16 +786,43 @@ class _MembersListScreenState extends State<MembersListScreen> {
     required bool canManage,
   }) async {
     if (_excelBusy) return;
-    if (action != _MemberExcelAction.export && !canManage) return;
+    final isExport =
+        action == _MemberExcelAction.export ||
+        action == _MemberExcelAction.qrPdf;
+    if (!isExport && !canManage) return;
 
     switch (action) {
       case _MemberExcelAction.export:
         await _exportMembers(context);
+      case _MemberExcelAction.qrPdf:
+        await _exportMemberQrPdf(context);
       case _MemberExcelAction.template:
         await _downloadTemplate(context);
       case _MemberExcelAction.import:
         await _importMembers(context);
     }
+  }
+
+  Future<void> _exportMemberQrPdf(BuildContext context) async {
+    final state = _membersBloc?.state;
+    final members = state is MembersLoaded
+        ? state.allMembers.where((member) => member.isActive).toList()
+        : <MemberEntity>[];
+
+    await _runExcelTask(context, () async {
+      final bytes = await _qrPdfService.build(members: members);
+      final date = DateTime.now().toIso8601String().split('T').first;
+      await Printing.sharePdf(
+        bytes: bytes,
+        filename: 'Link_member_QR_$date.pdf',
+      );
+      if (context.mounted) {
+        _showExcelSnack(
+          context,
+          'تم إنشاء ملف QR لـ ${members.length} عضو نشط',
+        );
+      }
+    });
   }
 
   Future<void> _exportMembers(BuildContext context) async {
@@ -835,9 +871,9 @@ class _MembersListScreenState extends State<MembersListScreen> {
 
   Future<void> _importMembers(BuildContext context) async {
     final picked = await FilePicker.pickFiles(
-      dialogTitle: 'اختر ملف أعضاء Excel',
+      dialogTitle: 'اختر ملف أعضاء Excel أو CSV',
       type: FileType.custom,
-      allowedExtensions: const ['xlsx'],
+      allowedExtensions: const ['xlsx', 'csv'],
       withData: true,
     );
     if (picked == null) return;
@@ -853,172 +889,358 @@ class _MembersListScreenState extends State<MembersListScreen> {
     final existing = currentState is MembersLoaded
         ? currentState.allMembers
         : <MemberEntity>[];
-    final parsed = _excelService.parseImport(
-      bytes: bytes,
-      meetings: _allMeetings,
-      classes: _classes,
-      existingMembers: existing,
-    );
+    final extension = picked.files.single.extension?.toLowerCase();
+    final parsed = extension == 'csv'
+        ? _excelService.parseCsvImport(
+            bytes: bytes,
+            meetings: _allMeetings,
+            classes: _classes,
+            existingMembers: existing,
+          )
+        : _excelService.parseImport(
+            bytes: bytes,
+            meetings: _allMeetings,
+            classes: _classes,
+            existingMembers: existing,
+          );
     if (!context.mounted) return;
 
-    final confirmed = await _showImportPreview(context, parsed);
-    if (confirmed != true || parsed.validRows.isEmpty || !context.mounted) {
+    final confirmation = await _showImportPreview(context, parsed);
+    if (confirmation == null || parsed.validRows.isEmpty || !context.mounted) {
       return;
     }
 
-    await _runExcelTask(context, () async {
-      final repository = context.read<DatabaseRepository>();
-      var imported = 0;
-      final failed = <MemberImportIssue>[];
-      for (final row in parsed.validRows) {
-        try {
-          final created = await repository.createMember(
-            fullName: row.fullName,
-            scope: row.scope,
-            sundaySchoolClassId: row.sundaySchoolClassId,
-            meetingId: row.meetingId,
-            phone: row.phone,
-            parentName: row.parentName,
-            parentPhone: row.parentPhone,
-            code: row.code,
-            birthDate: row.birthDate,
-          );
-          if (!row.isActive) {
-            final member = created.data;
-            await repository.updateMember(
-              id: member.id,
-              fullName: member.fullName,
-              scope: member.scope,
-              sundaySchoolClassId: member.sundaySchoolClassId,
-              meetingId: member.meetingId,
-              phone: member.phone,
-              parentName: member.parentName,
-              parentPhone: member.parentPhone,
-              code: member.code,
-              birthDate: member.birthDate,
-              isActive: false,
-            );
-          }
-          imported++;
-        } catch (error) {
-          failed.add(
-            MemberImportIssue(
-              row: row.sourceRow,
-              message: error.toString().replaceAll('Exception: ', ''),
-            ),
-          );
-        }
-      }
-      _membersBloc?.add(LoadMembers());
-      if (!context.mounted) return;
-      _showExcelSnack(
-        context,
-        failed.isEmpty
-            ? 'تم استيراد $imported عضو بنجاح'
-            : 'تم استيراد $imported عضو، وفشل ${failed.length}',
-        isError: failed.isNotEmpty,
+    final repository = context.read<DatabaseRepository>();
+    var rowsToImport = parsed.validRows;
+    while (context.mounted && rowsToImport.isNotEmpty) {
+      final result = await showDialog<MemberImportSaveResult>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _MemberImportProgressDialog(
+          rows: rowsToImport,
+          run: ({required onProgress, required isCancelled}) =>
+              _importWriter.save(
+                rows: rowsToImport,
+                repository: repository,
+                meetingWeekdays: confirmation.meetingWeekdays,
+                duplicatesByRow: {
+                  for (final duplicate in parsed.duplicates)
+                    duplicate.row.sourceRow: duplicate,
+                },
+                duplicateActions: confirmation.duplicateActions,
+                onProgress: onProgress,
+                isCancelled: isCancelled,
+              ),
+        ),
       );
-      if (failed.isNotEmpty) {
-        await _showImportIssues(context, failed, title: 'صفوف فشل حفظها');
+      if (result == null || !context.mounted) return;
+      _membersBloc?.add(LoadMembers());
+
+      final action = await _showImportResult(context, result);
+      if (!context.mounted) return;
+      if (action == _ImportResultAction.retryFailed &&
+          result.failedRows.isNotEmpty) {
+        rowsToImport = result.failedRows;
+        continue;
       }
-    });
+      break;
+    }
   }
 
-  Future<bool?> _showImportPreview(
+  Future<_MemberImportConfirmation?> _showImportPreview(
     BuildContext context,
     MemberImportParseResult result,
   ) {
-    return showDialog<bool>(
+    const weekdays = <(int, String)>[
+      (1, 'الاثنين'),
+      (2, 'الثلاثاء'),
+      (3, 'الأربعاء'),
+      (4, 'الخميس'),
+      (5, 'الجمعة'),
+      (6, 'السبت'),
+      (7, 'الأحد'),
+    ];
+    final meetingWeekdays = {
+      for (final name in result.meetingNamesToCreate) name: 5,
+    };
+    final duplicateActions = {
+      for (final duplicate in result.duplicates)
+        duplicate.row.sourceRow: MemberImportDuplicateAction.skip,
+    };
+
+    return showDialog<_MemberImportConfirmation>(
       context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => Directionality(
+          textDirection: TextDirection.rtl,
+          child: AlertDialog(
+            title: Text(
+              'معاينة استيراد الأعضاء',
+              style: GoogleFonts.cairo(fontWeight: FontWeight.w900),
+            ),
+            content: SizedBox(
+              width: 560,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _ImportCountCard(
+                            label: 'جاهز للاستيراد',
+                            count: result.validRows.length,
+                            color: AppTheme.secondary,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _ImportCountCard(
+                            label: 'صفوف بها أخطاء',
+                            count: result.issues.length,
+                            color: AppTheme.accentRed,
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (meetingWeekdays.isNotEmpty ||
+                        result.classNamesToCreate.isNotEmpty) ...[
+                      const SizedBox(height: 14),
+                      _ImportDestinationsSection(
+                        meetingWeekdays: meetingWeekdays,
+                        classNames: result.classNamesToCreate,
+                        weekdays: weekdays,
+                        onWeekdayChanged: (name, value) {
+                          setDialogState(() => meetingWeekdays[name] = value);
+                        },
+                      ),
+                    ],
+                    if (result.duplicates.isNotEmpty) ...[
+                      const SizedBox(height: 14),
+                      _ImportDuplicatesSection(
+                        duplicates: result.duplicates,
+                        actions: duplicateActions,
+                        onActionChanged: (row, value) {
+                          setDialogState(() => duplicateActions[row] = value);
+                        },
+                      ),
+                    ],
+                    if (result.issues.isNotEmpty) ...[
+                      const SizedBox(height: 14),
+                      Container(
+                        constraints: const BoxConstraints(maxHeight: 210),
+                        padding: const EdgeInsets.all(11),
+                        decoration: BoxDecoration(
+                          color: AppTheme.accentRed.withValues(alpha: 0.055),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: ListView(
+                          shrinkWrap: true,
+                          children: result.issues
+                              .take(10)
+                              .map(
+                                (issue) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 5),
+                                  child: Text(
+                                    'صف ${issue.row}: ${issue.message}',
+                                    style: GoogleFonts.cairo(
+                                      color: AppTheme.accentRed,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                        ),
+                      ),
+                      if (result.issues.length > 10)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Text(
+                            'وهناك ${result.issues.length - 10} أخطاء أخرى',
+                            style: GoogleFonts.cairo(
+                              color: AppTheme.textLight,
+                              fontSize: 10.5,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              if (result.issues.isNotEmpty)
+                TextButton.icon(
+                  onPressed: () => _saveImportIssuesCsv(
+                    dialogContext,
+                    result.issues,
+                  ),
+                  icon: const Icon(Icons.download_rounded),
+                  label: Text(
+                    'تنزيل الأخطاء',
+                    style: GoogleFonts.cairo(),
+                  ),
+                ),
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: Text('إلغاء', style: GoogleFonts.cairo()),
+              ),
+              FilledButton.icon(
+                onPressed: result.validRows.isEmpty
+                    ? null
+                    : () => Navigator.pop(
+                        dialogContext,
+                        _MemberImportConfirmation(
+                          meetingWeekdays: Map<String, int>.from(
+                            meetingWeekdays,
+                          ),
+                          duplicateActions:
+                              Map<int, MemberImportDuplicateAction>.from(
+                                duplicateActions,
+                              ),
+                        ),
+                      ),
+                icon: const Icon(Icons.group_add_outlined),
+                label: Text(
+                  'استيراد ${result.validRows.length} عضو',
+                  style: GoogleFonts.cairo(fontWeight: FontWeight.w800),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<_ImportResultAction?> _showImportResult(
+    BuildContext context,
+    MemberImportSaveResult result,
+  ) {
+    return showDialog<_ImportResultAction>(
+      context: context,
+      barrierDismissible: false,
       builder: (dialogContext) => Directionality(
         textDirection: TextDirection.rtl,
         child: AlertDialog(
+          icon: Icon(
+            result.issues.isEmpty
+                ? Icons.check_circle_rounded
+                : Icons.info_outline_rounded,
+            color: result.issues.isEmpty
+                ? AppTheme.secondary
+                : AppTheme.accentOrange,
+            size: 44,
+          ),
           title: Text(
-            'معاينة استيراد الأعضاء',
+            result.cancelled ? 'تم إيقاف الاستيراد بأمان' : 'نتيجة الاستيراد',
+            textAlign: TextAlign.center,
             style: GoogleFonts.cairo(fontWeight: FontWeight.w900),
           ),
           content: SizedBox(
-            width: 520,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: _ImportCountCard(
-                        label: 'جاهز للاستيراد',
-                        count: result.validRows.length,
-                        color: AppTheme.secondary,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _ImportCountCard(
-                        label: 'صفوف بها أخطاء',
-                        count: result.issues.length,
-                        color: AppTheme.accentRed,
-                      ),
-                    ),
-                  ],
-                ),
-                if (result.issues.isNotEmpty) ...[
-                  const SizedBox(height: 14),
-                  Container(
-                    constraints: const BoxConstraints(maxHeight: 210),
-                    padding: const EdgeInsets.all(11),
-                    decoration: BoxDecoration(
-                      color: AppTheme.accentRed.withValues(alpha: 0.055),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: ListView(
-                      shrinkWrap: true,
-                      children: result.issues
-                          .take(10)
-                          .map(
-                            (issue) => Padding(
-                              padding: const EdgeInsets.only(bottom: 5),
-                              child: Text(
-                                'صف ${issue.row}: ${issue.message}',
-                                style: GoogleFonts.cairo(
-                                  color: AppTheme.accentRed,
-                                  fontSize: 11,
-                                ),
-                              ),
-                            ),
-                          )
-                          .toList(),
-                    ),
+            width: 480,
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _ImportResultLine(
+                    label: 'تم إنشاء أعضاء',
+                    value: result.createdMembers,
+                    color: AppTheme.secondary,
                   ),
-                  if (result.issues.length > 10)
+                  _ImportResultLine(
+                    label: 'تم تحديث أعضاء',
+                    value: result.updatedMembers,
+                    color: AppTheme.primary,
+                  ),
+                  _ImportResultLine(
+                    label: 'تم تخطي مكررين',
+                    value: result.skippedMembers,
+                    color: AppTheme.textLight,
+                  ),
+                  _ImportResultLine(
+                    label: 'صفوف تحتاج مراجعة',
+                    value: result.failedRows.length,
+                    color: AppTheme.accentRed,
+                  ),
+                  if (result.createdMeetings > 0 || result.createdClasses > 0)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        'تم إنشاء ${result.createdMeetings} اجتماع و${result.createdClasses} فصل.',
+                        style: GoogleFonts.cairo(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  if (result.removedEmptyMeetings > 0 ||
+                      result.removedEmptyClasses > 0)
                     Padding(
                       padding: const EdgeInsets.only(top: 6),
                       child: Text(
-                        'وهناك ${result.issues.length - 10} أخطاء أخرى',
+                        'تم تنظيف ${result.removedEmptyMeetings} اجتماع فارغ و${result.removedEmptyClasses} فصل فارغ.',
                         style: GoogleFonts.cairo(
                           color: AppTheme.textLight,
-                          fontSize: 10.5,
+                          fontSize: 11,
                         ),
                       ),
                     ),
+                  if (result.savedOffline)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        'تم الحفظ محليًا وسيتم المزامنة عند عودة الاتصال.',
+                        style: GoogleFonts.cairo(
+                          color: AppTheme.accentOrange,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  if (result.issues.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    ...result.issues
+                        .take(8)
+                        .map(
+                          (issue) => Padding(
+                            padding: const EdgeInsets.only(bottom: 5),
+                            child: Text(
+                              '${issue.row == 0 ? 'تنظيف' : 'صف ${issue.row}'}: ${issue.message}',
+                              style: GoogleFonts.cairo(
+                                color: AppTheme.accentRed,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ),
+                        ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext, false),
-              child: Text('إلغاء', style: GoogleFonts.cairo()),
-            ),
-            FilledButton.icon(
-              onPressed: result.validRows.isEmpty
-                  ? null
-                  : () => Navigator.pop(dialogContext, true),
-              icon: const Icon(Icons.group_add_outlined),
-              label: Text(
-                'استيراد ${result.validRows.length} عضو',
-                style: GoogleFonts.cairo(fontWeight: FontWeight.w800),
+            if (result.issues.isNotEmpty)
+              TextButton.icon(
+                onPressed: () =>
+                    _saveImportIssuesCsv(dialogContext, result.issues),
+                icon: const Icon(Icons.download_rounded),
+                label: Text('تنزيل ملف الأخطاء', style: GoogleFonts.cairo()),
               ),
+            if (result.failedRows.isNotEmpty)
+              FilledButton.tonalIcon(
+                onPressed: () => Navigator.pop(
+                  dialogContext,
+                  _ImportResultAction.retryFailed,
+                ),
+                icon: const Icon(Icons.refresh_rounded),
+                label: Text(
+                  'إعادة محاولة الفاشل',
+                  style: GoogleFonts.cairo(fontWeight: FontWeight.w800),
+                ),
+              ),
+            FilledButton(
+              onPressed: () =>
+                  Navigator.pop(dialogContext, _ImportResultAction.close),
+              child: Text('إغلاق', style: GoogleFonts.cairo()),
             ),
           ],
         ),
@@ -1026,40 +1248,27 @@ class _MembersListScreenState extends State<MembersListScreen> {
     );
   }
 
-  Future<void> _showImportIssues(
+  Future<void> _saveImportIssuesCsv(
     BuildContext context,
-    List<MemberImportIssue> issues, {
-    required String title,
-  }) {
-    return showDialog<void>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(
-          title,
-          style: GoogleFonts.cairo(fontWeight: FontWeight.w900),
-        ),
-        content: SizedBox(
-          width: 500,
-          child: ListView(
-            shrinkWrap: true,
-            children: issues
-                .map(
-                  (issue) => Text(
-                    'صف ${issue.row}: ${issue.message}',
-                    style: GoogleFonts.cairo(fontSize: 11.5),
-                  ),
-                )
-                .toList(),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('إغلاق'),
-          ),
-        ],
-      ),
+    List<MemberImportIssue> issues,
+  ) async {
+    final bytes = _excelService.buildIssuesCsv(issues);
+    final date = DateTime.now().toIso8601String().split('T').first;
+    final path = await FilePicker.saveFile(
+      dialogTitle: 'حفظ أخطاء استيراد الأعضاء',
+      fileName: 'Link_members_import_errors_$date.csv',
+      type: FileType.custom,
+      allowedExtensions: const ['csv'],
+      bytes: bytes,
     );
+    if (path != null && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('تم حفظ ملف الأخطاء', style: GoogleFonts.cairo()),
+          backgroundColor: AppTheme.secondary,
+        ),
+      );
+    }
   }
 
   Future<void> _runExcelTask(
@@ -1149,7 +1358,347 @@ class _MembersListScreenState extends State<MembersListScreen> {
   }
 }
 
-enum _MemberExcelAction { export, template, import }
+enum _MemberExcelAction { export, qrPdf, template, import }
+
+enum _ImportResultAction { close, retryFailed }
+
+class _MemberImportConfirmation {
+  final Map<String, int> meetingWeekdays;
+  final Map<int, MemberImportDuplicateAction> duplicateActions;
+
+  const _MemberImportConfirmation({
+    required this.meetingWeekdays,
+    required this.duplicateActions,
+  });
+}
+
+typedef _MemberImportRunner =
+    Future<MemberImportSaveResult> Function({
+      required void Function(MemberImportProgress progress) onProgress,
+      required bool Function() isCancelled,
+    });
+
+class _MemberImportProgressDialog extends StatefulWidget {
+  final List<MemberImportRow> rows;
+  final _MemberImportRunner run;
+
+  const _MemberImportProgressDialog({required this.rows, required this.run});
+
+  @override
+  State<_MemberImportProgressDialog> createState() =>
+      _MemberImportProgressDialogState();
+}
+
+class _MemberImportProgressDialogState
+    extends State<_MemberImportProgressDialog> {
+  late MemberImportProgress _progress = MemberImportProgress(
+    processed: 0,
+    total: widget.rows.length,
+    imported: 0,
+    failed: 0,
+    skipped: 0,
+  );
+  bool _cancelRequested = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _start());
+  }
+
+  Future<void> _start() async {
+    try {
+      final result = await widget.run(
+        onProgress: (progress) {
+          if (mounted) setState(() => _progress = progress);
+        },
+        isCancelled: () => _cancelRequested,
+      );
+      if (mounted) Navigator.pop(context, result);
+    } catch (error) {
+      if (!mounted) return;
+      Navigator.pop(
+        context,
+        MemberImportSaveResult(
+          imported: _progress.imported,
+          cancelled: _cancelRequested,
+          issues: [
+            MemberImportIssue(
+              row: 0,
+              message: error.toString(),
+              suggestion: 'حاول الاستيراد مرة أخرى',
+            ),
+          ],
+          failedRows: widget.rows.skip(_progress.processed).toList(),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final total = _progress.total;
+    final value = total == 0 ? 0.0 : _progress.processed / total;
+    return PopScope(
+      canPop: false,
+      child: Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          title: Text(
+            _cancelRequested ? 'جارٍ الإيقاف بأمان...' : 'جارٍ استيراد الأعضاء',
+            style: GoogleFonts.cairo(fontWeight: FontWeight.w900),
+          ),
+          content: SizedBox(
+            width: 440,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                LinearProgressIndicator(value: value.clamp(0, 1)),
+                const SizedBox(height: 12),
+                Text(
+                  'تمت معالجة ${_progress.processed} من $total',
+                  style: GoogleFonts.cairo(fontWeight: FontWeight.w800),
+                ),
+                if (_progress.currentRow != null)
+                  Text(
+                    'الصف الحالي: ${_progress.currentRow}',
+                    style: GoogleFonts.cairo(color: AppTheme.textLight),
+                  ),
+                const SizedBox(height: 8),
+                Text(
+                  'نجح: ${_progress.imported}  •  فشل: ${_progress.failed}  •  تم تخطيه: ${_progress.skipped}',
+                  style: GoogleFonts.cairo(fontSize: 11.5),
+                ),
+                if (_cancelRequested) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'سيتم التوقف بعد انتهاء الصف الجاري ولن تُحذف البيانات التي تم حفظها.',
+                    style: GoogleFonts.cairo(
+                      color: AppTheme.accentOrange,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton.icon(
+              onPressed: _cancelRequested
+                  ? null
+                  : () => setState(() => _cancelRequested = true),
+              icon: const Icon(Icons.stop_circle_outlined),
+              label: Text('إيقاف', style: GoogleFonts.cairo()),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ImportResultLine extends StatelessWidget {
+  final String label;
+  final int value;
+  final Color color;
+
+  const _ImportResultLine({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 3),
+    child: Row(
+      children: [
+        Expanded(child: Text(label, style: GoogleFonts.cairo())),
+        Text(
+          value.toString(),
+          style: GoogleFonts.cairo(color: color, fontWeight: FontWeight.w900),
+        ),
+      ],
+    ),
+  );
+}
+
+class _ImportDestinationsSection extends StatelessWidget {
+  final Map<String, int> meetingWeekdays;
+  final List<String> classNames;
+  final List<(int, String)> weekdays;
+  final void Function(String name, int weekday) onWeekdayChanged;
+
+  const _ImportDestinationsSection({
+    required this.meetingWeekdays,
+    required this.classNames,
+    required this.weekdays,
+    required this.onWeekdayChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+    constraints: const BoxConstraints(maxHeight: 250),
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: AppTheme.primary.withValues(alpha: 0.06),
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: AppTheme.primary.withValues(alpha: 0.18)),
+    ),
+    child: ListView(
+      shrinkWrap: true,
+      children: [
+        Text(
+          'سيتم الإنشاء تلقائيًا قبل إضافة الأعضاء',
+          style: GoogleFonts.cairo(
+            color: AppTheme.primary,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        for (final entry in meetingWeekdays.entries) ...[
+          const SizedBox(height: 9),
+          Row(
+            children: [
+              const Icon(
+                Icons.groups_2_outlined,
+                color: AppTheme.primary,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  entry.key,
+                  style: GoogleFonts.cairo(fontWeight: FontWeight.w800),
+                ),
+              ),
+              const SizedBox(width: 8),
+              DropdownButton<int>(
+                value: entry.value,
+                underline: const SizedBox.shrink(),
+                items: weekdays
+                    .map(
+                      (day) => DropdownMenuItem<int>(
+                        value: day.$1,
+                        child: Text(day.$2, style: GoogleFonts.cairo()),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) {
+                  if (value != null) onWeekdayChanged(entry.key, value);
+                },
+              ),
+            ],
+          ),
+        ],
+        if (classNames.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Text(
+            'الفصول الجديدة:',
+            style: GoogleFonts.cairo(
+              color: AppTheme.textLight,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          ...classNames.map(
+            (name) => Text('• $name', style: GoogleFonts.cairo(fontSize: 11)),
+          ),
+        ],
+      ],
+    ),
+  );
+}
+
+class _ImportDuplicatesSection extends StatelessWidget {
+  final List<MemberImportDuplicate> duplicates;
+  final Map<int, MemberImportDuplicateAction> actions;
+  final void Function(int row, MemberImportDuplicateAction action)
+  onActionChanged;
+
+  const _ImportDuplicatesSection({
+    required this.duplicates,
+    required this.actions,
+    required this.onActionChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+    constraints: const BoxConstraints(maxHeight: 260),
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: AppTheme.accentOrange.withValues(alpha: 0.07),
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: AppTheme.accentOrange.withValues(alpha: 0.25)),
+    ),
+    child: ListView(
+      shrinkWrap: true,
+      children: [
+        Text(
+          'أعضاء محتمل تكرارهم (${duplicates.length})',
+          style: GoogleFonts.cairo(
+            color: AppTheme.accentOrange,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        ...duplicates.map(
+          (duplicate) => Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'صف ${duplicate.row.sourceRow}: ${duplicate.row.fullName}',
+                  style: GoogleFonts.cairo(fontWeight: FontWeight.w800),
+                ),
+                Text(
+                  'يطابق ${duplicate.existingMember.fullName} عن طريق ${duplicate.matchedBy.join('، ')}',
+                  style: GoogleFonts.cairo(
+                    color: AppTheme.textLight,
+                    fontSize: 11,
+                  ),
+                ),
+                DropdownButtonFormField<MemberImportDuplicateAction>(
+                  initialValue: actions[duplicate.row.sourceRow],
+                  isDense: true,
+                  items: [
+                    DropdownMenuItem(
+                      value: MemberImportDuplicateAction.skip,
+                      child: Text(
+                        'تخطي الصف (الأكثر أمانًا)',
+                        style: GoogleFonts.cairo(),
+                      ),
+                    ),
+                    DropdownMenuItem(
+                      value: MemberImportDuplicateAction.update,
+                      child: Text(
+                        'تحديث العضو الموجود',
+                        style: GoogleFonts.cairo(),
+                      ),
+                    ),
+                    DropdownMenuItem(
+                      value: MemberImportDuplicateAction.createNew,
+                      child: Text(
+                        duplicate.codeMatched
+                            ? 'إنشاء جديد بدون الكود المكرر'
+                            : 'إنشاء كعضو جديد',
+                        style: GoogleFonts.cairo(),
+                      ),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) {
+                      onActionChanged(duplicate.row.sourceRow, value);
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
 
 class _ImportCountCard extends StatelessWidget {
   final String label;
@@ -1301,7 +1850,7 @@ class _MemberTile extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppTheme.cardBackground,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: AppTheme.border.withValues(alpha: 0.8)),
         boxShadow: [
@@ -1442,7 +1991,8 @@ class _MemberTile extends StatelessWidget {
                                       ),
                                       const SizedBox(width: 4),
                                       InkWell(
-                                        onTap: () => _openWhatsApp(member.phone!),
+                                        onTap: () =>
+                                            _openWhatsApp(member.phone!),
                                         borderRadius: BorderRadius.circular(6),
                                         child: const Padding(
                                           padding: EdgeInsets.symmetric(
@@ -1498,30 +2048,36 @@ class _MemberTile extends StatelessWidget {
                                       color: accent,
                                       backgroundColor: accentLight,
                                     ),
-                                    if (member.notes != null && member.notes!.isNotEmpty)
+                                    if (member.notes != null &&
+                                        member.notes!.isNotEmpty)
                                       _MemberTag(
                                         icon: Icons.school_outlined,
                                         label: 'المرحلة: ${member.notes}',
                                         color: AppTheme.secondary,
-                                        backgroundColor: AppTheme.secondaryLight,
+                                        backgroundColor:
+                                            AppTheme.secondaryLight,
                                       ),
                                     if (member.parentName != null)
                                       _MemberTag(
                                         icon: Icons.family_restroom_outlined,
-                                        label: 'ولي الأمر: ${member.parentName}',
+                                        label:
+                                            'ولي الأمر: ${member.parentName}',
                                         color: AppTheme.accentPurple,
                                         backgroundColor: AppTheme.accentPurple
                                             .withValues(alpha: 0.08),
                                       ),
                                     if (member.parentPhone != null)
                                       InkWell(
-                                        onTap: () => _callNumber(member.parentPhone!),
+                                        onTap: () =>
+                                            _callNumber(member.parentPhone!),
                                         borderRadius: BorderRadius.circular(8),
                                         child: _MemberTag(
                                           icon: Icons.phone_iphone_rounded,
-                                          label: 'هاتف ولي الأمر: ${member.parentPhone}',
+                                          label:
+                                              'هاتف ولي الأمر: ${member.parentPhone}',
                                           color: AppTheme.accentOrange,
-                                          backgroundColor: AppTheme.accentOrangeLight,
+                                          backgroundColor:
+                                              AppTheme.accentOrangeLight,
                                         ),
                                       ),
                                   ],

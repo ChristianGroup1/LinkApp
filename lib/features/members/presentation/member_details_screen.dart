@@ -237,7 +237,7 @@ class _MemberDetailsView extends StatelessWidget {
                 ),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppTheme.accentRed,
-                  backgroundColor: Colors.white,
+                  backgroundColor: AppTheme.cardBackground,
                   side: BorderSide(
                     color: AppTheme.accentRed.withValues(alpha: 0.35),
                   ),
@@ -449,7 +449,7 @@ class _MemberAttendanceSectionState extends State<_MemberAttendanceSection> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppTheme.cardBackground,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: AppTheme.border.withValues(alpha: 0.8)),
         boxShadow: AppTheme.softShadow,
@@ -701,9 +701,7 @@ class _MemberAttendanceSectionState extends State<_MemberAttendanceSection> {
             ),
             style: OutlinedButton.styleFrom(
               foregroundColor: AppTheme.primary,
-              side: BorderSide(
-                color: AppTheme.primary.withValues(alpha: 0.3),
-              ),
+              side: BorderSide(color: AppTheme.primary.withValues(alpha: 0.3)),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
@@ -1037,7 +1035,7 @@ class _QuickActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.white,
+      color: AppTheme.cardBackground,
       borderRadius: BorderRadius.circular(15),
       child: InkWell(
         onTap: onTap,
@@ -1087,7 +1085,7 @@ class _DetailsSection extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppTheme.cardBackground,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: AppTheme.border.withValues(alpha: 0.8)),
         boxShadow: AppTheme.softShadow,

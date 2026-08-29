@@ -3,19 +3,25 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart' as intl;
 import '../../../core/theme/app_theme.dart';
+import '../../../core/attendance/qr_attendance_scan_result.dart';
+import '../../../core/attendance/qr_attendance_platform.dart';
 import '../../../data/models/models.dart';
+import '../../../data/offline/offline_save_result.dart';
+import '../../../data/repositories/database_repository.dart';
 import '../../../shared/ui/app_states.dart';
+import '../../../shared/ui/offline_editing.dart';
 import '../../church/logic/church_bloc.dart';
+import '../../members/logic/members_bloc.dart';
+import '../../members/presentation/add_edit_member_screen.dart';
 import '../logic/attendance_bloc.dart';
+import 'attendance_qr_desktop_screen.dart';
+import 'attendance_qr_scanner_screen.dart';
 import 'widgets/attendance_date_picker.dart';
 
 class AttendanceRecordingScreen extends StatefulWidget {
   final AttendanceSessionEntity session;
 
-  const AttendanceRecordingScreen({
-    super.key,
-    required this.session,
-  });
+  const AttendanceRecordingScreen({super.key, required this.session});
 
   @override
   State<AttendanceRecordingScreen> createState() =>
@@ -27,6 +33,11 @@ class _AttendanceRecordingScreenState extends State<AttendanceRecordingScreen> {
   bool _allowPop = false;
   bool _leaveDialogOpen = false;
   bool _sheetRequested = false;
+
+  QrAttendanceInputMode get _qrInputMode => resolveQrAttendanceInputMode();
+
+  bool get _usesDesktopQrReader =>
+      _qrInputMode == QrAttendanceInputMode.desktopReader;
 
   @override
   void didChangeDependencies() {
@@ -50,29 +61,7 @@ class _AttendanceRecordingScreenState extends State<AttendanceRecordingScreen> {
     }
     if (_leaveDialogOpen) return;
     _leaveDialogOpen = true;
-    final leave = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text('مغادرة بدون حفظ؟', style: GoogleFonts.cairo()),
-        content: Text(
-          'لديك تغييرات غير محفوظة. هل تريد المغادرة بدون حفظ؟',
-          style: GoogleFonts.cairo(),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: Text('البقاء', style: GoogleFonts.cairo()),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: Text(
-              'مغادرة',
-              style: GoogleFonts.cairo(color: AppTheme.accentRed),
-            ),
-          ),
-        ],
-      ),
-    );
+    final leave = await confirmDiscardUnsavedChanges(context);
     _leaveDialogOpen = false;
     if (leave == true && mounted) {
       setState(() => _allowPop = true);
@@ -93,37 +82,46 @@ class _AttendanceRecordingScreenState extends State<AttendanceRecordingScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   ListTile(
-                    leading: const Icon(Icons.check_circle_outline,
-                        color: Colors.green),
-                    title: Text('حاضر الكل',
-                        style: GoogleFonts.cairo(fontWeight: FontWeight.bold)),
+                    leading: const Icon(
+                      Icons.check_circle_outline,
+                      color: Colors.green,
+                    ),
+                    title: Text(
+                      'حاضر الكل',
+                      style: GoogleFonts.cairo(fontWeight: FontWeight.bold),
+                    ),
                     onTap: () {
-                      context
-                          .read<AttendanceBloc>()
-                          .add(MarkAllStatus(AttendanceStatus.present));
+                      context.read<AttendanceBloc>().add(
+                        MarkAllStatus(AttendanceStatus.present),
+                      );
                       Navigator.pop(sheetContext);
                     },
                   ),
                   ListTile(
-                    leading:
-                        const Icon(Icons.highlight_off, color: Colors.red),
-                    title: Text('غائب الكل',
-                        style: GoogleFonts.cairo(fontWeight: FontWeight.bold)),
+                    leading: const Icon(Icons.highlight_off, color: Colors.red),
+                    title: Text(
+                      'غائب الكل',
+                      style: GoogleFonts.cairo(fontWeight: FontWeight.bold),
+                    ),
                     onTap: () {
-                      context
-                          .read<AttendanceBloc>()
-                          .add(MarkAllStatus(AttendanceStatus.absent));
+                      context.read<AttendanceBloc>().add(
+                        MarkAllStatus(AttendanceStatus.absent),
+                      );
                       Navigator.pop(sheetContext);
                     },
                   ),
                   ListTile(
-                    leading: const Icon(Icons.person_add_alt_1,
-                        color: AppTheme.primary),
-                    title: Text('إضافة عضو جديد',
-                        style: GoogleFonts.cairo(fontWeight: FontWeight.bold)),
+                    leading: const Icon(
+                      Icons.person_add_alt_1,
+                      color: AppTheme.primary,
+                    ),
+                    title: Text(
+                      'إضافة عضو جديد',
+                      style: GoogleFonts.cairo(fontWeight: FontWeight.bold),
+                    ),
                     onTap: () {
                       Navigator.pop(sheetContext);
-                      _showNewcomerDialog(context);
+                      _openAddMemberScreen(context);
                     },
                   ),
                 ],
@@ -135,126 +133,60 @@ class _AttendanceRecordingScreenState extends State<AttendanceRecordingScreen> {
     );
   }
 
-  void _showNewcomerDialog(BuildContext context) {
-    final nameController = TextEditingController();
-    final phoneController = TextEditingController();
-    final parentNameController = TextEditingController();
-    final parentPhoneController = TextEditingController();
-    final codeController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          icon: const Icon(Icons.person_add_alt_1_outlined,
-              color: AppTheme.primary, size: 40),
-          title: Text(
-            'إضافة عضو جديد',
-            style: GoogleFonts.cairo(),
-            textAlign: TextAlign.center,
-          ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: nameController,
-                  decoration: const InputDecoration(labelText: 'الاسم بالكامل*'),
-                  style: GoogleFonts.cairo(),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: codeController,
-                  decoration:
-                      const InputDecoration(labelText: 'كود العضو (اختياري)'),
-                  style: GoogleFonts.cairo(),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: phoneController,
-                  keyboardType: TextInputType.phone,
-                  decoration: const InputDecoration(labelText: 'رقم الهاتف'),
-                  style: GoogleFonts.cairo(),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: parentNameController,
-                  decoration: const InputDecoration(
-                      labelText: 'اسم ولي الأمر (اختياري)'),
-                  style: GoogleFonts.cairo(),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: parentPhoneController,
-                  keyboardType: TextInputType.phone,
-                  decoration: const InputDecoration(
-                      labelText: 'رقم هاتف ولي الأمر (اختياري)'),
-                  style: GoogleFonts.cairo(),
-                ),
-              ],
-            ),
-          ),
-          actionsAlignment: MainAxisAlignment.center,
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: Text('إلغاء',
-                  style: GoogleFonts.cairo(
-                      fontWeight: FontWeight.bold, color: AppTheme.textLight)),
-            ),
-            const SizedBox(width: 8),
-            ElevatedButton(
-              onPressed: () {
-                final name = nameController.text.trim();
-                if (name.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content:
-                          Text('الرجاء إدخال الاسم', style: GoogleFonts.cairo()),
-                      backgroundColor: AppTheme.accentRed,
-                    ),
-                  );
-                  return;
-                }
-
-                context.read<AttendanceBloc>().add(
-                      AddNewcomerToSheet(
-                        fullName: name,
-                        code: codeController.text.trim().isEmpty
-                            ? null
-                            : codeController.text.trim(),
-                        phone: phoneController.text.trim().isEmpty
-                            ? null
-                            : phoneController.text.trim(),
-                        parentName: parentNameController.text.trim().isEmpty
-                            ? null
-                            : parentNameController.text.trim(),
-                        parentPhone: parentPhoneController.text.trim().isEmpty
-                            ? null
-                            : parentPhoneController.text.trim(),
-                      ),
-                    );
-                Navigator.pop(dialogContext);
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primary,
-                elevation: 0,
-              ),
-              child: Text(
-                'إضافة وتحديد حضور',
-                style: GoogleFonts.cairo(
-                    color: Colors.white, fontWeight: FontWeight.bold),
+  Future<void> _openAddMemberScreen(BuildContext context) async {
+    final attendanceBloc = context.read<AttendanceBloc>();
+    final repository = context.read<DatabaseRepository>();
+    final result = await Navigator.of(context)
+        .push<OfflineSaveResult<MemberEntity>>(
+          MaterialPageRoute(
+            builder: (_) => BlocProvider(
+              create: (_) => MembersBloc(repository: repository),
+              child: AddEditMemberScreen(
+                initialClassId: widget.session.classId,
+                initialMeetingId: widget.session.classId == null
+                    ? widget.session.meetingId
+                    : null,
               ),
             ),
-          ],
+          ),
         );
-      },
+    if (!mounted || result == null) return;
+    attendanceBloc.add(
+      AddCreatedMemberToSheet(
+        member: result.data,
+        savedOffline: !result.syncedToServer,
+      ),
     );
   }
 
-  int _countStatus(
-      Map<String, AttendanceStatus> map, AttendanceStatus status) {
+  int _countStatus(Map<String, AttendanceStatus> map, AttendanceStatus status) {
     return map.values.where((s) => s == status).length;
+  }
+
+  Future<void> _scanAttendanceQr(
+    BuildContext context,
+    AttendanceSheetLoaded state,
+  ) async {
+    final result = await Navigator.of(context).push<QrAttendanceScanResult>(
+      MaterialPageRoute(
+        builder: (_) => _usesDesktopQrReader
+            ? AttendanceQrDesktopScreen(
+                members: state.allMembers,
+                initialStatuses: state.statusMap,
+              )
+            : AttendanceQrScannerScreen(
+                members: state.allMembers,
+                initialStatuses: state.statusMap,
+              ),
+      ),
+    );
+    if (!context.mounted || result == null) return;
+    context.read<AttendanceBloc>().add(
+      ApplyQrAttendanceScan(
+        result.scannedMemberIds,
+        markUnscannedAbsent: result.markUnscannedAbsent,
+      ),
+    );
   }
 
   @override
@@ -263,34 +195,40 @@ class _AttendanceRecordingScreenState extends State<AttendanceRecordingScreen> {
       listenWhen: (previous, current) {
         if (current is AttendanceError) return true;
         if (current is! AttendanceSheetLoaded) return false;
-        final becameSaved = current.justSaved &&
+        final becameSaved =
+            current.justSaved &&
             (previous is! AttendanceSheetLoaded || !previous.justSaved);
-        final hasFlash = current.flashMessage != null &&
+        final hasFlash =
+            current.flashMessage != null &&
             (previous is! AttendanceSheetLoaded ||
                 previous.flashMessage != current.flashMessage);
         return becameSaved || hasFlash;
       },
       listener: (context, state) {
-        if (state is AttendanceSheetLoaded && state.justSaved) {
+        if (state is AttendanceSheetLoaded && state.flashMessage != null) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content:
-                  Text('تم حفظ كشف الحضور بنجاح', style: GoogleFonts.cairo()),
+              content: Text(state.flashMessage!, style: GoogleFonts.cairo()),
+              backgroundColor: state.savedOffline
+                  ? AppTheme.accentOrange
+                  : Colors.green,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          context.read<AttendanceBloc>().add(ClearFlashMessage());
+          context.read<AttendanceBloc>().add(ClearJustSavedFlag());
+        } else if (state is AttendanceSheetLoaded && state.justSaved) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'تم حفظ كشف الحضور بنجاح',
+                style: GoogleFonts.cairo(),
+              ),
               backgroundColor: Colors.green,
               behavior: SnackBarBehavior.floating,
             ),
           );
           context.read<AttendanceBloc>().add(ClearJustSavedFlag());
-        } else if (state is AttendanceSheetLoaded &&
-            state.flashMessage != null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(state.flashMessage!, style: GoogleFonts.cairo()),
-              backgroundColor: Colors.green,
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-          context.read<AttendanceBloc>().add(ClearFlashMessage());
         } else if (state is AttendanceError) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -323,7 +261,7 @@ class _AttendanceRecordingScreenState extends State<AttendanceRecordingScreen> {
                   ),
                 ),
                 centerTitle: true,
-                backgroundColor: Colors.white,
+                backgroundColor: AppTheme.cardBackground,
                 elevation: 0,
                 scrolledUnderElevation: 0,
                 foregroundColor: AppTheme.textDark,
@@ -341,7 +279,8 @@ class _AttendanceRecordingScreenState extends State<AttendanceRecordingScreen> {
                   ),
                   BlocBuilder<ChurchBloc, ChurchState>(
                     builder: (context, churchState) {
-                      final isAdmin = churchState is ChurchContextLoaded &&
+                      final isAdmin =
+                          churchState is ChurchContextLoaded &&
                           (churchState.profile.role == AppRole.superAdmin ||
                               churchState.profile.role == AppRole.churchAdmin);
                       if (!isAdmin) return const SizedBox.shrink();
@@ -366,14 +305,17 @@ class _AttendanceRecordingScreenState extends State<AttendanceRecordingScreen> {
                               actions: [
                                 TextButton(
                                   onPressed: () => Navigator.pop(dialogContext),
-                                  child: Text('إلغاء', style: GoogleFonts.cairo()),
+                                  child: Text(
+                                    'إلغاء',
+                                    style: GoogleFonts.cairo(),
+                                  ),
                                 ),
                                 TextButton(
                                   onPressed: () {
                                     setState(() => _allowPop = true);
                                     context.read<AttendanceBloc>().add(
-                                          DeleteSession(widget.session.id),
-                                        );
+                                      DeleteSession(widget.session.id),
+                                    );
                                     Navigator.pop(dialogContext);
                                     Navigator.pop(context);
                                   },
@@ -391,7 +333,12 @@ class _AttendanceRecordingScreenState extends State<AttendanceRecordingScreen> {
                   ),
                 ],
               ),
-              body: _buildBody(context, state),
+              body: Column(
+                children: [
+                  const OfflineEditingNotice(),
+                  Expanded(child: _buildBody(context, state)),
+                ],
+              ),
               bottomNavigationBar: sheet == null
                   ? null
                   : _buildStickySaveBar(context, sheet),
@@ -405,15 +352,16 @@ class _AttendanceRecordingScreenState extends State<AttendanceRecordingScreen> {
   Widget _buildBody(BuildContext context, AttendanceState state) {
     if (state is AttendanceLoading || state is AttendanceInitial) {
       return const Center(
-          child: CircularProgressIndicator(color: AppTheme.primary));
+        child: CircularProgressIndicator(color: AppTheme.primary),
+      );
     }
 
     if (state is AttendanceError) {
       return AppErrorState(
         message: state.message,
-        onRetry: () => context
-            .read<AttendanceBloc>()
-            .add(LoadAttendanceSheet(widget.session)),
+        onRetry: () => context.read<AttendanceBloc>().add(
+          LoadAttendanceSheet(widget.session),
+        ),
       );
     }
 
@@ -442,13 +390,36 @@ class _AttendanceRecordingScreenState extends State<AttendanceRecordingScreen> {
             excused: excused,
           ),
         ),
+        if (_qrInputMode != QrAttendanceInputMode.unsupported)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: FilledButton.icon(
+              onPressed: state.isSaving || state.allMembers.isEmpty
+                  ? null
+                  : () => _scanAttendanceQr(context, state),
+              style: FilledButton.styleFrom(
+                minimumSize: const Size.fromHeight(48),
+                backgroundColor: AppTheme.primary,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              icon: const Icon(Icons.qr_code_scanner_rounded),
+              label: Text(
+                'أخذ الحضور والغياب بالـ QR',
+                style: GoogleFonts.cairo(fontWeight: FontWeight.w900),
+              ),
+            ),
+          ),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
           child: Container(
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppTheme.cardBackground,
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppTheme.border.withValues(alpha: 0.75)),
+              border: Border.all(
+                color: AppTheme.border.withValues(alpha: 0.75),
+              ),
               boxShadow: AppTheme.softShadow,
             ),
             child: TextField(
@@ -460,7 +431,7 @@ class _AttendanceRecordingScreenState extends State<AttendanceRecordingScreen> {
                 hintText: 'ابحث عن اسم أو كود...',
                 hintStyle: GoogleFonts.cairo(color: AppTheme.textLight),
                 border: InputBorder.none,
-                prefixIcon: const Icon(
+                prefixIcon: Icon(
                   Icons.search_rounded,
                   color: AppTheme.textLight,
                 ),
@@ -531,7 +502,7 @@ class _AttendanceRecordingScreenState extends State<AttendanceRecordingScreen> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppTheme.cardBackground,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppTheme.border.withValues(alpha: 0.75)),
         boxShadow: AppTheme.softShadow,
@@ -650,7 +621,7 @@ class _AttendanceRecordingScreenState extends State<AttendanceRecordingScreen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppTheme.cardBackground,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppTheme.border.withValues(alpha: 0.75)),
         boxShadow: AppTheme.softShadow,
@@ -762,13 +733,15 @@ class _AttendanceRecordingScreenState extends State<AttendanceRecordingScreen> {
   }
 
   Widget _buildStickySaveBar(
-      BuildContext context, AttendanceSheetLoaded state) {
+    BuildContext context,
+    AttendanceSheetLoaded state,
+  ) {
     return Material(
       elevation: 0,
-      color: Colors.white,
+      color: AppTheme.cardBackground,
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppTheme.cardBackground,
           border: Border(
             top: BorderSide(color: AppTheme.border.withValues(alpha: 0.8)),
           ),
@@ -787,30 +760,13 @@ class _AttendanceRecordingScreenState extends State<AttendanceRecordingScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (state.isDirty)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(
-                          Icons.edit_note_rounded,
-                          color: AppTheme.accentOrange,
-                          size: 16,
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          'تغييرات غير محفوظة',
-                          style: GoogleFonts.cairo(
-                            fontSize: 12,
-                            color: AppTheme.accentOrange,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                else if (state.justSaved)
+                UnsavedChangesNotice(
+                  isDirty: state.isDirty,
+                  savedOffline: state.savedOffline,
+                ),
+                if (!state.isDirty &&
+                    state.justSaved &&
+                    state.flashMessage == null)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 8),
                     child: Row(
@@ -839,9 +795,9 @@ class _AttendanceRecordingScreenState extends State<AttendanceRecordingScreen> {
                   child: FilledButton.icon(
                     onPressed: state.isSaving
                         ? null
-                        : () => context
-                            .read<AttendanceBloc>()
-                            .add(SaveAttendanceSheet()),
+                        : () => context.read<AttendanceBloc>().add(
+                            SaveAttendanceSheet(),
+                          ),
                     icon: state.isSaving
                         ? const SizedBox(
                             width: 18,
@@ -897,7 +853,7 @@ class _AttendanceRecordingScreenState extends State<AttendanceRecordingScreen> {
       labelStyle: TextStyle(
         color: isSelected ? AppTheme.primary : AppTheme.textLight,
       ),
-      backgroundColor: Colors.white,
+      backgroundColor: AppTheme.cardBackground,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(999),
         side: BorderSide(
@@ -931,8 +887,8 @@ class _AttendanceRecordingScreenState extends State<AttendanceRecordingScreen> {
           customBorder: const CircleBorder(),
           onTap: () {
             context.read<AttendanceBloc>().add(
-                  UpdateMemberStatus(memberId: memberId, status: status),
-                );
+              UpdateMemberStatus(memberId: memberId, status: status),
+            );
           },
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 180),

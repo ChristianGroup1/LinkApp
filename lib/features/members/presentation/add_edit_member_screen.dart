@@ -1,14 +1,26 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/models.dart';
+import '../../../data/offline/offline_save_result.dart';
 import '../../../data/repositories/database_repository.dart';
+import '../../../shared/ui/offline_editing.dart';
 import '../logic/members_bloc.dart';
 
 class AddEditMemberScreen extends StatefulWidget {
   final MemberEntity? member; // If null, we are creating a member
-  const AddEditMemberScreen({super.key, this.member});
+  final String? initialClassId;
+  final String? initialMeetingId;
+
+  const AddEditMemberScreen({
+    super.key,
+    this.member,
+    this.initialClassId,
+    this.initialMeetingId,
+  });
 
   @override
   State<AddEditMemberScreen> createState() => _AddEditMemberScreenState();
@@ -28,6 +40,10 @@ class _AddEditMemberScreenState extends State<AddEditMemberScreen> {
   String? _selectedClassId;
   String? _selectedMeetingId;
   bool _isActive = true;
+  bool _isDirty = false;
+  bool _isSaving = false;
+  bool _allowPop = false;
+  bool _discardDialogOpen = false;
 
   List<SundaySchoolClassEntity> _classes = [];
   List<MeetingEntity> _meetings = [];
@@ -53,6 +69,12 @@ class _AddEditMemberScreenState extends State<AddEditMemberScreen> {
       _selectedClassId = widget.member!.sundaySchoolClassId;
       _selectedMeetingId = widget.member!.meetingId;
       _isActive = widget.member!.isActive;
+    } else if (widget.initialClassId != null) {
+      _scope = MemberScope.sundaySchoolClass;
+      _selectedClassId = widget.initialClassId;
+    } else if (widget.initialMeetingId != null) {
+      _scope = MemberScope.meeting;
+      _selectedMeetingId = widget.initialMeetingId;
     }
 
     _loadDropdownData();
@@ -74,20 +96,23 @@ class _AddEditMemberScreenState extends State<AddEditMemberScreen> {
             .where(
               (item) =>
                   item.isActive ||
-                  item.id == widget.member?.sundaySchoolClassId,
+                  item.id == widget.member?.sundaySchoolClassId ||
+                  item.id == widget.initialClassId,
             )
             .toList();
         _meetings = meetings
             .where(
               (item) =>
                   item.kind != MeetingKind.sundaySchool &&
-                  (item.isActive || item.id == widget.member?.meetingId),
+                  (item.isActive ||
+                      item.id == widget.member?.meetingId ||
+                      item.id == widget.initialMeetingId),
             )
             .toList();
         _isLoadingDropdowns = false;
 
         // Direct meetings appear first, then Sunday school classes.
-        if (widget.member == null) {
+        if (widget.member == null && !_hasValidSelectedAssignment) {
           if (_meetings.isNotEmpty) {
             _scope = MemberScope.meeting;
             _selectedMeetingId = _meetings.first.id;
@@ -115,6 +140,26 @@ class _AddEditMemberScreenState extends State<AddEditMemberScreen> {
     super.dispose();
   }
 
+  void _markDirty() {
+    if (!_isDirty && mounted) setState(() => _isDirty = true);
+  }
+
+  Future<void> _handleBack() async {
+    if (_isSaving) return;
+    if (_allowPop || !_isDirty) {
+      if (mounted) Navigator.pop(context);
+      return;
+    }
+    if (_discardDialogOpen) return;
+    _discardDialogOpen = true;
+    final discard = await confirmDiscardUnsavedChanges(context);
+    _discardDialogOpen = false;
+    if (discard && mounted) {
+      setState(() => _allowPop = true);
+      Navigator.pop(context);
+    }
+  }
+
   Future<void> _selectBirthDate() async {
     final today = DateTime.now();
     final initialDate =
@@ -130,7 +175,10 @@ class _AddEditMemberScreenState extends State<AddEditMemberScreen> {
       initialEntryMode: DatePickerEntryMode.calendarOnly,
     );
     if (selected != null && mounted) {
-      setState(() => _birthDate = selected);
+      setState(() {
+        _birthDate = selected;
+        _isDirty = true;
+      });
     }
   }
 
@@ -150,6 +198,16 @@ class _AddEditMemberScreenState extends State<AddEditMemberScreen> {
     return null;
   }
 
+  bool get _hasValidSelectedAssignment {
+    if (_scope == MemberScope.meeting && _selectedMeetingId != null) {
+      return _meetings.any((meeting) => meeting.id == _selectedMeetingId);
+    }
+    if (_scope == MemberScope.sundaySchoolClass && _selectedClassId != null) {
+      return _classes.any((item) => item.id == _selectedClassId);
+    }
+    return false;
+  }
+
   void _selectAssignment(String? value) {
     if (value == null) return;
     final separatorIndex = value.indexOf(':');
@@ -167,10 +225,12 @@ class _AddEditMemberScreenState extends State<AddEditMemberScreen> {
         _selectedClassId = id;
         _selectedMeetingId = null;
       }
+      _isDirty = true;
     });
   }
 
-  void _submit() {
+  Future<void> _submit() async {
+    if (_isSaving) return;
     if (!_formKey.currentState!.validate()) return;
 
     final name = _nameController.text.trim();
@@ -193,8 +253,12 @@ class _AddEditMemberScreenState extends State<AddEditMemberScreen> {
       return;
     }
 
+    setState(() => _isSaving = true);
+    final completion = Completer<OfflineSaveResult<MemberEntity>>();
+    final bloc = context.read<MembersBloc>();
+
     if (widget.member == null) {
-      context.read<MembersBloc>().add(
+      bloc.add(
         CreateMember(
           fullName: name,
           scope: _scope,
@@ -208,10 +272,11 @@ class _AddEditMemberScreenState extends State<AddEditMemberScreen> {
           code: code.isEmpty ? null : code,
           birthDate: _birthDate,
           notes: notes.isEmpty ? null : notes,
+          completion: completion,
         ),
       );
     } else {
-      context.read<MembersBloc>().add(
+      bloc.add(
         UpdateMemberEvent(
           id: widget.member!.id,
           fullName: name,
@@ -227,255 +292,314 @@ class _AddEditMemberScreenState extends State<AddEditMemberScreen> {
           birthDate: _birthDate,
           isActive: _isActive,
           notes: notes.isEmpty ? null : notes,
+          completion: completion,
         ),
       );
     }
 
-    Navigator.pop(context);
+    try {
+      final result = await completion.future;
+      if (!mounted) return;
+      setState(() {
+        _isSaving = false;
+        _isDirty = false;
+        _allowPop = true;
+      });
+      Navigator.pop(context, result);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _isSaving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            widget.member == null
+                ? 'تعذّر إضافة العضو: $error'
+                : 'تعذّر حفظ تعديلات العضو: $error',
+            style: GoogleFonts.cairo(),
+          ),
+          backgroundColor: AppTheme.accentRed,
+        ),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final isEdit = widget.member != null;
 
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Scaffold(
-        backgroundColor: AppTheme.background,
-        appBar: AppBar(
-          backgroundColor: Colors.white,
-          surfaceTintColor: Colors.transparent,
-          elevation: 0,
-          title: Text(
-            isEdit ? 'تعديل بيانات العضو' : 'إضافة عضو جديد',
-            style: GoogleFonts.cairo(
-              color: AppTheme.textDark,
-              fontWeight: FontWeight.w900,
-              fontSize: 18,
+    return PopScope(
+      canPop: !_isSaving && (_allowPop || !_isDirty),
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _handleBack();
+      },
+      child: Directionality(
+        textDirection: TextDirection.rtl,
+        child: Scaffold(
+          backgroundColor: AppTheme.background,
+          appBar: AppBar(
+            backgroundColor: AppTheme.cardBackground,
+            surfaceTintColor: Colors.transparent,
+            elevation: 0,
+            title: Text(
+              isEdit ? 'تعديل بيانات العضو' : 'إضافة عضو جديد',
+              style: GoogleFonts.cairo(
+                color: AppTheme.textDark,
+                fontWeight: FontWeight.w900,
+                fontSize: 18,
+              ),
+            ),
+            centerTitle: true,
+            leading: IconButton(
+              icon: Icon(Icons.arrow_back_rounded, color: AppTheme.textDark),
+              onPressed: _isSaving ? null : _handleBack,
             ),
           ),
-          centerTitle: true,
-          leading: IconButton(
-            icon: const Icon(
-              Icons.arrow_back_rounded,
-              color: AppTheme.textDark,
-            ),
-            onPressed: () => Navigator.pop(context),
-          ),
-        ),
-        body: _isLoadingDropdowns
-            ? const _MemberFormLoading()
-            : Form(
-                key: _formKey,
-                child: SingleChildScrollView(
-                  keyboardDismissBehavior:
-                      ScrollViewKeyboardDismissBehavior.onDrag,
-                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
-                  child: Column(
+          body: AbsorbPointer(
+            absorbing: _isSaving,
+            child: _isLoadingDropdowns
+                ? const _MemberFormLoading()
+                : Column(
                     children: [
-                      _MemberFormHero(isEdit: isEdit),
-                      const SizedBox(height: 14),
-                      _MemberFormSection(
-                        icon: Icons.badge_outlined,
-                        iconColor: AppTheme.primary,
-                        iconBackground: AppTheme.primaryLight,
-                        title: 'البيانات الأساسية والمعلومات',
-                        subtitle: 'الاسم، تاريخ الميلاد، التليفون والكود',
-                        child: Column(
-                          children: [
-                            // 1. الاسم (Full Name)
-                            TextFormField(
-                              controller: _nameController,
-                              textInputAction: TextInputAction.next,
-                              textCapitalization: TextCapitalization.words,
-                              style: GoogleFonts.cairo(
-                                color: AppTheme.textDark,
-                                fontWeight: FontWeight.w600,
-                              ),
-                              decoration: _fieldDecoration(
-                                label: 'الاسم الكامل',
-                                hint: 'مثال: جرجس إيليا أنطون',
-                                icon: Icons.person_outline_rounded,
-                                requiredField: true,
-                              ),
-                              validator: (value) {
-                                if (value == null || value.trim().isEmpty) {
-                                  return 'الرجاء إدخال الاسم الكامل';
-                                }
-                                return null;
-                              },
-                            ),
-                            const SizedBox(height: 12),
+                      const OfflineEditingNotice(),
+                      Expanded(
+                        child: Form(
+                          key: _formKey,
+                          onChanged: _markDirty,
+                          child: SingleChildScrollView(
+                            keyboardDismissBehavior:
+                                ScrollViewKeyboardDismissBehavior.onDrag,
+                            padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
+                            child: Column(
+                              children: [
+                                _MemberFormHero(isEdit: isEdit),
+                                const SizedBox(height: 14),
+                                _MemberFormSection(
+                                  icon: Icons.badge_outlined,
+                                  iconColor: AppTheme.primary,
+                                  iconBackground: AppTheme.primaryLight,
+                                  title: 'البيانات الأساسية والمعلومات',
+                                  subtitle:
+                                      'الاسم، تاريخ الميلاد، التليفون والكود',
+                                  child: Column(
+                                    children: [
+                                      // 1. الاسم (Full Name)
+                                      TextFormField(
+                                        controller: _nameController,
+                                        textInputAction: TextInputAction.next,
+                                        textCapitalization:
+                                            TextCapitalization.words,
+                                        style: GoogleFonts.cairo(
+                                          color: AppTheme.textDark,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                        decoration: _fieldDecoration(
+                                          label: 'الاسم الكامل',
+                                          hint: 'مثال: جرجس إيليا أنطون',
+                                          icon: Icons.person_outline_rounded,
+                                          requiredField: true,
+                                        ),
+                                        validator: (value) {
+                                          if (value == null ||
+                                              value.trim().isEmpty) {
+                                            return 'الرجاء إدخال الاسم الكامل';
+                                          }
+                                          return null;
+                                        },
+                                      ),
+                                      const SizedBox(height: 12),
 
-                            // 2. تاريخ الميلاد (Birth Date)
-                            _BirthDateField(
-                              birthDate: _birthDate,
-                              formattedDate: _birthDate == null
-                                  ? null
-                                  : _formatBirthDate(_birthDate!),
-                              onTap: _selectBirthDate,
-                              onClear: () => setState(() => _birthDate = null),
-                            ),
-                            const SizedBox(height: 12),
+                                      // 2. تاريخ الميلاد (Birth Date)
+                                      _BirthDateField(
+                                        birthDate: _birthDate,
+                                        formattedDate: _birthDate == null
+                                            ? null
+                                            : _formatBirthDate(_birthDate!),
+                                        onTap: _selectBirthDate,
+                                        onClear: () => setState(() {
+                                          _birthDate = null;
+                                          _isDirty = true;
+                                        }),
+                                      ),
+                                      const SizedBox(height: 12),
 
-                            // 3. رقم هاتف العضو (Member Phone)
-                            TextFormField(
-                              controller: _phoneController,
-                              textInputAction: TextInputAction.next,
-                              keyboardType: TextInputType.phone,
-                              style: GoogleFonts.cairo(
-                                color: AppTheme.textDark,
-                              ),
-                              decoration: _fieldDecoration(
-                                label: 'رقم هاتف العضو',
-                                hint: '01xxxxxxxxx',
-                                icon: Icons.phone_outlined,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
+                                      // 3. رقم هاتف العضو (Member Phone)
+                                      TextFormField(
+                                        controller: _phoneController,
+                                        textInputAction: TextInputAction.next,
+                                        keyboardType: TextInputType.phone,
+                                        style: GoogleFonts.cairo(
+                                          color: AppTheme.textDark,
+                                        ),
+                                        decoration: _fieldDecoration(
+                                          label: 'رقم هاتف العضو',
+                                          hint: '01xxxxxxxxx',
+                                          icon: Icons.phone_outlined,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 12),
 
-                             // 4. الكود التعريفي (Identification Code)
-                            TextFormField(
-                              controller: _codeController,
-                              textInputAction: TextInputAction.next,
-                              style: GoogleFonts.cairo(
-                                color: AppTheme.textDark,
-                              ),
-                              decoration: _fieldDecoration(
-                                label: 'الكود التعريفي',
-                                hint: 'M-120',
-                                icon: Icons.qr_code_2_rounded,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
+                                      // 4. الكود التعريفي (Identification Code)
+                                      TextFormField(
+                                        controller: _codeController,
+                                        textInputAction: TextInputAction.next,
+                                        style: GoogleFonts.cairo(
+                                          color: AppTheme.textDark,
+                                        ),
+                                        decoration: _fieldDecoration(
+                                          label: 'الكود التعريفي',
+                                          hint: 'M-120',
+                                          icon: Icons.qr_code_2_rounded,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 12),
 
-                            // 5. السنة الدراسية / المرحلة (Educational Stage / Grade)
-                            Autocomplete<String>(
-                              initialValue: TextEditingValue(
-                                text: _notesController.text,
-                              ),
-                              optionsBuilder: (textEditingValue) {
-                                const options = [
-                                  'أولى ابتدائي',
-                                  'ثانية ابتدائي',
-                                  'ثالثة ابتدائي',
-                                  'رابعة ابتدائي',
-                                  'خامسة ابتدائي',
-                                  'سادسة ابتدائي',
-                                  'أولى إعدادي',
-                                  'ثانية إعدادي',
-                                  'ثالثة إعدادي',
-                                  'أولى ثانوي',
-                                  'ثانية ثانوي',
-                                  'ثالثة ثانوي',
-                                  'جامعة / خريج',
-                                ];
-                                if (textEditingValue.text.isEmpty) {
-                                  return options;
-                                }
-                                return options.where(
-                                  (option) => option.contains(
-                                    textEditingValue.text.trim(),
+                                      // 5. السنة الدراسية / المرحلة (Educational Stage / Grade)
+                                      Autocomplete<String>(
+                                        initialValue: TextEditingValue(
+                                          text: _notesController.text,
+                                        ),
+                                        optionsBuilder: (textEditingValue) {
+                                          const options = [
+                                            'أولى ابتدائي',
+                                            'ثانية ابتدائي',
+                                            'ثالثة ابتدائي',
+                                            'رابعة ابتدائي',
+                                            'خامسة ابتدائي',
+                                            'سادسة ابتدائي',
+                                            'أولى إعدادي',
+                                            'ثانية إعدادي',
+                                            'ثالثة إعدادي',
+                                            'أولى ثانوي',
+                                            'ثانية ثانوي',
+                                            'ثالثة ثانوي',
+                                            'جامعة / خريج',
+                                          ];
+                                          if (textEditingValue.text.isEmpty) {
+                                            return options;
+                                          }
+                                          return options.where(
+                                            (option) => option.contains(
+                                              textEditingValue.text.trim(),
+                                            ),
+                                          );
+                                        },
+                                        onSelected: (selection) {
+                                          _notesController.text = selection;
+                                        },
+                                        fieldViewBuilder:
+                                            (
+                                              context,
+                                              fieldTextEditingController,
+                                              focusNode,
+                                              onFieldSubmitted,
+                                            ) {
+                                              fieldTextEditingController
+                                                  .addListener(() {
+                                                    _notesController.text =
+                                                        fieldTextEditingController
+                                                            .text;
+                                                  });
+                                              return TextFormField(
+                                                controller:
+                                                    fieldTextEditingController,
+                                                focusNode: focusNode,
+                                                textInputAction:
+                                                    TextInputAction.next,
+                                                style: GoogleFonts.cairo(
+                                                  color: AppTheme.textDark,
+                                                ),
+                                                decoration: _fieldDecoration(
+                                                  label:
+                                                      'السنة الدراسية / المرحلة',
+                                                  hint:
+                                                      'مثال: ثانية إعدادي / أولى ابتدائي',
+                                                  icon: Icons.school_outlined,
+                                                ),
+                                              );
+                                            },
+                                      ),
+                                    ],
                                   ),
-                                );
-                              },
-                              onSelected: (selection) {
-                                _notesController.text = selection;
-                              },
-                              fieldViewBuilder: (
-                                context,
-                                fieldTextEditingController,
-                                focusNode,
-                                onFieldSubmitted,
-                              ) {
-                                fieldTextEditingController.addListener(() {
-                                  _notesController.text =
-                                      fieldTextEditingController.text;
-                                });
-                                return TextFormField(
-                                  controller: fieldTextEditingController,
-                                  focusNode: focusNode,
-                                  textInputAction: TextInputAction.next,
-                                  style: GoogleFonts.cairo(
-                                    color: AppTheme.textDark,
+                                ),
+                                const SizedBox(height: 14),
+                                _MemberFormSection(
+                                  icon: Icons.account_tree_outlined,
+                                  iconColor: AppTheme.secondary,
+                                  iconBackground: AppTheme.secondaryLight,
+                                  title: 'التبعية',
+                                  subtitle:
+                                      'اختر الاجتماع أو الفصل الذي سيظهر فيه العضو',
+                                  child: _buildAssignmentSelector(),
+                                ),
+                                const SizedBox(height: 14),
+                                _MemberFormSection(
+                                  icon: Icons.family_restroom_rounded,
+                                  iconColor: AppTheme.accentPurple,
+                                  iconBackground: AppTheme.accentPurple
+                                      .withValues(alpha: 0.08),
+                                  title: 'بيانات ولي الأمر والعائلة',
+                                  subtitle: 'بيانات التواصل مع ولي الأمر',
+                                  child: Column(
+                                    children: [
+                                      TextFormField(
+                                        controller: _parentNameController,
+                                        textInputAction: TextInputAction.next,
+                                        textCapitalization:
+                                            TextCapitalization.words,
+                                        style: GoogleFonts.cairo(
+                                          color: AppTheme.textDark,
+                                        ),
+                                        decoration: _fieldDecoration(
+                                          label: 'اسم ولي الأمر',
+                                          hint: 'مثال: إيليا أنطون',
+                                          icon: Icons.family_restroom_rounded,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 12),
+                                      TextFormField(
+                                        controller: _parentPhoneController,
+                                        textInputAction: TextInputAction.done,
+                                        keyboardType: TextInputType.phone,
+                                        style: GoogleFonts.cairo(
+                                          color: AppTheme.textDark,
+                                        ),
+                                        decoration: _fieldDecoration(
+                                          label: 'هاتف ولي الأمر',
+                                          hint: '01xxxxxxxxx',
+                                          icon: Icons.phone_iphone_rounded,
+                                        ),
+                                        onFieldSubmitted: (_) => _submit(),
+                                      ),
+                                    ],
                                   ),
-                                  decoration: _fieldDecoration(
-                                    label: 'السنة الدراسية / المرحلة',
-                                    hint: 'مثال: ثانية إعدادي / أولى ابتدائي',
-                                    icon: Icons.school_outlined,
+                                ),
+                                if (isEdit) ...[
+                                  const SizedBox(height: 14),
+                                  _MemberStatusCard(
+                                    isActive: _isActive,
+                                    onChanged: (value) => setState(() {
+                                      _isActive = value;
+                                      _isDirty = true;
+                                    }),
                                   ),
-                                );
-                              },
+                                ],
+                              ],
                             ),
-                          ],
+                          ),
                         ),
                       ),
-                      const SizedBox(height: 14),
-                      _MemberFormSection(
-                        icon: Icons.account_tree_outlined,
-                        iconColor: AppTheme.secondary,
-                        iconBackground: AppTheme.secondaryLight,
-                        title: 'التبعية',
-                        subtitle: 'اختر الاجتماع أو الفصل الذي سيظهر فيه العضو',
-                        child: _buildAssignmentSelector(),
-                      ),
-                      const SizedBox(height: 14),
-                      _MemberFormSection(
-                        icon: Icons.family_restroom_rounded,
-                        iconColor: AppTheme.accentPurple,
-                        iconBackground: AppTheme.accentPurple.withValues(
-                          alpha: 0.08,
-                        ),
-                        title: 'بيانات ولي الأمر والعائلة',
-                        subtitle: 'بيانات التواصل مع ولي الأمر',
-                        child: Column(
-                          children: [
-                            TextFormField(
-                              controller: _parentNameController,
-                              textInputAction: TextInputAction.next,
-                              textCapitalization: TextCapitalization.words,
-                              style: GoogleFonts.cairo(
-                                color: AppTheme.textDark,
-                              ),
-                              decoration: _fieldDecoration(
-                                label: 'اسم ولي الأمر',
-                                hint: 'مثال: إيليا أنطون',
-                                icon: Icons.family_restroom_rounded,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            TextFormField(
-                              controller: _parentPhoneController,
-                              textInputAction: TextInputAction.done,
-                              keyboardType: TextInputType.phone,
-                              style: GoogleFonts.cairo(
-                                color: AppTheme.textDark,
-                              ),
-                              decoration: _fieldDecoration(
-                                label: 'هاتف ولي الأمر',
-                                hint: '01xxxxxxxxx',
-                                icon: Icons.phone_iphone_rounded,
-                              ),
-                              onFieldSubmitted: (_) => _submit(),
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (isEdit) ...[
-                        const SizedBox(height: 14),
-                        _MemberStatusCard(
-                          isActive: _isActive,
-                          onChanged: (value) =>
-                              setState(() => _isActive = value),
-                        ),
-                      ],
                     ],
                   ),
+          ),
+          bottomNavigationBar: _isLoadingDropdowns
+              ? null
+              : _MemberFormBottomBar(
+                  isEdit: isEdit,
+                  isDirty: _isDirty,
+                  isSaving: _isSaving,
+                  onSave: _submit,
                 ),
-              ),
-        bottomNavigationBar: _isLoadingDropdowns
-            ? null
-            : _MemberFormBottomBar(isEdit: isEdit, onSave: _submit),
+        ),
       ),
     );
   }
@@ -700,7 +824,7 @@ class _MemberFormSection extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppTheme.cardBackground,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: AppTheme.border.withValues(alpha: 0.8)),
         boxShadow: AppTheme.softShadow,
@@ -783,11 +907,7 @@ class _BirthDateField extends StatelessWidget {
           ),
           child: Row(
             children: [
-              const Icon(
-                Icons.cake_outlined,
-                color: AppTheme.textLight,
-                size: 20,
-              ),
+              Icon(Icons.cake_outlined, color: AppTheme.textLight, size: 20),
               const SizedBox(width: 8),
               Expanded(
                 child: Column(
@@ -821,7 +941,7 @@ class _BirthDateField extends StatelessWidget {
               if (birthDate != null)
                 GestureDetector(
                   onTap: onClear,
-                  child: const Icon(
+                  child: Icon(
                     Icons.close_rounded,
                     color: AppTheme.textLight,
                     size: 17,
@@ -954,16 +1074,23 @@ class _MemberStatusCard extends StatelessWidget {
 
 class _MemberFormBottomBar extends StatelessWidget {
   final bool isEdit;
-  final VoidCallback onSave;
+  final bool isDirty;
+  final bool isSaving;
+  final Future<void> Function() onSave;
 
-  const _MemberFormBottomBar({required this.isEdit, required this.onSave});
+  const _MemberFormBottomBar({
+    required this.isEdit,
+    required this.isDirty,
+    required this.isSaving,
+    required this.onSave,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppTheme.cardBackground,
         border: Border(
           top: BorderSide(color: AppTheme.border.withValues(alpha: 0.8)),
         ),
@@ -977,29 +1104,49 @@ class _MemberFormBottomBar extends StatelessWidget {
       ),
       child: SafeArea(
         top: false,
-        child: SizedBox(
-          height: 52,
-          child: ElevatedButton.icon(
-            onPressed: onSave,
-            icon: Icon(
-              isEdit ? Icons.save_outlined : Icons.person_add_alt_1_rounded,
-              size: 20,
-            ),
-            label: Text(
-              isEdit ? 'حفظ التعديلات' : 'إضافة العضو',
-              style: GoogleFonts.cairo(
-                fontSize: 15,
-                fontWeight: FontWeight.w900,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            UnsavedChangesNotice(isDirty: isDirty),
+            SizedBox(
+              height: 52,
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: isSaving ? null : onSave,
+                icon: isSaving
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : Icon(
+                        isEdit
+                            ? Icons.save_outlined
+                            : Icons.person_add_alt_1_rounded,
+                        size: 20,
+                      ),
+                label: Text(
+                  isSaving
+                      ? 'جارٍ الحفظ...'
+                      : (isEdit ? 'حفظ التعديلات' : 'إضافة العضو'),
+                  style: GoogleFonts.cairo(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primary,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                ),
               ),
             ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.primary,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(15),
-              ),
-            ),
-          ),
+          ],
         ),
       ),
     );

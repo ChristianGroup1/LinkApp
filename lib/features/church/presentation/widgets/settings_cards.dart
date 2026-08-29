@@ -16,7 +16,8 @@ class UserProfileCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     String roleLabel = 'خادم';
-    if (profile.role == AppRole.superAdmin || profile.role == AppRole.churchAdmin) {
+    if (profile.role == AppRole.superAdmin ||
+        profile.role == AppRole.churchAdmin) {
       roleLabel = 'أمين الخدمة / مسؤول الكنيسة';
     } else if (profile.role == AppRole.classLeader) {
       roleLabel = 'أمين فصل';
@@ -48,7 +49,11 @@ class UserProfileCard extends StatelessWidget {
             child: CircleAvatar(
               backgroundColor: Colors.white.withValues(alpha: 0.9),
               radius: 26,
-              child: const Icon(Icons.person_rounded, color: AppTheme.primary, size: 28),
+              child: const Icon(
+                Icons.person_rounded,
+                color: AppTheme.primary,
+                size: 28,
+              ),
             ),
           ),
           const SizedBox(width: 16),
@@ -58,25 +63,39 @@ class UserProfileCard extends StatelessWidget {
               children: [
                 Text(
                   profile.fullName,
-                  style: GoogleFonts.cairo(fontWeight: FontWeight.w900, color: Colors.white, fontSize: 16),
+                  style: GoogleFonts.cairo(
+                    fontWeight: FontWeight.w900,
+                    color: Colors.white,
+                    fontSize: 16,
+                  ),
                 ),
                 const SizedBox(height: 2),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
                     roleLabel,
-                    style: GoogleFonts.cairo(color: Colors.white.withValues(alpha: 0.9), fontSize: 11, fontWeight: FontWeight.bold),
+                    style: GoogleFonts.cairo(
+                      color: Colors.white.withValues(alpha: 0.9),
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
                 if (profile.email != null) ...[
                   const SizedBox(height: 4),
                   Text(
                     profile.email!,
-                    style: GoogleFonts.outfit(color: Colors.white.withValues(alpha: 0.75), fontSize: 12),
+                    style: GoogleFonts.outfit(
+                      color: Colors.white.withValues(alpha: 0.75),
+                      fontSize: 12,
+                    ),
                   ),
                 ],
               ],
@@ -92,14 +111,18 @@ class ChurchProfileCard extends StatelessWidget {
   final Church church;
   final bool isAdmin;
 
-  const ChurchProfileCard({super.key, required this.church, required this.isAdmin});
+  const ChurchProfileCard({
+    super.key,
+    required this.church,
+    required this.isAdmin,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppTheme.cardBackground,
         borderRadius: BorderRadius.circular(18),
         boxShadow: AppTheme.softShadow,
       ),
@@ -109,35 +132,68 @@ class ChurchProfileCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('بيانات الكنيسة', style: GoogleFonts.cairo(fontWeight: FontWeight.w900, fontSize: 14, color: AppTheme.primary)),
+              Text(
+                'بيانات الكنيسة',
+                style: GoogleFonts.cairo(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 14,
+                  color: AppTheme.primary,
+                ),
+              ),
               if (isAdmin)
                 IconButton(
-                  icon: const Icon(Icons.edit, color: AppTheme.primary, size: 20),
+                  icon: const Icon(
+                    Icons.edit,
+                    color: AppTheme.primary,
+                    size: 20,
+                  ),
                   onPressed: () => showEditChurchDialog(context, church),
                 ),
             ],
           ),
           const SizedBox(height: 10),
-          Row(children: [
-            const Icon(Icons.church, color: AppTheme.textLight, size: 18),
-            const SizedBox(width: 8),
-            Text(church.nameAr, style: GoogleFonts.cairo(fontWeight: FontWeight.bold, color: AppTheme.textDark)),
-          ]),
+          Row(
+            children: [
+              Icon(Icons.church, color: AppTheme.textLight, size: 18),
+              const SizedBox(width: 8),
+              Text(
+                church.nameAr,
+                style: GoogleFonts.cairo(
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.textDark,
+                ),
+              ),
+            ],
+          ),
           if (church.phone != null) ...[
             const SizedBox(height: 6),
-            Row(children: [
-              const Icon(Icons.phone, color: AppTheme.textLight, size: 18),
-              const SizedBox(width: 8),
-              Text(church.phone!, style: GoogleFonts.cairo(color: AppTheme.textDark)),
-            ]),
+            Row(
+              children: [
+                Icon(Icons.phone, color: AppTheme.textLight, size: 18),
+                const SizedBox(width: 8),
+                Text(
+                  church.phone!,
+                  style: GoogleFonts.cairo(color: AppTheme.textDark),
+                ),
+              ],
+            ),
           ],
           if (church.address != null) ...[
             const SizedBox(height: 6),
-            Row(children: [
-              const Icon(Icons.location_on_outlined, color: AppTheme.textLight, size: 18),
-              const SizedBox(width: 8),
-              Text(church.address!, style: GoogleFonts.cairo(color: AppTheme.textLight)),
-            ]),
+            Row(
+              children: [
+                Icon(
+                  Icons.location_on_outlined,
+                  color: AppTheme.textLight,
+                  size: 18,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  church.address!,
+                  style: GoogleFonts.cairo(color: AppTheme.textLight),
+                ),
+              ],
+            ),
           ],
         ],
       ),
@@ -168,7 +224,7 @@ class ServantsPermissionsEntryCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppTheme.cardBackground,
           borderRadius: BorderRadius.circular(18),
           boxShadow: AppTheme.softShadow,
         ),
@@ -180,20 +236,36 @@ class ServantsPermissionsEntryCard extends StatelessWidget {
                 color: AppTheme.primary.withValues(alpha: 0.10),
                 borderRadius: BorderRadius.circular(14),
               ),
-              child: const Icon(Icons.admin_panel_settings_outlined, color: AppTheme.primary),
+              child: const Icon(
+                Icons.admin_panel_settings_outlined,
+                color: AppTheme.primary,
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('الخدام والصلاحيات', style: GoogleFonts.cairo(fontWeight: FontWeight.w900, fontSize: 14, color: AppTheme.textDark)),
+                  Text(
+                    'الخدام والصلاحيات',
+                    style: GoogleFonts.cairo(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 14,
+                      color: AppTheme.textDark,
+                    ),
+                  ),
                   const SizedBox(height: 2),
-                  Text('إدارة الأدوار، الدعوات، الفصول، وصلاحيات الحضور.', style: GoogleFonts.cairo(fontSize: 11, color: AppTheme.textLight)),
+                  Text(
+                    'إدارة الأدوار، الدعوات، الفصول، وصلاحيات الحضور.',
+                    style: GoogleFonts.cairo(
+                      fontSize: 11,
+                      color: AppTheme.textLight,
+                    ),
+                  ),
                 ],
               ),
             ),
-            const Icon(Icons.arrow_forward_ios, color: AppTheme.textLight, size: 16),
+            Icon(Icons.arrow_forward_ios, color: AppTheme.textLight, size: 16),
           ],
         ),
       ),
@@ -218,11 +290,15 @@ class SettingsFallbackScaffold extends StatelessWidget {
       child: Scaffold(
         backgroundColor: AppTheme.background,
         appBar: AppBar(
-          backgroundColor: Colors.white,
+          backgroundColor: AppTheme.cardBackground,
           elevation: 0,
           title: Text(
             'إعدادات الحساب والخدمة',
-            style: GoogleFonts.cairo(color: AppTheme.textDark, fontWeight: FontWeight.w900, fontSize: 18),
+            style: GoogleFonts.cairo(
+              color: AppTheme.textDark,
+              fontWeight: FontWeight.w900,
+              fontSize: 18,
+            ),
           ),
           centerTitle: true,
         ),
@@ -235,7 +311,11 @@ class SettingsFallbackScaffold extends StatelessWidget {
                 if (isLoading)
                   const CircularProgressIndicator(color: AppTheme.primary)
                 else
-                  const Icon(Icons.error_outline, color: AppTheme.accentRed, size: 42),
+                  const Icon(
+                    Icons.error_outline,
+                    color: AppTheme.accentRed,
+                    size: 42,
+                  ),
                 const SizedBox(height: 14),
                 Text(
                   message,
@@ -249,9 +329,13 @@ class SettingsFallbackScaffold extends StatelessWidget {
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton.icon(
-                    onPressed: () => context.read<AuthBloc>().add(LogoutRequested()),
+                    onPressed: () =>
+                        context.read<AuthBloc>().add(LogoutRequested()),
                     icon: const Icon(Icons.logout),
-                    label: Text('تسجيل خروج', style: GoogleFonts.cairo(fontWeight: FontWeight.w800)),
+                    label: Text(
+                      'تسجيل خروج',
+                      style: GoogleFonts.cairo(fontWeight: FontWeight.w800),
+                    ),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppTheme.accentRed,
                       side: const BorderSide(color: AppTheme.accentRed),
@@ -290,7 +374,7 @@ class ServantsManagementCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppTheme.cardBackground,
         borderRadius: BorderRadius.circular(18),
         boxShadow: AppTheme.softShadow,
       ),
@@ -302,12 +386,22 @@ class ServantsManagementCard extends StatelessWidget {
             children: [
               Text(
                 'أعضاء الكنيسة وإدارة الأدوار (خدام)',
-                style: GoogleFonts.cairo(fontWeight: FontWeight.w900, fontSize: 14, color: AppTheme.primary),
+                style: GoogleFonts.cairo(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 14,
+                  color: AppTheme.primary,
+                ),
               ),
               TextButton.icon(
                 onPressed: () => openInviteServantScreen(context),
                 icon: const Icon(Icons.add_link, size: 16),
-                label: Text('دعوة خادم مساعد', style: GoogleFonts.cairo(fontSize: 12, fontWeight: FontWeight.bold)),
+                label: Text(
+                  'دعوة خادم مساعد',
+                  style: GoogleFonts.cairo(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
             ],
           ),
@@ -316,11 +410,16 @@ class ServantsManagementCard extends StatelessWidget {
             future: servantsFuture,
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator(color: AppTheme.primary));
+                return const Center(
+                  child: CircularProgressIndicator(color: AppTheme.primary),
+                );
               }
               final servants = snapshot.data ?? [];
               if (servants.isEmpty) {
-                return Text('لا يوجد خدام مسجلين حالياً.', style: GoogleFonts.cairo());
+                return Text(
+                  'لا يوجد خدام مسجلين حالياً.',
+                  style: GoogleFonts.cairo(),
+                );
               }
               return ListView.builder(
                 shrinkWrap: true,
@@ -365,7 +464,7 @@ class _ServantTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      color: Colors.white,
+      color: AppTheme.cardBackground,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(color: Colors.grey.shade100),
@@ -377,16 +476,41 @@ class _ServantTile extends StatelessWidget {
           children: [
             ListTile(
               contentPadding: EdgeInsets.zero,
-              title: Text(servant.fullName, style: GoogleFonts.cairo(fontWeight: FontWeight.bold, fontSize: 13)),
-              subtitle: Text(servant.email ?? servant.phone ?? '', style: GoogleFonts.cairo(fontSize: 11, color: AppTheme.textLight)),
+              title: Text(
+                servant.fullName,
+                style: GoogleFonts.cairo(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                ),
+              ),
+              subtitle: Text(
+                servant.email ?? servant.phone ?? '',
+                style: GoogleFonts.cairo(
+                  fontSize: 11,
+                  color: AppTheme.textLight,
+                ),
+              ),
               trailing: DropdownButton<AppRole>(
                 value: servant.role,
                 underline: const SizedBox.shrink(),
-                style: GoogleFonts.cairo(color: AppTheme.primary, fontSize: 12, fontWeight: FontWeight.bold),
+                style: GoogleFonts.cairo(
+                  color: AppTheme.primary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
                 items: const [
-                  DropdownMenuItem(value: AppRole.churchAdmin, child: Text('مدير كنيسة')),
-                  DropdownMenuItem(value: AppRole.classLeader, child: Text('أمين فصل')),
-                  DropdownMenuItem(value: AppRole.attendanceOfficer, child: Text('مسؤول حضور')),
+                  DropdownMenuItem(
+                    value: AppRole.churchAdmin,
+                    child: Text('مدير كنيسة'),
+                  ),
+                  DropdownMenuItem(
+                    value: AppRole.classLeader,
+                    child: Text('أمين فصل'),
+                  ),
+                  DropdownMenuItem(
+                    value: AppRole.attendanceOfficer,
+                    child: Text('مسؤول حضور'),
+                  ),
                 ],
                 onChanged: (val) async {
                   if (val != null) {
@@ -408,7 +532,13 @@ class _ServantTile extends StatelessWidget {
                 },
               ),
             ),
-            _ServantAssignmentsSection(servant: servant, dbRepo: dbRepo, meetings: meetings, classes: classes, onRefresh: onRefresh),
+            _ServantAssignmentsSection(
+              servant: servant,
+              dbRepo: dbRepo,
+              meetings: meetings,
+              classes: classes,
+              onRefresh: onRefresh,
+            ),
           ],
         ),
       ),
@@ -440,7 +570,10 @@ class _ServantAssignmentsSection extends StatelessWidget {
       ]),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
-          return const SizedBox(height: 10, child: LinearProgressIndicator(color: AppTheme.primary));
+          return const SizedBox(
+            height: 10,
+            child: LinearProgressIndicator(color: AppTheme.primary),
+          );
         }
         final classAssigns = snapshot.data![0] as List<Map<String, dynamic>>;
         final meetingAssigns = snapshot.data![1] as List<Map<String, dynamic>>;
@@ -448,54 +581,108 @@ class _ServantAssignmentsSection extends StatelessWidget {
         return Container(
           margin: const EdgeInsets.only(top: 8, bottom: 4),
           padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(color: const Color(0xFFF9FAFC), borderRadius: BorderRadius.circular(12)),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF9FAFC),
+            borderRadius: BorderRadius.circular(12),
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('التكليفات والمسؤوليات الحالية:', style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.textDark)),
+              Text(
+                'التكليفات والمسؤوليات الحالية:',
+                style: GoogleFonts.cairo(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.textDark,
+                ),
+              ),
               const SizedBox(height: 6),
               if (classAssigns.isEmpty && meetingAssigns.isEmpty)
-                Text('لا توجد فصول أو اجتماعات مسندة لهذا الخادم.', style: GoogleFonts.cairo(fontSize: 10, color: AppTheme.textLight)),
+                Text(
+                  'لا توجد فصول أو اجتماعات مسندة لهذا الخادم.',
+                  style: GoogleFonts.cairo(
+                    fontSize: 10,
+                    color: AppTheme.textLight,
+                  ),
+                ),
               if (classAssigns.isNotEmpty)
-                Wrap(spacing: 6, runSpacing: 4, children: classAssigns.map((a) {
-                  final classData = a['sunday_school_classes'] as Map<String, dynamic>?;
-                  final className = classData?['name_ar'] ?? 'فصل';
-                  final canTake = a['can_take_attendance'] as bool? ?? true;
-                  final canView = a['can_view_reports'] as bool? ?? true;
-                  return Chip(
-                    label: Text('$className • ${canTake ? "حضور" : "بدون حضور"} • ${canView ? "تقارير" : "بدون تقارير"}', style: GoogleFonts.cairo(fontSize: 10)),
-                    backgroundColor: AppTheme.primary.withValues(alpha: 0.08),
-                    deleteIcon: const Icon(Icons.close, size: 12, color: AppTheme.accentRed),
-                    onDeleted: () async {
-                      await dbRepo.removeClassAssignment(a['id'] as String);
-                      onRefresh();
-                    },
-                  );
-                }).toList()),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  children: classAssigns.map((a) {
+                    final classData =
+                        a['sunday_school_classes'] as Map<String, dynamic>?;
+                    final className = classData?['name_ar'] ?? 'فصل';
+                    final canTake = a['can_take_attendance'] as bool? ?? true;
+                    final canView = a['can_view_reports'] as bool? ?? true;
+                    return Chip(
+                      label: Text(
+                        '$className • ${canTake ? "حضور" : "بدون حضور"} • ${canView ? "تقارير" : "بدون تقارير"}',
+                        style: GoogleFonts.cairo(fontSize: 10),
+                      ),
+                      backgroundColor: AppTheme.primary.withValues(alpha: 0.08),
+                      deleteIcon: const Icon(
+                        Icons.close,
+                        size: 12,
+                        color: AppTheme.accentRed,
+                      ),
+                      onDeleted: () async {
+                        await dbRepo.removeClassAssignment(a['id'] as String);
+                        onRefresh();
+                      },
+                    );
+                  }).toList(),
+                ),
               if (meetingAssigns.isNotEmpty)
-                Wrap(spacing: 6, runSpacing: 4, children: meetingAssigns.map((a) {
-                  final meetingData = a['meetings'] as Map<String, dynamic>?;
-                  final meetingName = meetingData?['name_ar'] ?? 'اجتماع';
-                  final canTake = a['can_take_attendance'] as bool? ?? true;
-                  final canView = a['can_view_reports'] as bool? ?? true;
-                  return Chip(
-                    label: Text('$meetingName • ${canTake ? "حضور" : "بدون حضور"} • ${canView ? "تقارير" : "بدون تقارير"}', style: GoogleFonts.cairo(fontSize: 10)),
-                    backgroundColor: Colors.teal.withValues(alpha: 0.08),
-                    deleteIcon: const Icon(Icons.close, size: 12, color: AppTheme.accentRed),
-                    onDeleted: () async {
-                      await dbRepo.removeMeetingAssignment(a['id'] as String);
-                      onRefresh();
-                    },
-                  );
-                }).toList()),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  children: meetingAssigns.map((a) {
+                    final meetingData = a['meetings'] as Map<String, dynamic>?;
+                    final meetingName = meetingData?['name_ar'] ?? 'اجتماع';
+                    final canTake = a['can_take_attendance'] as bool? ?? true;
+                    final canView = a['can_view_reports'] as bool? ?? true;
+                    return Chip(
+                      label: Text(
+                        '$meetingName • ${canTake ? "حضور" : "بدون حضور"} • ${canView ? "تقارير" : "بدون تقارير"}',
+                        style: GoogleFonts.cairo(fontSize: 10),
+                      ),
+                      backgroundColor: Colors.teal.withValues(alpha: 0.08),
+                      deleteIcon: const Icon(
+                        Icons.close,
+                        size: 12,
+                        color: AppTheme.accentRed,
+                      ),
+                      onDeleted: () async {
+                        await dbRepo.removeMeetingAssignment(a['id'] as String);
+                        onRefresh();
+                      },
+                    );
+                  }).toList(),
+                ),
               const SizedBox(height: 6),
               Align(
                 alignment: AlignmentDirectional.centerStart,
                 child: TextButton.icon(
-                  onPressed: () => showAddAssignmentDialog(context, servant, meetings, classes, onRefresh),
+                  onPressed: () => showAddAssignmentDialog(
+                    context,
+                    servant,
+                    meetings,
+                    classes,
+                    onRefresh,
+                  ),
                   icon: const Icon(Icons.add, size: 12),
-                  label: Text('إسناد مهمة جديدة', style: GoogleFonts.cairo(fontSize: 10, fontWeight: FontWeight.bold)),
-                  style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 0)),
+                  label: Text(
+                    'إسناد مهمة جديدة',
+                    style: GoogleFonts.cairo(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  style: TextButton.styleFrom(
+                    padding: EdgeInsets.zero,
+                    minimumSize: const Size(0, 0),
+                  ),
                 ),
               ),
             ],

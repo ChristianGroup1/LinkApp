@@ -66,7 +66,7 @@ class _ReportsScreenState extends State<ReportsScreen>
       child: Scaffold(
         backgroundColor: AppTheme.background,
         appBar: AppBar(
-          backgroundColor: Colors.white,
+          backgroundColor: AppTheme.cardBackground,
           elevation: 0,
           title: Text(
             'التقارير والإحصائيات',
@@ -159,7 +159,7 @@ class _ReportsScreenState extends State<ReportsScreen>
       children: [
         // Search bar
         Container(
-          color: Colors.white,
+          color: AppTheme.cardBackground,
           padding: const EdgeInsets.all(12),
           child: TextField(
             controller: _searchController,
@@ -213,7 +213,7 @@ class _ReportsScreenState extends State<ReportsScreen>
                         margin: const EdgeInsets.only(bottom: 10),
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: AppTheme.cardBackground,
                           borderRadius: BorderRadius.circular(12),
                           boxShadow: AppTheme.softShadow,
                         ),
@@ -340,7 +340,7 @@ class _ReportsScreenState extends State<ReportsScreen>
           margin: const EdgeInsets.only(bottom: 12),
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AppTheme.cardBackground,
             borderRadius: BorderRadius.circular(16),
             boxShadow: AppTheme.softShadow,
           ),
@@ -415,7 +415,7 @@ class _ReportsScreenState extends State<ReportsScreen>
           margin: const EdgeInsets.only(bottom: 12),
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AppTheme.cardBackground,
             borderRadius: BorderRadius.circular(16),
             boxShadow: AppTheme.softShadow,
           ),
@@ -503,7 +503,7 @@ class _ReportsScreenState extends State<ReportsScreen>
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
+      backgroundColor: AppTheme.cardBackground,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -683,7 +683,7 @@ class _ReportsScreenState extends State<ReportsScreen>
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppTheme.cardBackground,
         border: Border.all(color: AppTheme.border),
         borderRadius: BorderRadius.circular(10),
       ),

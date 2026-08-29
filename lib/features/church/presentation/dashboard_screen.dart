@@ -567,8 +567,6 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 
-
-
   Widget _buildReportsEntryCard(BuildContext context) {
     return AppActionTile(
       icon: Icons.analytics_outlined,
@@ -583,7 +581,7 @@ class DashboardScreen extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppTheme.cardBackground,
         borderRadius: BorderRadius.circular(16),
         boxShadow: AppTheme.softShadow,
       ),
@@ -670,7 +668,7 @@ class DashboardScreen extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppTheme.cardBackground,
         borderRadius: BorderRadius.circular(18),
         boxShadow: AppTheme.softShadow,
       ),
@@ -754,7 +752,7 @@ class DashboardScreen extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: AppTheme.cardBackground,
                 borderRadius: BorderRadius.circular(14),
                 boxShadow: AppTheme.softShadow,
               ),
@@ -784,7 +782,7 @@ class DashboardScreen extends StatelessWidget {
                     width: 164,
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: AppTheme.cardBackground,
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(
                         color: isToday

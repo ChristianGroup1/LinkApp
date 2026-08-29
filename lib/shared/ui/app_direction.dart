@@ -5,9 +5,6 @@ abstract final class AppDirection {
   static const TextDirection textDirection = TextDirection.rtl;
 
   static Widget wrap(Widget child) {
-    return Directionality(
-      textDirection: textDirection,
-      child: child,
-    );
+    return Directionality(textDirection: textDirection, child: child);
   }
 }

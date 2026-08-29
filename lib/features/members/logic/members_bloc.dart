@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../data/models/models.dart';
 import '../../../data/offline/offline_messages.dart';
+import '../../../data/offline/offline_save_result.dart';
 import '../../../data/repositories/database_repository.dart';
 
 // EVENTS
@@ -36,6 +39,7 @@ class CreateMember extends MembersEvent {
   final String? code;
   final DateTime? birthDate;
   final String? notes;
+  final Completer<OfflineSaveResult<MemberEntity>>? completion;
 
   CreateMember({
     required this.fullName,
@@ -48,6 +52,7 @@ class CreateMember extends MembersEvent {
     this.code,
     this.birthDate,
     this.notes,
+    this.completion,
   });
 }
 
@@ -64,6 +69,7 @@ class UpdateMemberEvent extends MembersEvent {
   final DateTime? birthDate;
   final bool isActive;
   final String? notes;
+  final Completer<OfflineSaveResult<MemberEntity>>? completion;
 
   UpdateMemberEvent({
     required this.id,
@@ -78,6 +84,7 @@ class UpdateMemberEvent extends MembersEvent {
     this.birthDate,
     required this.isActive,
     this.notes,
+    this.completion,
   });
 }
 
@@ -286,10 +293,14 @@ class MembersBloc extends Bloc<MembersEvent, MembersState> {
         );
         add(
           LoadMembers(
-            flashMessage: result.syncedToServer ? null : kOfflineSavedMessage,
+            flashMessage: result.syncedToServer
+                ? 'تم إضافة العضو بنجاح'
+                : kOfflineSavedMessage,
           ),
         );
-      } catch (e) {
+        event.completion?.complete(result);
+      } catch (e, stackTrace) {
+        event.completion?.completeError(e, stackTrace);
         if (previous is MembersLoaded) {
           emit(
             previous.copyWith(flashMessage: 'فشل إضافة العضو: ${e.toString()}'),
@@ -319,10 +330,14 @@ class MembersBloc extends Bloc<MembersEvent, MembersState> {
         );
         add(
           LoadMembers(
-            flashMessage: result.syncedToServer ? null : kOfflineSavedMessage,
+            flashMessage: result.syncedToServer
+                ? 'تم حفظ تعديلات العضو بنجاح'
+                : kOfflineSavedMessage,
           ),
         );
-      } catch (e) {
+        event.completion?.complete(result);
+      } catch (e, stackTrace) {
+        event.completion?.completeError(e, stackTrace);
         if (previous is MembersLoaded) {
           emit(
             previous.copyWith(
