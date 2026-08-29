@@ -26,6 +26,7 @@ body {
     radial-gradient(1200px 480px at 80% -10%, rgba(79, 70, 229, 0.08), transparent 60%),
     radial-gradient(900px 420px at 0% 8%, rgba(15, 118, 110, 0.07), transparent 55%),
     #fff;
+  padding-inline: env(safe-area-inset-left, 0px) env(safe-area-inset-right, 0px);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -36,6 +37,13 @@ button:focus-visible,
 summary:focus-visible {
   outline: 3px solid var(--indigo);
   outline-offset: 3px;
+}
+
+#content,
+#how,
+#features,
+#download {
+  scroll-margin-top: 88px;
 }
 
 .shell {
@@ -66,6 +74,7 @@ summary:focus-visible {
   backdrop-filter: blur(16px);
   background: rgba(255, 255, 255, 0.86);
   border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+  padding-top: env(safe-area-inset-top, 0px);
 }
 
 .nav {
@@ -74,6 +83,7 @@ summary:focus-visible {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+  position: relative;
 }
 
 .brand {
@@ -97,10 +107,6 @@ summary:focus-visible {
   color: var(--muted);
   font-size: 12px;
   margin-top: 2px;
-}
-
-.nav {
-  position: relative;
 }
 
 .navToggle {
@@ -142,6 +148,8 @@ summary:focus-visible {
 .navLinks {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 8px;
   color: #334155;
   font-size: 15px;
@@ -196,11 +204,12 @@ summary:focus-visible {
 }
 
 .hero h1 {
-  font-size: clamp(36px, 5vw, 60px);
+  font-size: clamp(32px, 5vw, 60px);
   line-height: 1.28;
   letter-spacing: -0.03em;
   margin: 22px 0 18px;
   color: var(--navy-deep);
+  overflow-wrap: break-word;
 }
 
 .hero h1 em {
@@ -237,7 +246,9 @@ summary:focus-visible {
 }
 
 .downloadButton {
-  min-width: 210px;
+  min-width: min(100%, 210px);
+  flex: 1 1 210px;
+  max-width: 100%;
   min-height: 62px;
   border-radius: 16px;
   display: flex;
@@ -384,7 +395,7 @@ summary:focus-visible {
 
 .statGrid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
   margin-top: 16px;
 }
@@ -483,7 +494,11 @@ summary:focus-visible {
 
 .nextMeeting div { display: flex; flex: 1; flex-direction: column; gap: 2px; }
 .nextMeeting small { color: #92400e; font-size: 11px; }
-.nextMeeting strong { color: var(--navy); font-size: 12px; }
+.nextMeeting strong {
+  color: var(--navy);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
 
 .floatingBadge {
   position: absolute;
@@ -561,11 +576,13 @@ summary:focus-visible {
   display: grid;
   gap: 16px;
   margin-top: 40px;
+  padding: 0;
+  list-style: none;
 }
 
-.stepGrid { grid-template-columns: repeat(3, 1fr); }
-.featureGrid { grid-template-columns: repeat(3, 1fr); }
-.audienceGrid { grid-template-columns: repeat(3, 1fr); }
+.stepGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.featureGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.audienceGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 
 .stepCard,
 .featureCard,
@@ -574,6 +591,7 @@ summary:focus-visible {
   border-radius: 20px;
   padding: 24px;
   background: var(--card);
+  min-width: 0;
 }
 
 .stepCard { text-align: start; }
@@ -702,6 +720,7 @@ summary:focus-visible {
   align-items: center;
   gap: 6px;
   padding: 0 12px;
+  direction: ltr;
 }
 
 .windowBar i {
@@ -790,9 +809,13 @@ summary:focus-visible {
   padding-block: 28px;
 }
 
-.ctaInner img { border-radius: 20px; }
-.ctaInner div { flex: 1; }
-.ctaInner h2 { margin: 0 0 8px; font-size: 28px; }
+.ctaInner img { border-radius: 20px; flex-shrink: 0; }
+.ctaInner div { flex: 1; min-width: 0; }
+.ctaInner h2 {
+  margin: 0 0 8px;
+  font-size: clamp(22px, 4vw, 28px);
+  overflow-wrap: break-word;
+}
 .ctaInner p { margin: 0; color: #cbd5e1; font-size: 15px; }
 
 .ctaInner > a {
@@ -812,7 +835,8 @@ summary:focus-visible {
   min-height: 100px;
   display: flex;
   align-items: center;
-  gap: 24px;
+  flex-wrap: wrap;
+  gap: 16px 24px;
   color: var(--muted);
   font-size: 13px;
 }
@@ -822,39 +846,21 @@ summary:focus-visible {
 .footer > a { color: var(--navy); font-weight: 700; min-height: 44px; display: inline-flex; align-items: center; }
 
 @media (max-width: 900px) {
-  .hero {
-    grid-template-columns: 1fr;
-    padding-top: 28px;
-    text-align: center;
+  #content,
+  #how,
+  #features,
+  #download {
+    scroll-margin-top: 76px;
   }
 
-  .heroCopy > p { margin-inline: auto; }
-  .eyebrow { margin-inline: auto; }
-  .downloadActions,
-  .platformNote { justify-content: center; }
-  .downloadButton > span:last-child { text-align: center; }
-
-  .heroVisual { margin-top: 8px; }
-
-  .stepGrid,
-  .featureGrid,
-  .audienceGrid { grid-template-columns: 1fr 1fr; }
-
-  .desktopPanel { grid-template-columns: 1fr; }
-  .desktopCopy { text-align: center; }
-  .desktopCopy ul { display: inline-grid; text-align: start; }
-  .trustContent strong { width: 100%; text-align: center; }
-}
-
-@media (max-width: 720px) {
   .navToggle { display: inline-flex; }
 
   .navLinks {
     display: none;
     position: absolute;
-    inset-inline-end: 0;
+    inset-inline: 0;
     top: calc(100% + 8px);
-    width: min(240px, calc(100vw - 40px));
+    width: auto;
     flex-direction: column;
     align-items: stretch;
     padding: 10px;
@@ -865,41 +871,78 @@ summary:focus-visible {
   }
 
   .navLinks.isOpen { display: flex; }
-
   .navCta { justify-content: center; }
-}
 
-@media (max-width: 600px) {
-  .shell { width: min(100% - 28px, 1120px); }
-  .nav { min-height: 68px; }
-  .hero { padding-block: 28px 56px; gap: 16px; }
-  .hero h1 { font-size: 34px; }
-  .heroCopy > p { font-size: 16px; }
-  .downloadButton { width: 100%; }
-  .heroVisual { min-height: 420px; }
+  .hero {
+    grid-template-columns: 1fr;
+    min-height: 0;
+    padding: 28px 0 56px;
+    text-align: center;
+  }
+
+  .heroCopy > p { margin-inline: auto; }
+  .eyebrow { margin-inline: auto; }
+  .downloadActions,
+  .platformNote { justify-content: center; }
+  .downloadButton > span:last-child { text-align: center; }
+
+  .heroVisual {
+    margin-top: 8px;
+    min-height: 0;
+  }
+
   .floatingBadge { display: none; }
-  .trustContent { padding-block: 16px; gap: 10px; }
-  .trustContent i { display: none; }
-  .steps,
-  .features { padding-block: 64px 16px; }
+
   .stepGrid,
-  .featureGrid,
-  .audienceGrid { grid-template-columns: 1fr; margin-top: 28px; }
-  .desktopSection { padding-bottom: 64px; }
-  .desktopPanel { padding: 24px 16px; border-radius: 22px; }
-  .windowBody { height: 200px; }
+  .audienceGrid { grid-template-columns: 1fr; }
+  .featureGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+  .desktopPanel {
+    grid-template-columns: 1fr;
+    padding: 32px 24px;
+  }
+  .desktopCopy { text-align: center; }
+  .desktopCopy ul { display: inline-grid; text-align: start; }
+  .trustContent strong { width: 100%; text-align: center; }
+
   .ctaInner {
     flex-wrap: wrap;
     text-align: center;
     justify-content: center;
   }
-  .ctaInner img { width: 64px; height: 64px; }
-  .ctaInner div { min-width: 70%; }
   .ctaInner > a { width: 100%; }
+}
+
+@media (max-width: 600px) {
+  .shell { width: min(100% - 24px, 1120px); }
+  .nav { min-height: 68px; }
+  .hero { padding-block: 24px 48px; gap: 16px; }
+  .hero h1 { font-size: clamp(28px, 8vw, 34px); }
+  .heroCopy > p { font-size: 16px; }
+  .downloadButton { flex-basis: 100%; }
+  .phoneFrame { width: min(320px, 100%); }
+  .statGrid > div { padding: 8px; }
+  .statGrid small { font-size: 10px; }
+  .trustContent { padding-block: 16px; gap: 10px; }
+  .trustContent i { display: none; }
+  .steps,
+  .features,
+  .audience { padding-block: 56px 12px; }
+  .stepGrid,
+  .featureGrid,
+  .audienceGrid { grid-template-columns: 1fr; margin-top: 28px; }
+  .stepCard,
+  .featureCard,
+  .audienceCard { padding: 20px; }
+  .desktopSection { padding: 32px 0 56px; }
+  .desktopPanel { padding: 24px 16px; border-radius: 22px; }
+  .windowBody { height: 180px; }
+  .ctaInner img { width: 64px; height: 64px; }
+  .ctaInner div { flex-basis: 100%; }
   .footer {
-    flex-wrap: wrap;
     justify-content: center;
     padding-block: 22px;
+    padding-bottom: calc(22px + env(safe-area-inset-bottom, 0px));
     text-align: center;
   }
   .footerBrand {
@@ -907,6 +950,12 @@ summary:focus-visible {
     width: 100%;
     justify-content: center;
   }
+}
+
+@media (max-width: 380px) {
+  .brand small { display: none; }
+  .navToggle { padding-inline: 10px; font-size: 14px; }
+  .appCard { padding: 14px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

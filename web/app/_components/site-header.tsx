@@ -9,6 +9,19 @@ const links = [
   { href: '#download', label: 'تحميل التطبيق' },
 ];
 
+function scrollToHash(hash: string) {
+  const target = document.querySelector(hash);
+  if (!target) return;
+  const reduceMotion = window.matchMedia(
+    '(prefers-reduced-motion: reduce)',
+  ).matches;
+  target.scrollIntoView({
+    behavior: reduceMotion ? 'auto' : 'smooth',
+    block: 'start',
+  });
+  history.replaceState(null, '', hash);
+}
+
 export function SiteHeader() {
   const [open, setOpen] = useState(false);
   const menuId = useId();
@@ -21,6 +34,16 @@ export function SiteHeader() {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [open]);
+
+  useEffect(() => {
+    const media = window.matchMedia('(min-width: 901px)');
+    const onChange = () => {
+      if (media.matches) setOpen(false);
+    };
+    onChange();
+    media.addEventListener('change', onChange);
+    return () => media.removeEventListener('change', onChange);
+  }, []);
 
   return (
     <header className="navBar">
@@ -44,11 +67,27 @@ export function SiteHeader() {
         </button>
         <div className={`navLinks${open ? ' isOpen' : ''}`} id={menuId}>
           {links.map((link) => (
-            <a key={link.href} href={link.href} onClick={() => setOpen(false)}>
+            <a
+              key={link.href}
+              href={link.href}
+              onClick={(event) => {
+                event.preventDefault();
+                setOpen(false);
+                scrollToHash(link.href);
+              }}
+            >
               {link.label}
             </a>
           ))}
-          <a className="navCta" href="#download" onClick={() => setOpen(false)}>
+          <a
+            className="navCta"
+            href="#download"
+            onClick={(event) => {
+              event.preventDefault();
+              setOpen(false);
+              scrollToHash('#download');
+            }}
+          >
             حمّل الآن
           </a>
         </div>

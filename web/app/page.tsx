@@ -166,7 +166,9 @@ export default async function HomePage() {
             </div>
             <ul className="platformNote">
               <li>Android</li>
-              <li>Windows 10 و11</li>
+              <li>
+                <span dir="ltr">Windows 10 / 11</span>
+              </li>
               <li>مزامنة آمنة</li>
             </ul>
           </div>
