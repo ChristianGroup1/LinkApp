@@ -1,4 +1,3 @@
-import Image from 'next/image';
 import { playStoreUrl } from '../../lib/site';
 
 export function PlayQr() {
@@ -6,12 +5,12 @@ export function PlayQr() {
     <section className="share shell" id="share" aria-labelledby="share-title">
       <div className="sharePanel">
         <div className="qrFrame">
-          <Image
+          {/* Native img keeps QR pixels sharp for scanning and print. */}
+          <img
             src="/play-store-qr.png"
             alt="رمز QR لتحميل Link من Google Play"
             width={1024}
             height={1024}
-            priority={false}
           />
         </div>
         <div className="shareCopy">
