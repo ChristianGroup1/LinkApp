@@ -802,10 +802,6 @@ void main() {
       FilledButton,
       'حذف نهائي لكل البيانات',
     );
-    expect(tester.widget<FilledButton>(destructiveButton).onPressed, isNull);
-
-    await tester.enterText(find.byType(TextField).last, 'حذف');
-    await tester.pump();
     expect(tester.widget<FilledButton>(destructiveButton).onPressed, isNotNull);
     await tester.tap(find.widgetWithText(TextButton, 'إلغاء'));
     await _settle(tester);

@@ -11,6 +11,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
   final _passwordController = TextEditingController();
   final _confirmController = TextEditingController();
   bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
 
   @override
   void dispose() {
@@ -67,12 +68,9 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                     'تم تحديث كلمة المرور بنجاح 🎉',
                     style: GoogleFonts.cairo(),
                   ),
-                  backgroundColor: Colors.green,
+                  backgroundColor: AppTheme.secondary,
                 ),
               );
-              // Return to AuthenticationGate instead of replacing it with a
-              // standalone LoginScreen. The gate owns the transition to the
-              // dashboard after the next successful login.
               Navigator.of(context).popUntil((route) => route.isFirst);
             } else if (state is AuthPasswordResetError) {
               ScaffoldMessenger.of(context).showSnackBar(
@@ -94,116 +92,96 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                   onPressed: isLoading ? null : () => Navigator.pop(context),
                 ),
                 const SizedBox(height: 12),
-                // Top App Logo Header
-                const Column(
-                  children: [AuthLogoMark(size: 130), SizedBox(height: 14)],
-                ),
+                const AuthScreenHeader(),
                 const SizedBox(height: 24),
-                // Main Floating White Card
-                Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: AppTheme.cardBackground,
-                    borderRadius: BorderRadius.circular(28),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.04),
-                        blurRadius: 24,
-                        offset: const Offset(0, 8),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    textDirection: TextDirection.rtl,
-                    children: [
-                      Text(
-                        'تعيين كلمة مرور جديدة',
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.cairo(
-                          color: AppTheme.textDark,
-                          fontSize: 20,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'أدخل كلمة المرور الجديدة لحسابك لتأكيد التغيير',
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.cairo(
+                AuthFormCard(
+                  children: [
+                    const AuthScreenTitle(
+                      title: 'تعيين كلمة مرور جديدة',
+                      subtitle:
+                          'أدخل كلمة المرور الجديدة لحسابك لتأكيد التغيير',
+                      titleSize: 20,
+                    ),
+                    const AuthFieldLabel('كلمة المرور الجديدة'),
+                    AuthSoftTextField(
+                      controller: _passwordController,
+                      hint: '••••••••',
+                      icon: Icons.lock_outline_rounded,
+                      obscureText: _obscurePassword,
+                      trailing: IconButton(
+                        onPressed: isLoading
+                            ? null
+                            : () => setState(
+                                () => _obscurePassword = !_obscurePassword,
+                              ),
+                        icon: Icon(
+                          _obscurePassword
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
                           color: AppTheme.textLight,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
+                          size: 20,
                         ),
                       ),
-                      const SizedBox(height: 24),
-                      // New Password Input
-                      const AuthFieldLabel('كلمة المرور الجديدة'),
-                      AuthSoftTextField(
-                        controller: _passwordController,
-                        hint: '••••••••',
-                        icon: Icons.lock_outline_rounded,
-                        obscureText: _obscurePassword,
-                        trailing: IconButton(
-                          onPressed: () => setState(
-                            () => _obscurePassword = !_obscurePassword,
-                          ),
-                          icon: Icon(
-                            _obscurePassword
-                                ? Icons.visibility_outlined
-                                : Icons.visibility_off_outlined,
-                            color: AppTheme.textLight,
-                            size: 20,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      // Confirm Password Input
-                      const AuthFieldLabel('تأكيد كلمة المرور'),
-                      AuthSoftTextField(
-                        controller: _confirmController,
-                        hint: '••••••••',
-                        icon: Icons.lock_outline_rounded,
-                        obscureText: _obscurePassword,
-                      ),
-                      const SizedBox(height: 28),
-                      // Save Pill Button
-                      SizedBox(
-                        height: 52,
-                        child: ElevatedButton(
-                          onPressed: isLoading ? null : _submit,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppTheme.primaryAccent,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(26),
-                            ),
-                            elevation: 4,
-                            shadowColor: AppTheme.primaryAccent.withValues(
-                              alpha: 0.35,
-                            ),
-                          ),
-                          child: isLoading
-                              ? const SizedBox(
-                                  width: 22,
-                                  height: 22,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2.5,
-                                    color: Colors.white,
-                                  ),
-                                )
-                              : Text(
-                                  'حفظ كلمة المرور الجديدة 🔒',
-                                  style: GoogleFonts.cairo(
-                                    color: Colors.white,
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w800,
-                                  ),
+                    ),
+                    const SizedBox(height: 16),
+                    const AuthFieldLabel('تأكيد كلمة المرور'),
+                    AuthSoftTextField(
+                      controller: _confirmController,
+                      hint: '••••••••',
+                      icon: Icons.lock_reset_rounded,
+                      obscureText: _obscureConfirmPassword,
+                      trailing: IconButton(
+                        onPressed: isLoading
+                            ? null
+                            : () => setState(
+                                  () => _obscureConfirmPassword =
+                                      !_obscureConfirmPassword,
                                 ),
+                        icon: Icon(
+                          _obscureConfirmPassword
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
+                          color: AppTheme.textLight,
+                          size: 20,
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(height: 28),
+                    SizedBox(
+                      height: 52,
+                      child: ElevatedButton(
+                        onPressed: isLoading ? null : _submit,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.primaryAccent,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(26),
+                          ),
+                          elevation: 4,
+                          shadowColor: AppTheme.primaryAccent.withValues(
+                            alpha: 0.35,
+                          ),
+                        ),
+                        child: isLoading
+                            ? const SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.5,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : Text(
+                                'حفظ كلمة المرور الجديدة 🔒',
+                                style: GoogleFonts.cairo(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             );

@@ -973,23 +973,8 @@ class _DeleteAccountCardState extends State<_DeleteAccountCard> {
   );
 }
 
-class _DeleteAccountConfirmationDialog extends StatefulWidget {
+class _DeleteAccountConfirmationDialog extends StatelessWidget {
   const _DeleteAccountConfirmationDialog();
-
-  @override
-  State<_DeleteAccountConfirmationDialog> createState() =>
-      _DeleteAccountConfirmationDialogState();
-}
-
-class _DeleteAccountConfirmationDialogState
-    extends State<_DeleteAccountConfirmationDialog> {
-  final _confirmationController = TextEditingController();
-
-  @override
-  void dispose() {
-    _confirmationController.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) => AlertDialog(
@@ -998,34 +983,15 @@ class _DeleteAccountConfirmationDialogState
       style: GoogleFonts.cairo(fontWeight: FontWeight.w900),
     ),
     content: SingleChildScrollView(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            'لا تحتاج تعيّن مدير تاني عشان تمسح البيانات.\n\n'
-            'لو أنت المدير النشط الوحيد، سيتم حذف حسابك وكل بيانات '
-            'الخدمة: الاجتماعات، الفصول، الأعضاء، الحضور، الدعوات، '
-            'والبلاغات، وحسابات كل الخدام المرتبطين.\n\n'
-            'لو في مدير تاني نشط، سيتم حذف حسابك أنت بس وتفضل بيانات '
-            'الخدمة.\n\n'
-            'لا يمكن التراجع عن هذا الإجراء.',
-            style: GoogleFonts.cairo(height: 1.65),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'اكتب «حذف» للتأكيد',
-            style: GoogleFonts.cairo(fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _confirmationController,
-            textDirection: TextDirection.rtl,
-            autofocus: true,
-            onChanged: (_) => setState(() {}),
-            decoration: const InputDecoration(hintText: 'حذف'),
-          ),
-        ],
+      child: Text(
+        'لا تحتاج تعيّن مدير تاني عشان تمسح البيانات.\n\n'
+        'لو أنت المدير النشط الوحيد، سيتم حذف حسابك وكل بيانات '
+        'الخدمة: الاجتماعات، الفصول، الأعضاء، الحضور، الدعوات، '
+        'والبلاغات، وحسابات كل الخدام المرتبطين.\n\n'
+        'لو في مدير تاني نشط، سيتم حذف حسابك أنت بس وتفضل بيانات '
+        'الخدمة.\n\n'
+        'لا يمكن التراجع عن هذا الإجراء.',
+        style: GoogleFonts.cairo(height: 1.65),
       ),
     ),
     actions: [
@@ -1035,9 +1001,7 @@ class _DeleteAccountConfirmationDialogState
       ),
       FilledButton(
         style: FilledButton.styleFrom(backgroundColor: AppTheme.accentRed),
-        onPressed: _confirmationController.text.trim() == 'حذف'
-            ? () => Navigator.pop(context, true)
-            : null,
+        onPressed: () => Navigator.pop(context, true),
         child: Text(
           'حذف نهائي لكل البيانات',
           style: GoogleFonts.cairo(fontWeight: FontWeight.w800),

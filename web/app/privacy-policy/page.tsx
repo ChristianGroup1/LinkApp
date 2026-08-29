@@ -101,10 +101,13 @@ export default function PrivacyPolicyPage() {
         <section style={styles.section}>
           <h2 style={styles.sectionTitle}>6. Data Retention &amp; Account Deletion</h2>
           <p style={styles.paragraph}>
-            We retain church, attendance, and account data for as long as necessary to provide the service to your church organization. Church administrators or servants may request deletion of their account or church records at any time.
+            We retain church, attendance, and account data for as long as necessary to provide the service to your church organization. Church administrators or servants may delete their account at any time from inside the app.
+          </p>
+          <p style={styles.paragraph}>
+            <strong>In-app deletion (Android &amp; iOS):</strong> open Settings, go to Account, tap &quot;Delete account permanently&quot;, then confirm in the dialog. If you are the sole active church administrator, your church data is deleted with your account. If another active administrator exists, only your personal account is removed.
           </p>
           <div style={styles.contactBox}>
-            To request account deletion or data removal, please contact us at:{' '}
+            If you cannot delete from the app, contact us at:{' '}
             <a href="mailto:fadykhayrat@gmail.com" style={styles.link}>
               fadykhayrat@gmail.com
             </a>
