@@ -1,4 +1,15 @@
 import Image from 'next/image';
+import { SiteHeader } from './_components/site-header';
+import {
+  AttendanceIcon,
+  FollowUpIcon,
+  MeetingsIcon,
+  MembersIcon,
+  OfflineIcon,
+  PlayStoreIcon,
+  RolesIcon,
+  WindowsIcon,
+} from './_components/icons';
 
 export const revalidate = 3600;
 
@@ -33,223 +44,347 @@ async function desktopReleaseAvailable() {
 
 const features = [
   {
-    icon: '✓',
+    icon: AttendanceIcon,
     title: 'تسجيل الحضور',
-    description: 'تسجيل سريع للحضور والغياب مع مراجعة السجلات السابقة.',
+    description: 'سجّل الحضور والغياب بسرعة، وارجع للسجلات السابقة وقت ما تحتاج.',
   },
   {
-    icon: '◷',
+    icon: MeetingsIcon,
     title: 'إدارة الاجتماعات',
-    description: 'تنظيم الاجتماعات والفصول والمواعيد والتنبيهات الأسبوعية.',
+    description: 'نظّم الاجتماعات والفصول والمواعيد والتنبيهات الأسبوعية.',
   },
   {
-    icon: '♙',
+    icon: MembersIcon,
     title: 'إدارة الأعضاء',
-    description: 'بيانات منظمة للأعضاء والخدام وسهولة الوصول لكل التفاصيل.',
+    description: 'بيانات منظمة للأعضاء والخدام، ووصول سهل لكل التفاصيل.',
   },
   {
-    icon: '♡',
+    icon: FollowUpIcon,
     title: 'متابعة الافتقاد',
-    description: 'متابعة الغياب وتوثيق التواصل والزيارات في مكان واحد.',
+    description: 'تابع الغياب، وثبّت التواصل والزيارات في مكان واحد.',
   },
   {
-    icon: '⌁',
+    icon: RolesIcon,
     title: 'صلاحيات مرنة',
-    description: 'أدوار وصلاحيات مناسبة لمسؤولي الخدمة وأمناء الفصول.',
+    description: 'أدوار واضحة لمسؤولي الخدمة وأمناء الفصول دون تعقيد.',
   },
   {
-    icon: '↻',
+    icon: OfflineIcon,
     title: 'يعمل دون اتصال',
-    description: 'استمر في العمل عند ضعف الإنترنت مع المزامنة عند عودته.',
+    description: 'كمّل شغلك عند ضعف الإنترنت، والمزامنة تتم عند عودته.',
+  },
+];
+
+const steps = [
+  {
+    number: '١',
+    title: 'حمّل التطبيق',
+    description: 'من Google Play على الموبايل، أو من حزمة Windows على الكمبيوتر.',
+  },
+  {
+    number: '٢',
+    title: 'ادعُ فريق الخدمة',
+    description: 'أضف الخدام وأمناء الفصول بصلاحيات مناسبة لكل دور.',
+  },
+  {
+    number: '٣',
+    title: 'سجّل وتابع',
+    description: 'حضور، غياب، افتقاد، وتقارير — كلها في منظومة واحدة.',
+  },
+];
+
+const audiences = [
+  {
+    title: 'أمين الفصل',
+    description: 'تسجيل حضور اليوم ومتابعة من تغيّب دون أوراق متناثرة.',
+  },
+  {
+    title: 'الخادم',
+    description: 'شوف مخدوميك، سجّل الافتقاد، وخلّي المتابعة واضحة.',
+  },
+  {
+    title: 'مسؤول الخدمة',
+    description: 'تقارير، صلاحيات، وصورة كاملة للخدمة من مكان واحد.',
   },
 ];
 
 export default async function HomePage() {
   const hasDesktopRelease = await desktopReleaseAvailable();
+  const windowsHref = hasDesktopRelease ? desktopDownloadUrl : releasesUrl;
+  const windowsLabel = hasDesktopRelease
+    ? 'تحميل Link لنظام Windows'
+    : 'متابعة إصدار Windows القادم';
 
   return (
-    <main>
-      <nav className="nav shell" aria-label="التنقل الرئيسي">
-        <a className="brand" href="#top" aria-label="Link — الرئيسية">
-          <Image src="/link-logo.png" alt="شعار Link" width={48} height={48} />
-          <span>
-            <strong>Link</strong>
-            <small>إدارة الخدمة ببساطة</small>
-          </span>
-        </a>
-        <div className="navLinks">
-          <a href="#features">المميزات</a>
-          <a href="#download">تحميل التطبيق</a>
-        </div>
-      </nav>
-
-      <section className="hero shell" id="top">
-        <div className="heroCopy">
-          <div className="eyebrow"><span /> منظومة واحدة لخدمة أكثر تنظيمًا</div>
-          <h1>
-            ركّز في <em>الخدمة</em>
-            <br />واترك التنظيم لـ Link
-          </h1>
-          <p>
-            تطبيق عربي متكامل لإدارة الاجتماعات والحضور والأعضاء والافتقاد،
-            مصمم للكنائس والخدمات التي تريد رؤية أوضح ومتابعة أسهل.
-          </p>
-
-          <div className="downloadActions" id="download">
-            <a
-              className="downloadButton primary"
-              href={playStoreUrl}
-              target="_blank"
-              rel="noreferrer"
-            >
-              <span className="storeIcon">▶</span>
-              <span><small>حمّل التطبيق من</small>Google Play</span>
-            </a>
-            <a
-              className={`downloadButton desktop ${hasDesktopRelease ? '' : 'pending'}`}
-              href={hasDesktopRelease ? desktopDownloadUrl : releasesUrl}
-              target="_blank"
-              rel="noreferrer"
-              aria-label={
-                hasDesktopRelease
-                  ? 'تحميل Link لنظام Windows'
-                  : 'متابعة إصدار Windows القادم'
-              }
-            >
-              <span className="windowsIcon">⊞</span>
-              <span>
-                <small>{hasDesktopRelease ? 'تحميل مباشر' : 'قريبًا'}</small>
-                Link for Windows
-              </span>
-            </a>
-          </div>
-          <div className="platformNote">
-            <span>✓ Android</span>
-            <span>✓ Windows 10/11</span>
-            <span>✓ مزامنة آمنة</span>
-          </div>
-        </div>
-
-        <div
-          className="heroVisual"
-          role="img"
-          aria-label="نظرة توضيحية على لوحة تحكم Link"
-        >
-          <div className="glow glowOne" />
-          <div className="glow glowTwo" />
-          <div className="appCard">
-            <div className="appCardTop">
-              <div>
-                <small>مساء الخير 👋</small>
-                <strong>لوحة متابعة الخدمة</strong>
-              </div>
-              <Image src="/link-logo.png" alt="" width={54} height={54} />
-            </div>
-            <div className="statGrid">
-              <div><span className="dot indigo" /><strong>١٢٨</strong><small>عضوًا</small></div>
-              <div><span className="dot teal" /><strong>٨٧٪</strong><small>نسبة الحضور</small></div>
-              <div><span className="dot gold" /><strong>٦</strong><small>اجتماعات</small></div>
-            </div>
-            <div className="attendanceCard">
-              <div className="attendanceTitle">
-                <span>الحضور هذا الأسبوع</span><strong>٨٧٪</strong>
-              </div>
-              <div className="progress"><span /></div>
-              <div className="miniBars">
-                {[42, 68, 54, 82, 73, 91, 78].map((height, index) => (
-                  <i key={index} style={{ height: `${height}%` }} />
-                ))}
-              </div>
-            </div>
-            <div className="nextMeeting">
-              <span className="calendarIcon">١٠</span>
-              <div><small>الاجتماع القادم</small><strong>اجتماع الشباب — الجمعة ٧:٠٠م</strong></div>
-              <b>‹</b>
-            </div>
-          </div>
-          <div className="floatingBadge badgeMembers"><span>+١٢</span> عضو جديد</div>
-          <div className="floatingBadge badgeSync"><span>✓</span> تمت المزامنة</div>
-        </div>
-      </section>
-
-      <section className="trustStrip">
-        <div className="shell trustContent">
-          <strong>كل أدوات الخدمة في مكان واحد</strong>
-          <span>حضور</span><i />
-          <span>اجتماعات</span><i />
-          <span>أعضاء</span><i />
-          <span>افتقاد</span><i />
-          <span>تقارير</span>
-        </div>
-      </section>
-
-      <section className="features shell" id="features">
-        <div className="sectionHeading">
-          <span>مصمم للخدمة اليومية</span>
-          <h2>كل ما تحتاجه لإدارة خدمتك بوضوح</h2>
-          <p>أدوات عملية، واجهة عربية بسيطة، ومعلوماتك متاحة على الموبايل والكمبيوتر.</p>
-        </div>
-        <div className="featureGrid">
-          {features.map((feature, index) => (
-            <article className="featureCard" key={feature.title}>
-              <div className={`featureIcon color${(index % 3) + 1}`}>{feature.icon}</div>
-              <h3>{feature.title}</h3>
-              <p>{feature.description}</p>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section className="desktopSection shell">
-        <div className="desktopPanel">
-          <div className="desktopCopy">
-            <span className="sectionTag">Link على الكمبيوتر</span>
-            <h2>نفس بيانات خدمتك، على شاشة أكبر</h2>
-            <p>
-              نسخة Windows تمنحك مساحة أوسع للمراجعة والإدارة، مع نفس الحساب
-              والمزامنة الموجودة على تطبيق Android.
+    <>
+      <a className="skipLink" href="#content">
+        تخطي إلى المحتوى
+      </a>
+      <SiteHeader />
+      <main id="content">
+        <section className="hero shell" aria-labelledby="hero-title">
+          <div className="heroCopy">
+            <p className="eyebrow">
+              <span /> منظومة واحدة لخدمة أكثر تنظيمًا
             </p>
-            <ul>
-              <li>تسجيل الدخول بنفس حساب Link</li>
-              <li>مزامنة مباشرة وآمنة للبيانات</li>
-              <li>حزمة ZIP سهلة التشغيل على Windows 10 و11</li>
+            <h1 id="hero-title">
+              ركّز في <em>الخدمة</em>
+              <br />
+              واترك التنظيم لـ Link
+            </h1>
+            <p>
+              تطبيق عربي للكنائس والخدمات: اجتماعات، حضور، أعضاء، وافتقاد —
+              بواجهة بسيطة تعمل على الموبايل والكمبيوتر حتى مع ضعف الإنترنت.
+            </p>
+
+            <div className="downloadActions" id="download">
+              <a
+                className="downloadButton primary"
+                href={playStoreUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <PlayStoreIcon className="storeIcon" />
+                <span>
+                  <small>حمّل التطبيق من</small>
+                  Google Play
+                </span>
+              </a>
+              <a
+                className={`downloadButton desktop${hasDesktopRelease ? '' : ' pending'}`}
+                href={windowsHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={windowsLabel}
+              >
+                <WindowsIcon className="windowsIcon" />
+                <span>
+                  <small>{hasDesktopRelease ? 'تحميل مباشر' : 'قريبًا'}</small>
+                  Link for Windows
+                </span>
+              </a>
+            </div>
+            <ul className="platformNote">
+              <li>Android</li>
+              <li>Windows 10 و11</li>
+              <li>مزامنة آمنة</li>
             </ul>
-            <a
-              className={`secondaryButton ${hasDesktopRelease ? '' : 'pending'}`}
-              href={hasDesktopRelease ? desktopDownloadUrl : releasesUrl}
-              target="_blank"
-              rel="noreferrer"
-            >
-              {hasDesktopRelease ? 'تنزيل نسخة Windows ↓' : 'نسخة Windows تُجهّز للنشر'}
-            </a>
           </div>
-          <div className="desktopMockup" aria-hidden="true">
-            <div className="windowBar"><i /><i /><i /><span>Link</span></div>
-            <div className="windowBody">
-              <aside><Image src="/link-logo.png" alt="" width={58} height={58} /><b /><b /><b /><b /></aside>
-              <div className="windowContent"><span /><div><i /><i /><i /></div><strong /><strong /><strong /></div>
+
+          <div className="heroVisual">
+            <div className="glow glowOne" />
+            <div className="glow glowTwo" />
+            <div className="phoneFrame" aria-hidden="true">
+              <div className="phoneNotch" />
+              <div className="appCard">
+                <div className="appCardTop">
+                  <div>
+                    <small>مساء الخير</small>
+                    <strong>لوحة متابعة الخدمة</strong>
+                  </div>
+                  <Image src="/link-logo.png" alt="" width={40} height={40} />
+                </div>
+                <div className="statGrid">
+                  <div>
+                    <span className="dot indigo" />
+                    <strong>١٢٨</strong>
+                    <small>عضوًا</small>
+                  </div>
+                  <div>
+                    <span className="dot teal" />
+                    <strong>٨٧٪</strong>
+                    <small>نسبة الحضور</small>
+                  </div>
+                  <div>
+                    <span className="dot gold" />
+                    <strong>٦</strong>
+                    <small>اجتماعات</small>
+                  </div>
+                </div>
+                <div className="attendanceCard">
+                  <div className="attendanceTitle">
+                    <span>الحضور هذا الأسبوع</span>
+                    <strong>٨٧٪</strong>
+                  </div>
+                  <div className="progress">
+                    <span />
+                  </div>
+                  <div className="miniBars">
+                    {[42, 68, 54, 82, 73, 91, 78].map((height) => (
+                      <i key={height} style={{ height: `${height}%` }} />
+                    ))}
+                  </div>
+                </div>
+                <div className="nextMeeting">
+                  <span className="calendarIcon">١٠</span>
+                  <div>
+                    <small>الاجتماع القادم</small>
+                    <strong>اجتماع الشباب — الجمعة ٧:٠٠م</strong>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="floatingBadge badgeMembers">
+              <span>+١٢</span> عضو جديد
+            </div>
+            <div className="floatingBadge badgeSync">
+              <span>✓</span> تمت المزامنة
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      <section className="cta">
-        <div className="shell ctaInner">
-          <Image src="/link-logo.png" alt="شعار Link" width={96} height={96} />
-          <div><h2>ابدأ تنظيم خدمتك اليوم</h2><p>حمّل Link وسجّل دخولك، وكل أدوات الخدمة ستكون بين يديك.</p></div>
-          <a href={playStoreUrl} target="_blank" rel="noreferrer">تحميل من Google Play</a>
-        </div>
-      </section>
+        <section className="trustStrip">
+          <div className="shell trustContent">
+            <strong>كل أدوات الخدمة في مكان واحد</strong>
+            <span>حضور</span>
+            <i />
+            <span>اجتماعات</span>
+            <i />
+            <span>أعضاء</span>
+            <i />
+            <span>افتقاد</span>
+            <i />
+            <span>تقارير</span>
+          </div>
+        </section>
+
+        <section className="steps shell" id="how" aria-labelledby="how-title">
+          <div className="sectionHeading">
+            <span>ثلاث خطوات للبداية</span>
+            <h2 id="how-title">ابدأ اليوم من غير تعقيد</h2>
+            <p>من التحميل إلى المتابعة اليومية — المسار واضح لكل خادم في الفريق.</p>
+          </div>
+          <ol className="stepGrid">
+            {steps.map((step) => (
+              <li className="stepCard" key={step.title}>
+                <span className="stepNumber">{step.number}</span>
+                <h3>{step.title}</h3>
+                <p>{step.description}</p>
+              </li>
+            ))}
+          </ol>
+        </section>
+
+        <section className="features shell" id="features" aria-labelledby="features-title">
+          <div className="sectionHeading">
+            <span>مصمم للخدمة اليومية</span>
+            <h2 id="features-title">كل ما تحتاجه لإدارة خدمتك بوضوح</h2>
+            <p>
+              أدوات عملية، عربي واضح، وبياناتك متاحة على الموبايل والكمبيوتر.
+            </p>
+          </div>
+          <div className="featureGrid">
+            {features.map((feature, index) => {
+              const Icon = feature.icon;
+              return (
+                <article className="featureCard" key={feature.title}>
+                  <div className={`featureIcon color${(index % 3) + 1}`}>
+                    <Icon />
+                  </div>
+                  <h3>{feature.title}</h3>
+                  <p>{feature.description}</p>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+
+        <section className="audience shell" aria-labelledby="audience-title">
+          <div className="sectionHeading">
+            <span>لمن صُمّم Link؟</span>
+            <h2 id="audience-title">كل دور في الخدمة له مكانه</h2>
+          </div>
+          <div className="audienceGrid">
+            {audiences.map((item) => (
+              <article className="audienceCard" key={item.title}>
+                <h3>{item.title}</h3>
+                <p>{item.description}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="desktopSection shell">
+          <div className="desktopPanel">
+            <div className="desktopCopy">
+              <span className="sectionTag">Link على الكمبيوتر</span>
+              <h2>نفس بيانات خدمتك، على شاشة أكبر</h2>
+              <p>
+                نسخة Windows تمنحك مساحة أوسع للمراجعة والإدارة، مع نفس الحساب
+                والمزامنة الموجودة على تطبيق Android.
+              </p>
+              <ul>
+                <li>تسجيل الدخول بنفس حساب Link</li>
+                <li>مزامنة مباشرة وآمنة للبيانات</li>
+                <li>حزمة ZIP سهلة التشغيل على Windows 10 و11</li>
+              </ul>
+              <a
+                className={`secondaryButton${hasDesktopRelease ? '' : ' pending'}`}
+                href={windowsHref}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {hasDesktopRelease
+                  ? 'تنزيل نسخة Windows'
+                  : 'نسخة Windows تُجهّز للنشر'}
+              </a>
+            </div>
+            <div className="desktopMockup" aria-hidden="true">
+              <div className="windowBar">
+                <i />
+                <i />
+                <i />
+                <span>Link</span>
+              </div>
+              <div className="windowBody">
+                <aside>
+                  <Image src="/link-logo.png" alt="" width={42} height={42} />
+                  <b />
+                  <b />
+                  <b />
+                  <b />
+                </aside>
+                <div className="windowContent">
+                  <span />
+                  <div>
+                    <i />
+                    <i />
+                    <i />
+                  </div>
+                  <strong />
+                  <strong />
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="cta">
+          <div className="shell ctaInner">
+            <Image src="/link-logo.png" alt="" width={80} height={80} />
+            <div>
+              <h2>ابدأ تنظيم خدمتك اليوم</h2>
+              <p>حمّل Link وسجّل دخولك — أدوات الخدمة كلها بين يديك.</p>
+            </div>
+            <a href={playStoreUrl} target="_blank" rel="noopener noreferrer">
+              تحميل من Google Play
+            </a>
+          </div>
+        </section>
+      </main>
 
       <footer className="footer shell">
         <div className="brand footerBrand">
           <Image src="/link-logo.png" alt="" width={40} height={40} />
-          <span><strong>Link</strong><small>متصلين بمحبة، ننمو معًا</small></span>
+          <span>
+            <strong>Link</strong>
+            <small>متصلين بمحبة، ننمو معًا</small>
+          </span>
         </div>
         <p>© 2026 Link. جميع الحقوق محفوظة.</p>
         <a href="/support">الدعم</a>
         <a href="/privacy-policy">سياسة الخصوصية</a>
       </footer>
-    </main>
+    </>
   );
 }
