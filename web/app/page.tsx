@@ -118,9 +118,6 @@ export default async function HomePage() {
 
   return (
     <>
-      <a className="skipLink" href="#content">
-        تخطي إلى المحتوى
-      </a>
       <SiteHeader />
       <main id="content">
         <section className="hero shell" aria-labelledby="hero-title">
