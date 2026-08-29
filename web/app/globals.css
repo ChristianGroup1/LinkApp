@@ -648,7 +648,7 @@ summary:focus-visible {
 
 .audience { padding-bottom: 40px; }
 
-.faq { padding-block: 72px 24px; }
+.faq { padding-block: 12px 4px; }
 
 .faqList {
   max-width: 760px;
@@ -769,7 +769,7 @@ summary:focus-visible {
   background: linear-gradient(180deg, #fff, var(--surface));
 }
 
-.desktopSection { padding: 48px 0 96px; }
+.desktopSection { padding: 8px 0 16px; }
 
 .desktopPanel {
   overflow: hidden;
