@@ -12,6 +12,7 @@ import '../../core/invitations/invitation_email_errors.dart';
 import '../../core/invitations/invitation_identity.dart';
 import '../../core/invitations/invitation_preview.dart';
 import '../offline/invitation_create_result.dart';
+import '../offline/member_create_draft.dart';
 import '../offline/offline_cache.dart';
 import '../offline/offline_entity_json.dart';
 import '../offline/offline_network_policy.dart';
@@ -133,6 +134,9 @@ abstract class DatabaseRepository {
     DateTime? birthDate,
     String? notes,
   });
+  Future<List<OfflineSaveResult<MemberEntity>>> createMembers(
+    List<MemberCreateDraft> drafts,
+  );
   Future<OfflineSaveResult<MemberEntity>> updateMember({
     required String id,
     required String fullName,
@@ -1468,6 +1472,15 @@ class SupabaseRepository implements DatabaseRepository {
       ),
       {AppDataArea.members},
     );
+  }
+
+  @override
+  Future<List<OfflineSaveResult<MemberEntity>>> createMembers(
+    List<MemberCreateDraft> drafts,
+  ) {
+    return _notifyAfter(_offlineWriter.createMembers(drafts), {
+      AppDataArea.members,
+    });
   }
 
   @override

@@ -9,6 +9,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import '../../core/invitations/invitation_link.dart';
 import '../../shared/data/app_models.dart';
+import 'member_create_draft.dart';
 import 'offline_cache.dart';
 import 'offline_entity_json.dart';
 import 'invitation_create_result.dart';
@@ -198,6 +199,79 @@ class OfflineWriteHandler {
         ),
       );
       return OfflineSaveResult(data: member, syncedToServer: false);
+    }
+  }
+
+  /// Inserts many members in one server request. Falls back to per-member
+  /// queued creates when the device is offline. Throws when the server
+  /// rejects the batch, so callers can retry rows individually.
+  Future<List<OfflineSaveResult<MemberEntity>>> createMembers(
+    List<MemberCreateDraft> drafts,
+  ) async {
+    if (drafts.isEmpty) return const [];
+    final profile = await _requireProfile();
+    final churchId = profile.churchId!;
+
+    try {
+      await _throwIfKnownOffline();
+      final joinedOn = DateTime.now().toIso8601String().split('T').first;
+      final payload = <Map<String, dynamic>>[];
+      for (final draft in drafts) {
+        payload.add({
+          'church_id': churchId,
+          'full_name': draft.fullName.trim(),
+          'scope': draft.scope.value,
+          'sunday_school_class_id': draft.scope == MemberScope.sundaySchoolClass
+              ? (draft.sundaySchoolClassId == null
+                    ? null
+                    : await queue.resolveId(draft.sundaySchoolClassId!))
+              : null,
+          'meeting_id': draft.scope == MemberScope.meeting
+              ? (draft.meetingId == null
+                    ? null
+                    : await queue.resolveId(draft.meetingId!))
+              : null,
+          'phone': emptyToNull(draft.phone),
+          'parent_name': emptyToNull(draft.parentName),
+          'parent_phone': emptyToNull(draft.parentPhone),
+          'code': emptyToNull(draft.code),
+          'birth_date': _dateOnly(draft.birthDate),
+          'notes': emptyToNull(draft.notes),
+          'is_active': true,
+          'joined_on': joinedOn,
+        });
+      }
+      final rows = await client.from('members').insert(payload).select();
+      final members = [
+        for (final row in rows) MemberEntity.fromJson(row),
+      ];
+      for (final member in members) {
+        await cache.upsertMember(churchId, member);
+      }
+      return [
+        for (final member in members)
+          OfflineSaveResult(data: member, syncedToServer: true),
+      ];
+    } catch (error) {
+      if (!isRecoverableOfflineError(error)) rethrow;
+      final results = <OfflineSaveResult<MemberEntity>>[];
+      for (final draft in drafts) {
+        results.add(
+          await createMember(
+            fullName: draft.fullName,
+            scope: draft.scope,
+            sundaySchoolClassId: draft.sundaySchoolClassId,
+            meetingId: draft.meetingId,
+            phone: draft.phone,
+            parentName: draft.parentName,
+            parentPhone: draft.parentPhone,
+            code: draft.code,
+            birthDate: draft.birthDate,
+            notes: draft.notes,
+          ),
+        );
+      }
+      return results;
     }
   }
 

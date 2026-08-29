@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:excel/excel.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:link/data/models/models.dart';
+import 'package:link/data/offline/member_create_draft.dart';
 import 'package:link/data/offline/offline_save_result.dart';
 import 'package:link/data/repositories/database_repository.dart';
 import 'package:link/features/members/data/member_excel_service.dart';
@@ -398,8 +399,8 @@ void main() {
     },
   );
 
-  test('builds UTF-8 error CSV with original data and correction', () {
-    final bytes = MemberExcelService().buildIssuesCsv(const [
+  test('builds a re-importable Excel error report', () {
+    final bytes = MemberExcelService().buildIssuesWorkbook(const [
       MemberImportIssue(
         row: 7,
         message: 'الكود مكرر',
@@ -407,13 +408,167 @@ void main() {
         sourceValues: ['مينا', 'اجتماع', 'اجتماع الشباب'],
       ),
     ]);
-    final csv = utf8.decode(bytes);
+    final workbook = Excel.decodeBytes(bytes);
+    final sheet = workbook.tables[MemberExcelService.membersSheetName];
 
-    expect(bytes.take(3), [0xEF, 0xBB, 0xBF]);
-    expect(csv, contains('رقم الصف الأصلي'));
-    expect(csv, contains('مينا'));
-    expect(csv, contains('الكود مكرر'));
-    expect(csv, contains('غيّر الكود'));
+    expect(sheet, isNotNull);
+    final headerTexts = [
+      for (final cell in sheet!.rows.first) cell?.value?.toString() ?? '',
+    ];
+    expect(headerTexts, containsAll(memberExcelHeaders));
+    expect(
+      headerTexts,
+      containsAll(['رقم الصف الأصلي', 'سبب الخطأ', 'طريقة التصحيح']),
+    );
+    final rowTexts = [
+      for (final cell in sheet.rows[1]) cell?.value?.toString() ?? '',
+    ];
+    expect(rowTexts, containsAll(['مينا', '7', 'الكود مكرر', 'غيّر الكود']));
+  });
+
+  test('saves large imports through batched server calls', () async {
+    const directMeeting = MeetingEntity(
+      id: 'meeting-direct',
+      churchId: 'church-1',
+      name: 'Youth',
+      nameAr: 'اجتماع الشباب',
+      kind: MeetingKind.normal,
+      weekday: 5,
+      isActive: true,
+    );
+    final csv = StringBuffer('الاسم الكامل *;نوع التبعية *;الاجتماع *;الفصل\n');
+    for (var index = 1; index <= 5; index++) {
+      csv.writeln('عضو رقم $index;اجتماع;اجتماع الشباب;');
+    }
+    final parsed = MemberExcelService().parseCsvImport(
+      bytes: Uint8List.fromList(utf8.encode(csv.toString())),
+      meetings: const [directMeeting],
+      classes: const [],
+      existingMembers: const [],
+    );
+    final repository = _RecordingRepository(
+      initialMeetings: const [directMeeting],
+    );
+
+    final saved = await MemberImportWriter().save(
+      rows: parsed.validRows,
+      repository: repository,
+      batchSize: 2,
+    );
+
+    expect(saved.imported, 5);
+    expect(saved.issues, isEmpty);
+    expect(repository.created, hasLength(5));
+    // Two full batches of 2; the trailing single row is saved directly.
+    expect(repository.batchCalls, 2);
+    expect(saved.createdMemberIds, hasLength(5));
+  });
+
+  test('falls back to per-row saves when a whole batch fails', () async {
+    const directMeeting = MeetingEntity(
+      id: 'meeting-direct',
+      churchId: 'church-1',
+      name: 'Youth',
+      nameAr: 'اجتماع الشباب',
+      kind: MeetingKind.normal,
+      weekday: 5,
+      isActive: true,
+    );
+    const csv = '''الاسم الكامل *;نوع التبعية *;الاجتماع *;الفصل
+عضو أول;اجتماع;اجتماع الشباب;
+عضو ثان;اجتماع;اجتماع الشباب;
+''';
+    final parsed = MemberExcelService().parseCsvImport(
+      bytes: Uint8List.fromList(utf8.encode(csv)),
+      meetings: const [directMeeting],
+      classes: const [],
+      existingMembers: const [],
+    );
+    final repository =
+        _RecordingRepository(initialMeetings: const [directMeeting])
+          ..failBatch = true
+          ..memberCreateFailures = 1;
+
+    final saved = await MemberImportWriter().save(
+      rows: parsed.validRows,
+      repository: repository,
+    );
+
+    expect(repository.batchCalls, 1);
+    expect(saved.imported, 1);
+    expect(saved.failedRows, hasLength(1));
+    expect(saved.failedRows.single.fullName, 'عضو أول');
+    expect(repository.created.single.fullName, 'عضو ثان');
+  });
+
+  test('undoImport deletes created members and restores updated ones', () async {
+    const existing = MemberEntity(
+      id: 'existing-member',
+      churchId: 'church-1',
+      fullName: 'الاسم القديم',
+      scope: MemberScope.sundaySchoolClass,
+      sundaySchoolClassId: 'class-1',
+      code: 'DUP-1',
+      isActive: true,
+    );
+    const csv = '''الاسم الكامل *;نوع التبعية *;الاجتماع *;الفصل
+عضو جديد;فصل;اجتماع جديد;فصل جديد
+''';
+    final parsed = MemberExcelService().parseCsvImport(
+      bytes: Uint8List.fromList(utf8.encode(csv)),
+      meetings: const [],
+      classes: const [],
+      existingMembers: const [],
+    );
+    final repository = _RecordingRepository();
+    final writer = MemberImportWriter();
+    final saved = await writer.save(
+      rows: parsed.validRows,
+      repository: repository,
+      meetingWeekdays: const {'اجتماع جديد': 7},
+    );
+    expect(saved.createdMemberIds, hasLength(1));
+    expect(saved.createdMeetingIds, hasLength(1));
+    expect(saved.createdClassIds, hasLength(1));
+
+    final undo = await writer.undoImport(
+      repository: repository,
+      createdMemberIds: saved.createdMemberIds,
+      updatedMemberPreviousVersions: const [existing],
+      createdClassIds: saved.createdClassIds,
+      createdMeetingIds: saved.createdMeetingIds,
+    );
+
+    expect(undo.removedMembers, 1);
+    expect(undo.restoredMembers, 1);
+    expect(undo.removedClasses, 1);
+    expect(undo.removedMeetings, 1);
+    expect(undo.issues, isEmpty);
+    expect(repository.deletedMemberIds, saved.createdMemberIds);
+    expect(repository.updated.single.fullName, 'الاسم القديم');
+    expect(repository.createdMeetings, isEmpty);
+    expect(repository.createdClasses, isEmpty);
+  });
+
+  test('warns about suspicious or repeated phones without blocking', () {
+    const csv = '''الاسم الكامل *;نوع التبعية *;الاجتماع *;الفصل;رقم هاتف العضو
+عضو أول;فصل;اجتماع مدارس الأحد;أولى ابتدائي;123
+عضو ثان;فصل;اجتماع مدارس الأحد;أولى ابتدائي;01000000000
+عضو ثالث;فصل;اجتماع مدارس الأحد;أولى ابتدائي;01000000000
+''';
+
+    final parsed = MemberExcelService().parseCsvImport(
+      bytes: Uint8List.fromList(utf8.encode(csv)),
+      meetings: const [meeting],
+      classes: const [classEntity],
+      existingMembers: const [],
+    );
+
+    expect(parsed.issues, isEmpty);
+    expect(parsed.validRows, hasLength(3));
+    expect(parsed.warnings, hasLength(2));
+    expect(parsed.warnings.first.message, contains('يبدو غير صحيح'));
+    expect(parsed.warnings.last.message, contains('مكرر مع الصف'));
   });
 }
 
@@ -423,7 +578,10 @@ class _RecordingRepository implements DatabaseRepository {
   final List<MeetingEntity> createdMeetings;
   final List<SundaySchoolClassEntity> createdClasses;
   final List<String> deactivatedIds = [];
+  final List<String> deletedMemberIds = [];
   int memberCreateFailures = 0;
+  int batchCalls = 0;
+  bool failBatch = false;
 
   _RecordingRepository({
     List<MeetingEntity> initialMeetings = const [],
@@ -514,6 +672,35 @@ class _RecordingRepository implements DatabaseRepository {
     );
     created.add(member);
     return OfflineSaveResult(data: member, syncedToServer: true);
+  }
+
+  @override
+  Future<List<OfflineSaveResult<MemberEntity>>> createMembers(
+    List<MemberCreateDraft> drafts,
+  ) async {
+    batchCalls++;
+    if (failBatch) throw StateError('فشل تجريبي في دفعة الأعضاء');
+    return [
+      for (final draft in drafts)
+        await createMember(
+          fullName: draft.fullName,
+          scope: draft.scope,
+          sundaySchoolClassId: draft.sundaySchoolClassId,
+          meetingId: draft.meetingId,
+          phone: draft.phone,
+          parentName: draft.parentName,
+          parentPhone: draft.parentPhone,
+          code: draft.code,
+          birthDate: draft.birthDate,
+        ),
+    ];
+  }
+
+  @override
+  Future<bool> deleteMember(String id) async {
+    deletedMemberIds.add(id);
+    created.removeWhere((member) => member.id == id);
+    return true;
   }
 
   @override

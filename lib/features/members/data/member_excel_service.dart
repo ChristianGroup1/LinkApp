@@ -1,10 +1,12 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:csv/csv.dart';
 import 'package:excel/excel.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../../data/models/models.dart';
+import '../../../data/offline/member_create_draft.dart';
+import '../../../data/offline/offline_save_result.dart';
 import '../../../data/repositories/database_repository.dart';
 
 const memberExcelHeaders = [
@@ -100,11 +102,15 @@ class MemberImportDuplicate {
 class MemberImportParseResult {
   final List<MemberImportRow> validRows;
   final List<MemberImportIssue> issues;
+
+  /// Non-blocking notes (e.g. suspicious phone numbers); rows stay importable.
+  final List<MemberImportIssue> warnings;
   final List<MemberImportDuplicate> duplicates;
 
   const MemberImportParseResult({
     required this.validRows,
     required this.issues,
+    this.warnings = const [],
     this.duplicates = const [],
   });
 
@@ -150,6 +156,12 @@ class MemberImportSaveResult {
   final bool cancelled;
   final List<MemberImportIssue> issues;
   final List<MemberImportRow> failedRows;
+  final List<String> createdMemberIds;
+
+  /// Pre-update snapshots of members changed by «تحديث الموجود», for undo.
+  final List<MemberEntity> updatedMemberPreviousVersions;
+  final List<String> createdMeetingIds;
+  final List<String> createdClassIds;
 
   const MemberImportSaveResult({
     required this.imported,
@@ -164,7 +176,62 @@ class MemberImportSaveResult {
     this.cancelled = false,
     required this.issues,
     this.failedRows = const [],
+    this.createdMemberIds = const [],
+    this.updatedMemberPreviousVersions = const [],
+    this.createdMeetingIds = const [],
+    this.createdClassIds = const [],
   });
+}
+
+class MemberImportUndoResult {
+  final int removedMembers;
+  final int restoredMembers;
+  final int removedMeetings;
+  final int removedClasses;
+  final List<MemberImportIssue> issues;
+
+  const MemberImportUndoResult({
+    required this.removedMembers,
+    required this.restoredMembers,
+    required this.removedMeetings,
+    required this.removedClasses,
+    required this.issues,
+  });
+}
+
+class MemberImportParseRequest {
+  final Uint8List bytes;
+  final bool isCsv;
+  final List<MeetingEntity> meetings;
+  final List<SundaySchoolClassEntity> classes;
+  final List<MemberEntity> existingMembers;
+
+  const MemberImportParseRequest({
+    required this.bytes,
+    required this.isCsv,
+    required this.meetings,
+    required this.classes,
+    required this.existingMembers,
+  });
+}
+
+MemberImportParseResult _parseMemberImportInBackground(
+  MemberImportParseRequest request,
+) {
+  final service = MemberExcelService();
+  return request.isCsv
+      ? service.parseCsvImport(
+          bytes: request.bytes,
+          meetings: request.meetings,
+          classes: request.classes,
+          existingMembers: request.existingMembers,
+        )
+      : service.parseImport(
+          bytes: request.bytes,
+          meetings: request.meetings,
+          classes: request.classes,
+          existingMembers: request.existingMembers,
+        );
 }
 
 class MemberImportProgress {
@@ -194,6 +261,7 @@ class MemberImportWriter {
     Map<int, MemberImportDuplicateAction> duplicateActions = const {},
     void Function(MemberImportProgress progress)? onProgress,
     bool Function()? isCancelled,
+    int batchSize = 25,
   }) async {
     var imported = 0;
     var createdMembers = 0;
@@ -281,10 +349,127 @@ class MemberImportWriter {
       }
     }
 
+    final pendingCreates = <_PendingMemberCreate>[];
+    final createdMemberIds = <String>[];
+    final updatedPreviousVersions = <MemberEntity>[];
+
+    void markDestinationSuccess(
+      MemberImportRow row,
+      String meetingId,
+      String? classId,
+    ) {
+      if (row.scope == MemberScope.sundaySchoolClass) {
+        successfulClassIds.add(classId!);
+      } else {
+        successfulMeetingIds.add(meetingId);
+      }
+    }
+
+    Future<void> deactivateCreated(
+      MemberImportRow row,
+      MemberEntity member,
+    ) async {
+      try {
+        final updated = await repository.updateMember(
+          id: member.id,
+          fullName: member.fullName,
+          scope: member.scope,
+          sundaySchoolClassId: member.sundaySchoolClassId,
+          meetingId: member.meetingId,
+          phone: member.phone,
+          parentName: member.parentName,
+          parentPhone: member.parentPhone,
+          code: member.code,
+          birthDate: member.birthDate,
+          isActive: false,
+          notes: member.notes,
+        );
+        allSyncedToServer = allSyncedToServer && updated.syncedToServer;
+      } catch (error) {
+        issues.add(
+          MemberImportIssue(
+            row: row.sourceRow,
+            message:
+                'تم إنشاء العضو، لكن تعذر تحويله إلى غير نشط: ${_errorText(error)}',
+            suggestion: 'افتح بيانات العضو وعطّل حالة «نشط» يدويًا',
+            sourceValues: row.toCsvValues(),
+          ),
+        );
+      }
+    }
+
+    Future<void> registerCreated(
+      _PendingMemberCreate item,
+      OfflineSaveResult<MemberEntity> created,
+    ) async {
+      allSyncedToServer = allSyncedToServer && created.syncedToServer;
+      createdMembers++;
+      createdMemberIds.add(created.data.id);
+      markDestinationSuccess(item.row, item.meetingId, item.classId);
+      imported++;
+      if (!item.row.isActive) await deactivateCreated(item.row, created.data);
+    }
+
+    Future<void> flushPendingCreates() async {
+      if (pendingCreates.isEmpty) return;
+      final batch = List.of(pendingCreates);
+      pendingCreates.clear();
+
+      List<OfflineSaveResult<MemberEntity>>? batchResults;
+      if (batch.length > 1) {
+        try {
+          batchResults = await repository.createMembers([
+            for (final item in batch) item.draft,
+          ]);
+        } catch (_) {
+          // The server rejected the whole batch; retry rows one by one below
+          // so a single bad row doesn't fail its neighbours.
+          batchResults = null;
+        }
+      }
+
+      if (batchResults != null && batchResults.length == batch.length) {
+        for (var index = 0; index < batch.length; index++) {
+          await registerCreated(batch[index], batchResults[index]);
+        }
+      } else {
+        for (final item in batch) {
+          try {
+            final created = await repository.createMember(
+              fullName: item.draft.fullName,
+              scope: item.draft.scope,
+              sundaySchoolClassId: item.draft.sundaySchoolClassId,
+              meetingId: item.draft.meetingId,
+              phone: item.draft.phone,
+              parentName: item.draft.parentName,
+              parentPhone: item.draft.parentPhone,
+              code: item.draft.code,
+              birthDate: item.draft.birthDate,
+            );
+            await registerCreated(item, created);
+          } catch (error) {
+            failedRows.add(item.row);
+            issues.add(
+              MemberImportIssue(
+                row: item.row.sourceRow,
+                message: _errorText(error),
+                suggestion:
+                    'صحح البيانات أو الاتصال ثم اختر «إعادة محاولة الفاشل»',
+                sourceValues: item.row.toCsvValues(),
+                importRow: item.row,
+              ),
+            );
+          }
+        }
+      }
+      report();
+    }
+
     for (var rowIndex = 0; rowIndex < rows.length; rowIndex++) {
       final row = rows[rowIndex];
       if (isCancelled?.call() ?? false) {
         cancelled = true;
+        await flushPendingCreates();
         failedRows.addAll(rows.skip(rowIndex));
         break;
       }
@@ -378,64 +563,37 @@ class MemberImportWriter {
           );
           allSyncedToServer = allSyncedToServer && updated.syncedToServer;
           updatedMembers++;
+          updatedPreviousVersions.add(existing);
+          markDestinationSuccess(row, resolvedMeetingId, resolvedClassId);
+          imported++;
         } else {
-          final created = await repository.createMember(
-            fullName: row.fullName,
-            scope: row.scope,
-            sundaySchoolClassId: resolvedClassId,
-            meetingId: row.scope == MemberScope.meeting
-                ? resolvedMeetingId
-                : null,
-            phone: row.phone,
-            parentName: row.parentName,
-            parentPhone: row.parentPhone,
-            code:
-                duplicate != null &&
-                    duplicateAction == MemberImportDuplicateAction.createNew &&
-                    duplicate.codeMatched
-                ? null
-                : row.code,
-            birthDate: row.birthDate,
+          pendingCreates.add(
+            _PendingMemberCreate(
+              row: row,
+              meetingId: resolvedMeetingId,
+              classId: resolvedClassId,
+              draft: MemberCreateDraft(
+                fullName: row.fullName,
+                scope: row.scope,
+                sundaySchoolClassId: resolvedClassId,
+                meetingId: row.scope == MemberScope.meeting
+                    ? resolvedMeetingId
+                    : null,
+                phone: row.phone,
+                parentName: row.parentName,
+                parentPhone: row.parentPhone,
+                code:
+                    duplicate != null &&
+                        duplicateAction ==
+                            MemberImportDuplicateAction.createNew &&
+                        duplicate.codeMatched
+                    ? null
+                    : row.code,
+                birthDate: row.birthDate,
+              ),
+            ),
           );
-          allSyncedToServer = allSyncedToServer && created.syncedToServer;
-          createdMembers++;
-          if (!row.isActive) {
-            final member = created.data;
-            try {
-              final updated = await repository.updateMember(
-                id: member.id,
-                fullName: member.fullName,
-                scope: member.scope,
-                sundaySchoolClassId: member.sundaySchoolClassId,
-                meetingId: member.meetingId,
-                phone: member.phone,
-                parentName: member.parentName,
-                parentPhone: member.parentPhone,
-                code: member.code,
-                birthDate: member.birthDate,
-                isActive: false,
-                notes: member.notes,
-              );
-              allSyncedToServer = allSyncedToServer && updated.syncedToServer;
-            } catch (error) {
-              issues.add(
-                MemberImportIssue(
-                  row: row.sourceRow,
-                  message:
-                      'تم إنشاء العضو، لكن تعذر تحويله إلى غير نشط: ${_errorText(error)}',
-                  suggestion: 'افتح بيانات العضو وعطّل حالة «نشط» يدويًا',
-                  sourceValues: row.toCsvValues(),
-                ),
-              );
-            }
-          }
         }
-        if (row.scope == MemberScope.sundaySchoolClass) {
-          successfulClassIds.add(resolvedClassId!);
-        } else {
-          successfulMeetingIds.add(resolvedMeetingId);
-        }
-        imported++;
       } catch (error) {
         failedRows.add(row);
         issues.add(
@@ -450,8 +608,12 @@ class MemberImportWriter {
       }
       processed++;
       report();
+      if (pendingCreates.length >= batchSize) await flushPendingCreates();
     }
+    await flushPendingCreates();
 
+    final removedClassIds = <String>{};
+    final removedMeetingIds = <String>{};
     for (final entry in createdClassNamesById.entries) {
       if (successfulClassIds.contains(entry.key)) continue;
       try {
@@ -460,6 +622,7 @@ class MemberImportWriter {
         final synced = await repository.deleteSundaySchoolClass(entry.key);
         allSyncedToServer = allSyncedToServer && synced;
         removedEmptyClasses++;
+        removedClassIds.add(entry.key);
       } catch (error) {
         issues.add(
           MemberImportIssue(
@@ -490,6 +653,7 @@ class MemberImportWriter {
         final synced = await repository.deleteMeeting(entry.key);
         allSyncedToServer = allSyncedToServer && synced;
         removedEmptyMeetings++;
+        removedMeetingIds.add(entry.key);
       } catch (error) {
         issues.add(
           MemberImportIssue(
@@ -516,6 +680,151 @@ class MemberImportWriter {
       cancelled: cancelled,
       issues: issues,
       failedRows: failedRows,
+      createdMemberIds: createdMemberIds,
+      updatedMemberPreviousVersions: updatedPreviousVersions,
+      createdMeetingIds: [
+        for (final id in createdMeetingNamesById.keys)
+          if (!removedMeetingIds.contains(id)) id,
+      ],
+      createdClassIds: [
+        for (final id in createdClassNamesById.keys)
+          if (!removedClassIds.contains(id)) id,
+      ],
+    );
+  }
+
+  /// Reverts a finished import: deletes members it created, restores members
+  /// it updated, then removes meetings/classes it created if they are empty.
+  Future<MemberImportUndoResult> undoImport({
+    required DatabaseRepository repository,
+    required List<String> createdMemberIds,
+    required List<MemberEntity> updatedMemberPreviousVersions,
+    required List<String> createdClassIds,
+    required List<String> createdMeetingIds,
+    void Function(int done, int total)? onProgress,
+  }) async {
+    var removedMembers = 0;
+    var restoredMembers = 0;
+    var removedClasses = 0;
+    var removedMeetings = 0;
+    final issues = <MemberImportIssue>[];
+    final total =
+        createdMemberIds.length +
+        updatedMemberPreviousVersions.length +
+        createdClassIds.length +
+        createdMeetingIds.length;
+    var done = 0;
+    void step() => onProgress?.call(++done, total);
+
+    for (final id in createdMemberIds) {
+      try {
+        await repository.deleteMember(id);
+        removedMembers++;
+      } catch (error) {
+        issues.add(
+          MemberImportIssue(
+            row: 0,
+            message: 'تعذر حذف عضو أنشأه الاستيراد: ${_errorText(error)}',
+            suggestion: 'احذف العضو يدويًا من قائمة الأعضاء',
+          ),
+        );
+      }
+      step();
+    }
+
+    for (final previous in updatedMemberPreviousVersions) {
+      try {
+        await repository.updateMember(
+          id: previous.id,
+          fullName: previous.fullName,
+          scope: previous.scope,
+          sundaySchoolClassId: previous.sundaySchoolClassId,
+          meetingId: previous.meetingId,
+          phone: previous.phone,
+          parentName: previous.parentName,
+          parentPhone: previous.parentPhone,
+          code: previous.code,
+          birthDate: previous.birthDate,
+          isActive: previous.isActive,
+          notes: previous.notes,
+        );
+        restoredMembers++;
+      } catch (error) {
+        issues.add(
+          MemberImportIssue(
+            row: 0,
+            message:
+                'تعذر استرجاع بيانات «${previous.fullName}»: '
+                '${_errorText(error)}',
+            suggestion: 'راجع بيانات العضو وصححها يدويًا',
+          ),
+        );
+      }
+      step();
+    }
+
+    for (final id in createdClassIds) {
+      try {
+        final members = await repository.getClassMembers(id);
+        if (members.isEmpty) {
+          await repository.deleteSundaySchoolClass(id);
+          removedClasses++;
+        } else {
+          issues.add(
+            const MemberImportIssue(
+              row: 0,
+              message: 'فصل أنشأه الاستيراد لم يعد فارغًا فلم يُحذف',
+              suggestion: 'راجع الفصل واحذفه يدويًا إذا لزم',
+            ),
+          );
+        }
+      } catch (error) {
+        issues.add(
+          MemberImportIssue(
+            row: 0,
+            message: 'تعذر حذف فصل أنشأه الاستيراد: ${_errorText(error)}',
+            suggestion: 'احذف الفصل يدويًا إذا ظل فارغًا',
+          ),
+        );
+      }
+      step();
+    }
+
+    for (final id in createdMeetingIds) {
+      try {
+        final directMembers = await repository.getMeetingMembers(id);
+        final classes = await repository.getAllSundaySchoolClasses();
+        final hasClasses = classes.any((item) => item.meetingId == id);
+        if (directMembers.isEmpty && !hasClasses) {
+          await repository.deleteMeeting(id);
+          removedMeetings++;
+        } else {
+          issues.add(
+            const MemberImportIssue(
+              row: 0,
+              message: 'اجتماع أنشأه الاستيراد لم يعد فارغًا فلم يُحذف',
+              suggestion: 'راجع الاجتماع واحذفه يدويًا إذا لزم',
+            ),
+          );
+        }
+      } catch (error) {
+        issues.add(
+          MemberImportIssue(
+            row: 0,
+            message: 'تعذر حذف اجتماع أنشأه الاستيراد: ${_errorText(error)}',
+            suggestion: 'احذف الاجتماع يدويًا إذا ظل فارغًا',
+          ),
+        );
+      }
+      step();
+    }
+
+    return MemberImportUndoResult(
+      removedMembers: removedMembers,
+      restoredMembers: restoredMembers,
+      removedMeetings: removedMeetings,
+      removedClasses: removedClasses,
+      issues: issues,
     );
   }
 
@@ -525,30 +834,82 @@ class MemberImportWriter {
       .replaceAll('Bad state: ', '');
 }
 
+class _PendingMemberCreate {
+  final MemberImportRow row;
+  final MemberCreateDraft draft;
+  final String meetingId;
+  final String? classId;
+
+  const _PendingMemberCreate({
+    required this.row,
+    required this.draft,
+    required this.meetingId,
+    required this.classId,
+  });
+}
+
 class MemberExcelService {
   static const membersSheetName = 'الأعضاء';
 
-  Uint8List buildIssuesCsv(List<MemberImportIssue> issues) {
-    final rows = <List<String>>[
-      [...memberExcelHeaders, 'رقم الصف الأصلي', 'سبب الخطأ', 'طريقة التصحيح'],
-      ...issues.map((issue) {
-        final values = issue.sourceValues.isNotEmpty
-            ? issue.sourceValues
-            : (issue.importRow?.toCsvValues() ?? const <String>[]);
-        final padded = List<String>.generate(
-          memberExcelHeaders.length,
-          (index) => index < values.length ? values[index] : '',
-        );
-        return [
-          ...padded,
-          issue.row == 0 ? '' : issue.row.toString(),
-          issue.message,
-          issue.suggestion,
-        ];
-      }),
+  /// Parses an import file off the UI thread. On platforms without isolates
+  /// (web) this falls back to running synchronously.
+  static Future<MemberImportParseResult> parseAsync(
+    MemberImportParseRequest request,
+  ) {
+    return compute(_parseMemberImportInBackground, request);
+  }
+
+  /// Builds an Excel error report that reuses the members sheet layout, so
+  /// the user can fix the rows in place and re-import the same file.
+  Uint8List buildIssuesWorkbook(List<MemberImportIssue> issues) {
+    final workbook = Excel.createExcel();
+    final defaultSheet = workbook.getDefaultSheet();
+    if (defaultSheet != null) workbook.rename(defaultSheet, membersSheetName);
+    final sheet = workbook[membersSheetName]..isRTL = true;
+
+    final headers = [
+      ...memberExcelHeaders,
+      'رقم الصف الأصلي',
+      'سبب الخطأ',
+      'طريقة التصحيح',
     ];
-    final csv = const ListToCsvConverter(fieldDelimiter: ';').convert(rows);
-    return Uint8List.fromList(utf8.encode('\uFEFF$csv'));
+    sheet.appendRow(headers.map(TextCellValue.new).toList());
+    final headerStyle = CellStyle(
+      bold: true,
+      fontColorHex: ExcelColor.white,
+      backgroundColorHex: ExcelColor.fromHexString('#B91C1C'),
+      horizontalAlign: HorizontalAlign.Center,
+      verticalAlign: VerticalAlign.Center,
+    );
+    for (var column = 0; column < headers.length; column++) {
+      sheet
+              .cell(
+                CellIndex.indexByColumnRow(columnIndex: column, rowIndex: 0),
+              )
+              .cellStyle =
+          headerStyle;
+      sheet.setColumnWidth(
+        column,
+        column >= memberExcelHeaders.length ? 35 : 20,
+      );
+    }
+
+    for (final issue in issues) {
+      final values = issue.sourceValues.isNotEmpty
+          ? issue.sourceValues
+          : (issue.importRow?.toCsvValues() ?? const <String>[]);
+      sheet.appendRow([
+        for (var index = 0; index < memberExcelHeaders.length; index++)
+          TextCellValue(index < values.length ? values[index] : ''),
+        TextCellValue(issue.row == 0 ? '' : issue.row.toString()),
+        TextCellValue(issue.message),
+        TextCellValue(issue.suggestion),
+      ]);
+    }
+
+    final encoded = workbook.encode();
+    if (encoded == null) throw StateError('تعذر إنشاء ملف الأخطاء');
+    return Uint8List.fromList(encoded);
   }
 
   Uint8List buildTemplate({
@@ -674,6 +1035,7 @@ class MemberExcelService {
     }
 
     final issues = <MemberImportIssue>[];
+    final warnings = <MemberImportIssue>[];
     final validRows = <MemberImportRow>[];
     final duplicates = <MemberImportDuplicate>[];
 
@@ -717,6 +1079,7 @@ class MemberExcelService {
     }
     final incomingCodes = <String>{};
     final incomingIdentities = <String>{};
+    final incomingPhoneRows = <String, int>{};
 
     String valueAt(List<String> row, dynamic headers) {
       final headerList = headers is List<String>
@@ -968,6 +1331,37 @@ class MemberExcelService {
         continue;
       }
 
+      for (final (label, value) in [
+        ('رقم هاتف العضو', phone),
+        ('هاتف ولي الأمر', parentPhone),
+      ]) {
+        if (value == null || _looksLikeValidPhone(value)) continue;
+        warnings.add(
+          MemberImportIssue(
+            row: sourceRow,
+            message: 'تحذير: $label «$value» يبدو غير صحيح',
+            suggestion: 'راجع الرقم؛ سيُستورد الصف كما هو',
+            sourceValues: sourceValues,
+          ),
+        );
+      }
+      if (normalizedPhone.isNotEmpty) {
+        final firstRow = incomingPhoneRows[normalizedPhone];
+        if (firstRow == null) {
+          incomingPhoneRows[normalizedPhone] = sourceRow;
+        } else {
+          warnings.add(
+            MemberImportIssue(
+              row: sourceRow,
+              message:
+                  'تحذير: رقم هاتف العضو «$phone» مكرر مع الصف $firstRow داخل الملف',
+              suggestion: 'تأكد أن الصفين لعضوين مختلفين فعلًا',
+              sourceValues: sourceValues,
+            ),
+          );
+        }
+      }
+
       validRows.add(importRow);
       if (candidatesById.length == 1) {
         final existing = candidatesById.values.single;
@@ -1021,13 +1415,22 @@ class MemberExcelService {
       duplicates.removeWhere(
         (duplicate) => conflictedSourceRows.contains(duplicate.row.sourceRow),
       );
+      warnings.removeWhere(
+        (warning) => conflictedSourceRows.contains(warning.row),
+      );
     }
 
     return MemberImportParseResult(
       validRows: validRows,
       issues: issues,
+      warnings: warnings,
       duplicates: duplicates,
     );
+  }
+
+  static bool _looksLikeValidPhone(String value) {
+    final digits = value.replaceAll(RegExp(r'[^0-9]'), '');
+    return digits.length >= 10 && digits.length <= 15;
   }
 
   static String _detectCsvDelimiter(String firstLine) {

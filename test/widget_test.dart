@@ -9,6 +9,7 @@ import 'package:link/core/invitations/invitation_preview.dart';
 import 'package:link/core/theme/app_theme.dart';
 import 'package:link/core/theme/theme_controller.dart';
 import 'package:link/data/offline/invitation_create_result.dart';
+import 'package:link/data/offline/member_create_draft.dart';
 import 'package:link/data/offline/offline_save_result.dart';
 import 'package:link/data/models/models.dart';
 import 'package:link/data/repositories/database_repository.dart';
@@ -1189,6 +1190,26 @@ class TestRepository implements DatabaseRepository {
     );
     _members.add(m);
     return OfflineSaveResult(data: m, syncedToServer: true);
+  }
+
+  @override
+  Future<List<OfflineSaveResult<MemberEntity>>> createMembers(
+    List<MemberCreateDraft> drafts,
+  ) async {
+    return [
+      for (final draft in drafts)
+        await createMember(
+          fullName: draft.fullName,
+          scope: draft.scope,
+          sundaySchoolClassId: draft.sundaySchoolClassId,
+          meetingId: draft.meetingId,
+          phone: draft.phone,
+          parentName: draft.parentName,
+          parentPhone: draft.parentPhone,
+          code: draft.code,
+          birthDate: draft.birthDate,
+        ),
+    ];
   }
 
   @override

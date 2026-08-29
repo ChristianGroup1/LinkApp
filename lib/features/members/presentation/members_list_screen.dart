@@ -10,6 +10,7 @@ import '../../../data/repositories/database_repository.dart';
 import '../../../logic/home/home_bloc.dart';
 import '../../../shared/ui/app_states.dart';
 import '../data/member_excel_service.dart';
+import '../data/member_import_history.dart';
 import '../data/member_qr_pdf_service.dart';
 import '../logic/members_bloc.dart';
 import 'add_edit_member_screen.dart';
@@ -32,6 +33,7 @@ class _MembersListScreenState extends State<MembersListScreen> {
   bool _excelBusy = false;
   final _excelService = MemberExcelService();
   final _importWriter = MemberImportWriter();
+  final _historyStore = MemberImportHistoryStore();
   final _qrPdfService = MemberQrPdfService();
 
   List<SundaySchoolClassEntity> _classes = [];
@@ -178,6 +180,11 @@ class _MembersListScreenState extends State<MembersListScreen> {
                                 _MemberExcelAction.import,
                                 Icons.file_upload_outlined,
                                 'استيراد أعضاء Excel / CSV',
+                              ),
+                              _excelMenuItem(
+                                _MemberExcelAction.history,
+                                Icons.history_rounded,
+                                'سجل الاستيراد',
                               ),
                             ],
                           ],
@@ -800,6 +807,8 @@ class _MembersListScreenState extends State<MembersListScreen> {
         await _downloadTemplate(context);
       case _MemberExcelAction.import:
         await _importMembers(context);
+      case _MemberExcelAction.history:
+        await _showImportHistory(context);
     }
   }
 
@@ -890,19 +899,15 @@ class _MembersListScreenState extends State<MembersListScreen> {
         ? currentState.allMembers
         : <MemberEntity>[];
     final extension = picked.files.single.extension?.toLowerCase();
-    final parsed = extension == 'csv'
-        ? _excelService.parseCsvImport(
-            bytes: bytes,
-            meetings: _allMeetings,
-            classes: _classes,
-            existingMembers: existing,
-          )
-        : _excelService.parseImport(
-            bytes: bytes,
-            meetings: _allMeetings,
-            classes: _classes,
-            existingMembers: existing,
-          );
+    final parsed = await MemberExcelService.parseAsync(
+      MemberImportParseRequest(
+        bytes: bytes,
+        isCsv: extension == 'csv',
+        meetings: _allMeetings,
+        classes: _classes,
+        existingMembers: existing,
+      ),
+    );
     if (!context.mounted) return;
 
     final confirmation = await _showImportPreview(context, parsed);
@@ -911,8 +916,17 @@ class _MembersListScreenState extends State<MembersListScreen> {
     }
 
     final repository = context.read<DatabaseRepository>();
+    final fileName = picked.files.single.name;
+    final undoData = _ImportUndoData();
+    var totalCreated = 0;
+    var totalUpdated = 0;
+    var totalSkipped = 0;
+    var lastFailed = 0;
+    var cancelled = false;
+    var undone = false;
     var rowsToImport = parsed.validRows;
-    while (context.mounted && rowsToImport.isNotEmpty) {
+    while (rowsToImport.isNotEmpty) {
+      if (!context.mounted) break;
       final result = await showDialog<MemberImportSaveResult>(
         context: context,
         barrierDismissible: false,
@@ -933,18 +947,161 @@ class _MembersListScreenState extends State<MembersListScreen> {
               ),
         ),
       );
-      if (result == null || !context.mounted) return;
+      if (result == null || !context.mounted) break;
       _membersBloc?.add(LoadMembers());
+      undoData.absorb(result);
+      totalCreated += result.createdMembers;
+      totalUpdated += result.updatedMembers;
+      totalSkipped += result.skippedMembers;
+      lastFailed = result.failedRows.length;
+      cancelled = result.cancelled;
 
-      final action = await _showImportResult(context, result);
+      final action = await _showImportResult(
+        context,
+        result,
+        canUndo: undoData.isNotEmpty,
+      );
       if (!context.mounted) return;
       if (action == _ImportResultAction.retryFailed &&
           result.failedRows.isNotEmpty) {
         rowsToImport = result.failedRows;
         continue;
       }
+      if (action == _ImportResultAction.undo) {
+        undone = await _confirmAndUndoImport(context, undoData);
+      }
       break;
     }
+
+    await _historyStore.add(
+      MemberImportHistoryEntry(
+        id: DateTime.now().microsecondsSinceEpoch.toString(),
+        date: DateTime.now(),
+        fileName: fileName,
+        created: totalCreated,
+        updated: totalUpdated,
+        skipped: totalSkipped,
+        failed: lastFailed,
+        cancelled: cancelled,
+        undone: undone,
+      ),
+    );
+  }
+
+  Future<bool> _confirmAndUndoImport(
+    BuildContext context,
+    _ImportUndoData undoData,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          icon: const Icon(
+            Icons.undo_rounded,
+            color: AppTheme.accentRed,
+            size: 40,
+          ),
+          title: Text(
+            'تراجع عن الاستيراد؟',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.cairo(fontWeight: FontWeight.w900),
+          ),
+          content: Text(
+            'سيتم حذف ${undoData.createdMemberIds.length} عضو أنشأه الاستيراد، '
+            'واسترجاع بيانات ${undoData.updatedPrevious.length} عضو تم تحديثه، '
+            'وحذف الاجتماعات والفصول الجديدة إذا ظلت فارغة.',
+            style: GoogleFonts.cairo(),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: Text('إلغاء', style: GoogleFonts.cairo()),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: AppTheme.accentRed,
+              ),
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: Text(
+                'تراجع الآن',
+                style: GoogleFonts.cairo(fontWeight: FontWeight.w800),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true || !context.mounted) return false;
+
+    final repository = context.read<DatabaseRepository>();
+    final undoResult = await showDialog<MemberImportUndoResult>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => _MemberImportUndoProgressDialog(
+        run: (onProgress) => _importWriter.undoImport(
+          repository: repository,
+          createdMemberIds: undoData.createdMemberIds,
+          updatedMemberPreviousVersions: undoData.updatedPrevious,
+          createdClassIds: undoData.createdClassIds,
+          createdMeetingIds: undoData.createdMeetingIds,
+          onProgress: onProgress,
+        ),
+      ),
+    );
+    if (undoResult == null || !context.mounted) return false;
+    _membersBloc?.add(LoadMembers());
+    _loadDropdowns();
+    _showExcelSnack(
+      context,
+      undoResult.issues.isEmpty
+          ? 'تم التراجع: حذف ${undoResult.removedMembers} عضو '
+                'واسترجاع ${undoResult.restoredMembers} عضو'
+          : 'تم التراجع مع ${undoResult.issues.length} ملاحظات؛ '
+                'راجع الأعضاء والاجتماعات',
+      isError: undoResult.issues.isNotEmpty,
+    );
+    return true;
+  }
+
+  Future<void> _showImportHistory(BuildContext context) async {
+    final entries = await _historyStore.load();
+    if (!context.mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          title: Text(
+            'سجل الاستيراد',
+            style: GoogleFonts.cairo(fontWeight: FontWeight.w900),
+          ),
+          content: SizedBox(
+            width: 480,
+            child: entries.isEmpty
+                ? Text(
+                    'لا توجد عمليات استيراد سابقة على هذا الجهاز',
+                    style: GoogleFonts.cairo(),
+                  )
+                : SizedBox(
+                    height: 340,
+                    child: ListView.separated(
+                      itemCount: entries.length,
+                      separatorBuilder: (_, _) => const Divider(height: 16),
+                      itemBuilder: (_, index) =>
+                          _ImportHistoryTile(entry: entries[index]),
+                    ),
+                  ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: Text('إغلاق', style: GoogleFonts.cairo()),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<_MemberImportConfirmation?> _showImportPreview(
@@ -1024,6 +1181,65 @@ class _MembersListScreenState extends State<MembersListScreen> {
                         onActionChanged: (row, value) {
                           setDialogState(() => duplicateActions[row] = value);
                         },
+                        onApplyToAll: (value) {
+                          setDialogState(() {
+                            for (final duplicate in result.duplicates) {
+                              duplicateActions[duplicate.row.sourceRow] =
+                                  value;
+                            }
+                          });
+                        },
+                      ),
+                    ],
+                    if (result.warnings.isNotEmpty) ...[
+                      const SizedBox(height: 14),
+                      Container(
+                        constraints: const BoxConstraints(maxHeight: 160),
+                        padding: const EdgeInsets.all(11),
+                        decoration: BoxDecoration(
+                          color: AppTheme.accentOrange.withValues(
+                            alpha: 0.07,
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: ListView(
+                          shrinkWrap: true,
+                          children: [
+                            Text(
+                              'تحذيرات لا تمنع الاستيراد (${result.warnings.length})',
+                              style: GoogleFonts.cairo(
+                                color: AppTheme.accentOrange,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 11.5,
+                              ),
+                            ),
+                            ...result.warnings
+                                .take(8)
+                                .map(
+                                  (warning) => Padding(
+                                    padding: const EdgeInsets.only(top: 5),
+                                    child: Text(
+                                      'صف ${warning.row}: ${warning.message}',
+                                      style: GoogleFonts.cairo(
+                                        color: AppTheme.accentOrange,
+                                        fontSize: 11,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            if (result.warnings.length > 8)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 5),
+                                child: Text(
+                                  'وهناك ${result.warnings.length - 8} تحذيرات أخرى',
+                                  style: GoogleFonts.cairo(
+                                    color: AppTheme.textLight,
+                                    fontSize: 10.5,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
                     ],
                     if (result.issues.isNotEmpty) ...[
@@ -1071,15 +1287,15 @@ class _MembersListScreenState extends State<MembersListScreen> {
               ),
             ),
             actions: [
-              if (result.issues.isNotEmpty)
+              if (result.issues.isNotEmpty || result.warnings.isNotEmpty)
                 TextButton.icon(
-                  onPressed: () => _saveImportIssuesCsv(
-                    dialogContext,
-                    result.issues,
-                  ),
+                  onPressed: () => _saveImportIssuesFile(dialogContext, [
+                    ...result.issues,
+                    ...result.warnings,
+                  ]),
                   icon: const Icon(Icons.download_rounded),
                   label: Text(
-                    'تنزيل الأخطاء',
+                    'تنزيل الأخطاء (Excel)',
                     style: GoogleFonts.cairo(),
                   ),
                 ),
@@ -1117,8 +1333,9 @@ class _MembersListScreenState extends State<MembersListScreen> {
 
   Future<_ImportResultAction?> _showImportResult(
     BuildContext context,
-    MemberImportSaveResult result,
-  ) {
+    MemberImportSaveResult result, {
+    required bool canUndo,
+  }) {
     return showDialog<_ImportResultAction>(
       context: context,
       barrierDismissible: false,
@@ -1221,9 +1438,22 @@ class _MembersListScreenState extends State<MembersListScreen> {
             if (result.issues.isNotEmpty)
               TextButton.icon(
                 onPressed: () =>
-                    _saveImportIssuesCsv(dialogContext, result.issues),
+                    _saveImportIssuesFile(dialogContext, result.issues),
                 icon: const Icon(Icons.download_rounded),
-                label: Text('تنزيل ملف الأخطاء', style: GoogleFonts.cairo()),
+                label: Text(
+                  'تنزيل ملف الأخطاء (Excel)',
+                  style: GoogleFonts.cairo(),
+                ),
+              ),
+            if (canUndo)
+              TextButton.icon(
+                onPressed: () =>
+                    Navigator.pop(dialogContext, _ImportResultAction.undo),
+                icon: const Icon(Icons.undo_rounded, color: AppTheme.accentRed),
+                label: Text(
+                  'تراجع عن الاستيراد',
+                  style: GoogleFonts.cairo(color: AppTheme.accentRed),
+                ),
               ),
             if (result.failedRows.isNotEmpty)
               FilledButton.tonalIcon(
@@ -1248,23 +1478,26 @@ class _MembersListScreenState extends State<MembersListScreen> {
     );
   }
 
-  Future<void> _saveImportIssuesCsv(
+  Future<void> _saveImportIssuesFile(
     BuildContext context,
     List<MemberImportIssue> issues,
   ) async {
-    final bytes = _excelService.buildIssuesCsv(issues);
+    final bytes = _excelService.buildIssuesWorkbook(issues);
     final date = DateTime.now().toIso8601String().split('T').first;
     final path = await FilePicker.saveFile(
       dialogTitle: 'حفظ أخطاء استيراد الأعضاء',
-      fileName: 'Link_members_import_errors_$date.csv',
+      fileName: 'Link_members_import_errors_$date.xlsx',
       type: FileType.custom,
-      allowedExtensions: const ['csv'],
+      allowedExtensions: const ['xlsx'],
       bytes: bytes,
     );
     if (path != null && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('تم حفظ ملف الأخطاء', style: GoogleFonts.cairo()),
+          content: Text(
+            'تم حفظ ملف الأخطاء؛ صحح الصفوف فيه ثم أعد استيراده مباشرة',
+            style: GoogleFonts.cairo(),
+          ),
           backgroundColor: AppTheme.secondary,
         ),
       );
@@ -1358,9 +1591,35 @@ class _MembersListScreenState extends State<MembersListScreen> {
   }
 }
 
-enum _MemberExcelAction { export, qrPdf, template, import }
+enum _MemberExcelAction { export, qrPdf, template, import, history }
 
-enum _ImportResultAction { close, retryFailed }
+enum _ImportResultAction { close, retryFailed, undo }
+
+/// Accumulates everything created/changed across import runs (including
+/// retries), so one undo can revert the whole session.
+class _ImportUndoData {
+  final createdMemberIds = <String>[];
+  final updatedPrevious = <MemberEntity>[];
+  final createdClassIds = <String>[];
+  final createdMeetingIds = <String>[];
+
+  bool get isNotEmpty =>
+      createdMemberIds.isNotEmpty ||
+      updatedPrevious.isNotEmpty ||
+      createdClassIds.isNotEmpty ||
+      createdMeetingIds.isNotEmpty;
+
+  void absorb(MemberImportSaveResult result) {
+    createdMemberIds.addAll(result.createdMemberIds);
+    updatedPrevious.addAll(result.updatedMemberPreviousVersions);
+    for (final id in result.createdClassIds) {
+      if (!createdClassIds.contains(id)) createdClassIds.add(id);
+    }
+    for (final id in result.createdMeetingIds) {
+      if (!createdMeetingIds.contains(id)) createdMeetingIds.add(id);
+    }
+  }
+}
 
 class _MemberImportConfirmation {
   final Map<String, int> meetingWeekdays;
@@ -1498,6 +1757,148 @@ class _MemberImportProgressDialogState
   }
 }
 
+class _MemberImportUndoProgressDialog extends StatefulWidget {
+  final Future<MemberImportUndoResult> Function(
+    void Function(int done, int total) onProgress,
+  )
+  run;
+
+  const _MemberImportUndoProgressDialog({required this.run});
+
+  @override
+  State<_MemberImportUndoProgressDialog> createState() =>
+      _MemberImportUndoProgressDialogState();
+}
+
+class _MemberImportUndoProgressDialogState
+    extends State<_MemberImportUndoProgressDialog> {
+  int _done = 0;
+  int _total = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _start());
+  }
+
+  Future<void> _start() async {
+    final result = await widget.run((done, total) {
+      if (mounted) {
+        setState(() {
+          _done = done;
+          _total = total;
+        });
+      }
+    });
+    if (mounted) Navigator.pop(context, result);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,
+      child: Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          title: Text(
+            'جارٍ التراجع عن الاستيراد',
+            style: GoogleFonts.cairo(fontWeight: FontWeight.w900),
+          ),
+          content: SizedBox(
+            width: 380,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                LinearProgressIndicator(
+                  value: _total == 0 ? null : (_done / _total).clamp(0, 1),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  _total == 0 ? 'جارٍ التحضير...' : 'تم $_done من $_total',
+                  style: GoogleFonts.cairo(fontWeight: FontWeight.w800),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ImportHistoryTile extends StatelessWidget {
+  final MemberImportHistoryEntry entry;
+
+  const _ImportHistoryTile({required this.entry});
+
+  @override
+  Widget build(BuildContext context) {
+    final date = entry.date;
+    final formattedDate =
+        '${date.year}-${date.month.toString().padLeft(2, '0')}-'
+        '${date.day.toString().padLeft(2, '0')} '
+        '${date.hour.toString().padLeft(2, '0')}:'
+        '${date.minute.toString().padLeft(2, '0')}';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                entry.fileName.isEmpty ? 'ملف استيراد' : entry.fileName,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.cairo(fontWeight: FontWeight.w800),
+              ),
+            ),
+            if (entry.undone)
+              _ImportHistoryBadge(label: 'تم التراجع', color: AppTheme.accentRed)
+            else if (entry.cancelled)
+              _ImportHistoryBadge(
+                label: 'أُوقف بأمان',
+                color: AppTheme.accentOrange,
+              ),
+          ],
+        ),
+        Text(
+          formattedDate,
+          style: GoogleFonts.cairo(color: AppTheme.textLight, fontSize: 10.5),
+        ),
+        Text(
+          'إنشاء ${entry.created} • تحديث ${entry.updated} • '
+          'تخطي ${entry.skipped} • فشل ${entry.failed}',
+          style: GoogleFonts.cairo(fontSize: 11),
+        ),
+      ],
+    );
+  }
+}
+
+class _ImportHistoryBadge extends StatelessWidget {
+  final String label;
+  final Color color;
+
+  const _ImportHistoryBadge({required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: 0.1),
+      borderRadius: BorderRadius.circular(20),
+    ),
+    child: Text(
+      label,
+      style: GoogleFonts.cairo(
+        color: color,
+        fontSize: 10,
+        fontWeight: FontWeight.w800,
+      ),
+    ),
+  );
+}
+
 class _ImportResultLine extends StatelessWidget {
   final String label;
   final int value;
@@ -1614,12 +2015,21 @@ class _ImportDuplicatesSection extends StatelessWidget {
   final Map<int, MemberImportDuplicateAction> actions;
   final void Function(int row, MemberImportDuplicateAction action)
   onActionChanged;
+  final void Function(MemberImportDuplicateAction action) onApplyToAll;
 
   const _ImportDuplicatesSection({
     required this.duplicates,
     required this.actions,
     required this.onActionChanged,
+    required this.onApplyToAll,
   });
+
+  MemberImportDuplicateAction? get _sharedAction {
+    final values = {
+      for (final duplicate in duplicates) actions[duplicate.row.sourceRow],
+    };
+    return values.length == 1 ? values.single : null;
+  }
 
   @override
   Widget build(BuildContext context) => Container(
@@ -1640,6 +2050,54 @@ class _ImportDuplicatesSection extends StatelessWidget {
             fontWeight: FontWeight.w900,
           ),
         ),
+        if (duplicates.length > 1)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Row(
+              children: [
+                Text(
+                  'طبّق على الكل:',
+                  style: GoogleFonts.cairo(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: DropdownButton<MemberImportDuplicateAction>(
+                    value: _sharedAction,
+                    isExpanded: true,
+                    isDense: true,
+                    underline: const SizedBox.shrink(),
+                    hint: Text(
+                      'اختر إجراءً موحدًا',
+                      style: GoogleFonts.cairo(fontSize: 11.5),
+                    ),
+                    items: [
+                      DropdownMenuItem(
+                        value: MemberImportDuplicateAction.skip,
+                        child: Text('تخطي الكل', style: GoogleFonts.cairo()),
+                      ),
+                      DropdownMenuItem(
+                        value: MemberImportDuplicateAction.update,
+                        child: Text('تحديث الكل', style: GoogleFonts.cairo()),
+                      ),
+                      DropdownMenuItem(
+                        value: MemberImportDuplicateAction.createNew,
+                        child: Text(
+                          'إنشاء الكل كجدد',
+                          style: GoogleFonts.cairo(),
+                        ),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) onApplyToAll(value);
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
         ...duplicates.map(
           (duplicate) => Padding(
             padding: const EdgeInsets.only(top: 10),
@@ -1658,6 +2116,10 @@ class _ImportDuplicatesSection extends StatelessWidget {
                   ),
                 ),
                 DropdownButtonFormField<MemberImportDuplicateAction>(
+                  key: ValueKey(
+                    '${duplicate.row.sourceRow}:'
+                    '${actions[duplicate.row.sourceRow]}',
+                  ),
                   initialValue: actions[duplicate.row.sourceRow],
                   isDense: true,
                   items: [
