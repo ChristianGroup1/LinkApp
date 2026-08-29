@@ -1,4 +1,6 @@
 import Image from 'next/image';
+import { FaqSection } from './_components/faq-section';
+import { PlayQr } from './_components/play-qr';
 import { SiteHeader } from './_components/site-header';
 import {
   AttendanceIcon,
@@ -10,14 +12,13 @@ import {
   RolesIcon,
   WindowsIcon,
 } from './_components/icons';
+import {
+  desktopDownloadUrl,
+  playStoreUrl,
+  releasesUrl,
+} from '../lib/site';
 
 export const revalidate = 3600;
-
-const playStoreUrl =
-  'https://play.google.com/store/apps/details?id=com.linkapp.church';
-const desktopDownloadUrl =
-  'https://github.com/ChristianGroup1/LinkApp/releases/download/desktop-latest/LinkApp-Windows-x64.zip';
-const releasesUrl = 'https://github.com/ChristianGroup1/LinkApp/releases';
 
 async function desktopReleaseAvailable() {
   try {
@@ -360,6 +361,9 @@ export default async function HomePage() {
             </div>
           </div>
         </section>
+
+        <FaqSection />
+        <PlayQr />
 
         <section className="cta">
           <div className="shell ctaInner">

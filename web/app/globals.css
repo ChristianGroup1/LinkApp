@@ -42,6 +42,8 @@ summary:focus-visible {
 #content,
 #how,
 #features,
+#faq,
+#share,
 #download {
   scroll-margin-top: 88px;
 }
@@ -646,6 +648,123 @@ summary:focus-visible {
 
 .audience { padding-bottom: 40px; }
 
+.faq { padding-block: 72px 24px; }
+
+.faqList {
+  max-width: 760px;
+  margin: 40px auto 0;
+  display: grid;
+  gap: 12px;
+}
+
+.faqItem {
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--card);
+}
+
+.faqItem summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 56px;
+  padding: 16px 20px;
+  cursor: pointer;
+  font-weight: 800;
+  color: var(--navy);
+  font-size: 17px;
+}
+
+.faqItem summary::-webkit-details-marker { display: none; }
+
+.faqItem summary::after {
+  content: "+";
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: #eef2ff;
+  color: var(--indigo);
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.faqItem[open] summary::after { content: "–"; }
+
+.faqItem p {
+  margin: 0;
+  padding: 0 20px 18px;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.85;
+}
+
+.share { padding-block: 24px 88px; }
+
+.sharePanel {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 36px;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 28px;
+  padding: 32px;
+  background: linear-gradient(135deg, #fff, var(--surface));
+}
+
+.qrFrame {
+  width: 200px;
+  height: 200px;
+  padding: 14px;
+  border-radius: 20px;
+  background: #fff;
+  border: 1px solid var(--line);
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+}
+
+.qrFrame img {
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+
+.shareCopy h2 {
+  color: var(--navy);
+  font-size: clamp(26px, 4vw, 36px);
+  margin: 12px 0;
+  line-height: 1.4;
+}
+
+.shareCopy > p {
+  color: var(--muted);
+  line-height: 1.85;
+  margin: 0;
+  font-size: 16px;
+  max-width: 520px;
+}
+
+.shareActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-top: 22px;
+}
+
+.textButton {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 12px 8px;
+  color: var(--indigo);
+  font-weight: 800;
+  font-size: 14px;
+}
+
 .audienceCard {
   background: linear-gradient(180deg, #fff, var(--surface));
 }
@@ -849,6 +968,8 @@ summary:focus-visible {
   #content,
   #how,
   #features,
+  #faq,
+  #share,
   #download {
     scroll-margin-top: 76px;
   }
@@ -911,6 +1032,16 @@ summary:focus-visible {
     justify-content: center;
   }
   .ctaInner > a { width: 100%; }
+
+  .sharePanel {
+    grid-template-columns: 1fr;
+    text-align: center;
+    padding: 28px 22px;
+  }
+
+  .qrFrame { margin-inline: auto; }
+  .shareCopy > p { margin-inline: auto; }
+  .shareActions { justify-content: center; }
 }
 
 @media (max-width: 600px) {
@@ -927,7 +1058,9 @@ summary:focus-visible {
   .trustContent i { display: none; }
   .steps,
   .features,
-  .audience { padding-block: 56px 12px; }
+  .audience,
+  .faq { padding-block: 56px 12px; }
+  .share { padding-block: 12px 56px; }
   .stepGrid,
   .featureGrid,
   .audienceGrid { grid-template-columns: 1fr; margin-top: 28px; }

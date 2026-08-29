@@ -6,6 +6,7 @@ import { useEffect, useId, useState } from 'react';
 const links = [
   { href: '#how', label: 'كيف يعمل' },
   { href: '#features', label: 'المميزات' },
+  { href: '#faq', label: 'أسئلة شائعة' },
   { href: '#download', label: 'تحميل التطبيق' },
 ];
 
