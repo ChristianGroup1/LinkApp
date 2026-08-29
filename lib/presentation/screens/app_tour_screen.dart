@@ -120,7 +120,7 @@ class _AppTourScreenState extends State<AppTourScreen> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: const Color(0xFFF8FAFC),
+        backgroundColor: AppTheme.background,
         body: SafeArea(
           child: Column(
             children: [
@@ -140,7 +140,7 @@ class _AppTourScreenState extends State<AppTourScreen> {
                         child: Text(
                           'تخطي',
                           style: GoogleFonts.cairo(
-                            color: const Color(0xFF64748B),
+                            color: AppTheme.textLight,
                             fontWeight: FontWeight.w700,
                             fontSize: 14,
                           ),
@@ -213,7 +213,7 @@ class _AppTourScreenState extends State<AppTourScreen> {
                                   style: GoogleFonts.cairo(
                                     fontSize: 20,
                                     fontWeight: FontWeight.w900,
-                                    color: const Color(0xFF0F172A),
+                                    color: AppTheme.textDark,
                                   ),
                                 ),
                                 const SizedBox(height: 12),
@@ -223,7 +223,7 @@ class _AppTourScreenState extends State<AppTourScreen> {
                                   style: GoogleFonts.cairo(
                                     fontSize: 14,
                                     height: 1.6,
-                                    color: const Color(0xFF64748B),
+                                    color: AppTheme.textLight,
                                     fontWeight: FontWeight.w500,
                                   ),
                                 ),
@@ -254,8 +254,8 @@ class _AppTourScreenState extends State<AppTourScreen> {
                           width: _currentPage == index ? 28 : 8,
                           decoration: BoxDecoration(
                             color: _currentPage == index
-                                ? const Color(0xFF2563EB)
-                                : const Color(0xFFCBD5E1),
+                                ? AppTheme.primaryAccent
+                                : AppTheme.border,
                             borderRadius: BorderRadius.circular(4),
                           ),
                         ),

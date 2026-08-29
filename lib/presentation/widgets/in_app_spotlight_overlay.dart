@@ -250,12 +250,12 @@ class _InAppSpotlightOverlayState extends State<InAppSpotlightOverlay> {
                         Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFEFF6FF),
+                            color: AppTheme.primaryLight,
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Icon(
                             step.icon,
-                            color: const Color(0xFF2563EB),
+                            color: AppTheme.primaryAccent,
                             size: 24,
                           ),
                         ),
@@ -270,14 +270,14 @@ class _InAppSpotlightOverlayState extends State<InAppSpotlightOverlay> {
                                 style: GoogleFonts.cairo(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w900,
-                                  color: const Color(0xFF0F172A),
+                                  color: AppTheme.textDark,
                                 ),
                               ),
                               Text(
                                 'خطوة ${widget.currentStep + 1} من ${widget.steps.length}',
                                 style: GoogleFonts.cairo(
                                   fontSize: 11,
-                                  color: const Color(0xFF2563EB),
+                                  color: AppTheme.primaryAccent,
                                   fontWeight: FontWeight.w800,
                                 ),
                               ),
@@ -292,7 +292,7 @@ class _InAppSpotlightOverlayState extends State<InAppSpotlightOverlay> {
                       style: GoogleFonts.cairo(
                         fontSize: 13,
                         height: 1.6,
-                        color: const Color(0xFF475569),
+                        color: AppTheme.textLight,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -306,7 +306,7 @@ class _InAppSpotlightOverlayState extends State<InAppSpotlightOverlay> {
                           child: Text(
                             'تخطي الجولة',
                             style: GoogleFonts.cairo(
-                              color: const Color(0xFF94A3B8),
+                              color: AppTheme.textLight,
                               fontWeight: FontWeight.w700,
                               fontSize: 12,
                             ),
@@ -320,10 +320,8 @@ class _InAppSpotlightOverlayState extends State<InAppSpotlightOverlay> {
                               OutlinedButton(
                                 onPressed: _prevStep,
                                 style: OutlinedButton.styleFrom(
-                                  foregroundColor: const Color(0xFF64748B),
-                                  side: const BorderSide(
-                                    color: Color(0xFFCBD5E1),
-                                  ),
+                                  foregroundColor: AppTheme.textLight,
+                                  side: BorderSide(color: AppTheme.border),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(20),
                                   ),
@@ -354,7 +352,7 @@ class _InAppSpotlightOverlayState extends State<InAppSpotlightOverlay> {
                                 ),
                               ),
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF2563EB),
+                                backgroundColor: AppTheme.primaryAccent,
                                 foregroundColor: Colors.white,
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(20),

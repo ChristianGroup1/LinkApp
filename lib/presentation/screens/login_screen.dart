@@ -189,7 +189,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         style: GoogleFonts.cairo(
                           fontSize: 24,
                           fontWeight: FontWeight.w900,
-                          color: const Color(0xFF0F172A),
+                          color: AppTheme.textDark,
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -197,7 +197,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         'أدخل البريد الإلكتروني وكلمة المرور للبدء',
                         textAlign: TextAlign.center,
                         style: GoogleFonts.cairo(
-                          color: const Color(0xFF64748B),
+                          color: AppTheme.textLight,
                           fontSize: 12,
                           fontWeight: FontWeight.w500,
                         ),
@@ -238,7 +238,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             child: Text(
                               'نسيت كلمة المرور؟',
                               style: GoogleFonts.cairo(
-                                color: const Color(0xFF2563EB),
+                                color: AppTheme.primaryAccent,
                                 fontWeight: FontWeight.w700,
                                 fontSize: 12,
                               ),
@@ -259,7 +259,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             obscure
                                 ? Icons.visibility_outlined
                                 : Icons.visibility_off_outlined,
-                            color: const Color(0xFF94A3B8),
+                            color: AppTheme.textLight,
                             size: 20,
                           ),
                         ),
@@ -278,7 +278,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   : (value) => setState(
                                       () => remember = value ?? false,
                                     ),
-                              activeColor: const Color(0xFF2563EB),
+                              activeColor: AppTheme.primaryAccent,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(6),
                               ),
@@ -292,7 +292,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             child: Text(
                               'تذكرني',
                               style: GoogleFonts.cairo(
-                                color: const Color(0xFF475569),
+                                color: AppTheme.textLight,
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -305,15 +305,15 @@ class _LoginScreenState extends State<LoginScreen> {
                       FilledButton(
                         onPressed: isLoading ? null : _submitLogin,
                         style: FilledButton.styleFrom(
-                          backgroundColor: const Color(0xFF2563EB),
+                          backgroundColor: AppTheme.primaryAccent,
                           minimumSize: const Size.fromHeight(52),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(26),
                           ),
                           elevation: 4,
-                          shadowColor: const Color(
-                            0xFF2563EB,
-                          ).withValues(alpha: 0.35),
+                          shadowColor: AppTheme.primaryAccent.withValues(
+                            alpha: 0.35,
+                          ),
                         ),
                         child: isLoading
                             ? const SizedBox(
@@ -334,7 +334,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                       ),
                       const SizedBox(height: 24),
-                      const Divider(color: Color(0xFFF1F5F9), height: 1),
+                      Divider(color: AppTheme.border, height: 1),
                       const SizedBox(height: 20),
                       // Registration Link Prompt inside card
                       Row(
@@ -344,7 +344,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           Text(
                             'ليس لديك حساب؟ ',
                             style: GoogleFonts.cairo(
-                              color: const Color(0xFF64748B),
+                              color: AppTheme.textLight,
                               fontSize: 13,
                             ),
                           ),
@@ -362,7 +362,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             child: Text(
                               'إنشاء حساب',
                               style: GoogleFonts.cairo(
-                                color: const Color(0xFF2563EB),
+                                color: AppTheme.primaryAccent,
                                 fontWeight: FontWeight.w900,
                                 fontSize: 13,
                               ),
@@ -378,7 +378,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   'LinkApp © 2026 جميع الحقوق محفوظة',
                   textAlign: TextAlign.center,
                   style: GoogleFonts.cairo(
-                    color: const Color(0xFF94A3B8),
+                    color: AppTheme.textLight,
                     fontSize: 11,
                     fontWeight: FontWeight.w500,
                   ),

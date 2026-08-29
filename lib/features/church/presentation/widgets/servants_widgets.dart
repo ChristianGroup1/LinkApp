@@ -484,12 +484,12 @@ class ServantPermissionCard extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
-        color: servant.isActive ? Colors.white : AppTheme.surfaceMuted,
+        color: servant.isActive ? AppTheme.cardBackground : AppTheme.surfaceMuted,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: AppTheme.border.withValues(alpha: 0.8)),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0F172A).withValues(alpha: 0.04),
+            color: AppTheme.textDark.withValues(alpha: 0.04),
             blurRadius: 18,
             offset: const Offset(0, 6),
           ),
@@ -1064,7 +1064,7 @@ class ServantsScopeOptionCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(9),
                 decoration: BoxDecoration(
-                  color: selected ? AppTheme.primaryLight : Colors.white,
+                  color: selected ? AppTheme.primaryLight : AppTheme.cardBackground,
                   borderRadius: BorderRadius.circular(11),
                 ),
                 child: Icon(

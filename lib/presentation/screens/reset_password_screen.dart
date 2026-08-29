@@ -121,7 +121,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                         'تعيين كلمة مرور جديدة',
                         textAlign: TextAlign.center,
                         style: GoogleFonts.cairo(
-                          color: const Color(0xFF0F172A),
+                          color: AppTheme.textDark,
                           fontSize: 20,
                           fontWeight: FontWeight.w900,
                         ),
@@ -131,7 +131,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                         'أدخل كلمة المرور الجديدة لحسابك لتأكيد التغيير',
                         textAlign: TextAlign.center,
                         style: GoogleFonts.cairo(
-                          color: const Color(0xFF64748B),
+                          color: AppTheme.textLight,
                           fontSize: 12,
                           fontWeight: FontWeight.w500,
                         ),
@@ -152,7 +152,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                             _obscurePassword
                                 ? Icons.visibility_outlined
                                 : Icons.visibility_off_outlined,
-                            color: const Color(0xFF94A3B8),
+                            color: AppTheme.textLight,
                             size: 20,
                           ),
                         ),
@@ -173,15 +173,15 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                         child: ElevatedButton(
                           onPressed: isLoading ? null : _submit,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF2563EB),
+                            backgroundColor: AppTheme.primaryAccent,
                             foregroundColor: Colors.white,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(26),
                             ),
                             elevation: 4,
-                            shadowColor: const Color(
-                              0xFF2563EB,
-                            ).withValues(alpha: 0.35),
+                            shadowColor: AppTheme.primaryAccent.withValues(
+                              alpha: 0.35,
+                            ),
                           ),
                           child: isLoading
                               ? const SizedBox(

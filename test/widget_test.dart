@@ -797,7 +797,7 @@ void main() {
     await tester.tap(deleteAccount);
     await _settle(tester);
 
-    expect(find.textContaining('إذا كنت آخر مدير نشط'), findsOneWidget);
+    expect(find.textContaining('لا تحتاج تعيّن مدير تاني'), findsOneWidget);
     final destructiveButton = find.widgetWithText(
       FilledButton,
       'حذف نهائي لكل البيانات',

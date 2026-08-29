@@ -215,7 +215,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                         style: GoogleFonts.cairo(
                           fontSize: 24,
                           fontWeight: FontWeight.w900,
-                          color: const Color(0xFF0F172A),
+                          color: AppTheme.textDark,
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -225,7 +225,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                             : 'أدخل بياناتك لإنشاء حساب خادم جديد',
                         textAlign: TextAlign.center,
                         style: GoogleFonts.cairo(
-                          color: const Color(0xFF64748B),
+                          color: AppTheme.textLight,
                           fontSize: 12,
                           fontWeight: FontWeight.w500,
                         ),
@@ -287,7 +287,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                             _obscurePassword
                                 ? Icons.visibility_outlined
                                 : Icons.visibility_off_outlined,
-                            color: const Color(0xFF94A3B8),
+                            color: AppTheme.textLight,
                             size: 20,
                           ),
                         ),
@@ -331,7 +331,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                                   : (value) => setState(
                                       () => _acceptedTerms = value ?? false,
                                     ),
-                              activeColor: const Color(0xFF2563EB),
+                              activeColor: AppTheme.primaryAccent,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(6),
                               ),
@@ -352,7 +352,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                                     TextSpan(
                                       text: 'شروط الخدمة وسياسة الخصوصية',
                                       style: GoogleFonts.cairo(
-                                        color: const Color(0xFF2563EB),
+                                        color: AppTheme.primaryAccent,
                                         fontWeight: FontWeight.w800,
                                       ),
                                     ),
@@ -362,7 +362,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                                 textAlign: TextAlign.right,
                                 style: GoogleFonts.cairo(
                                   fontSize: 12,
-                                  color: const Color(0xFF475569),
+                                  color: AppTheme.textLight,
                                 ),
                               ),
                             ),
@@ -374,15 +374,15 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                       FilledButton(
                         onPressed: isLoading ? null : _submit,
                         style: FilledButton.styleFrom(
-                          backgroundColor: const Color(0xFF2563EB),
+                          backgroundColor: AppTheme.primaryAccent,
                           minimumSize: const Size.fromHeight(52),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(26),
                           ),
                           elevation: 4,
-                          shadowColor: const Color(
-                            0xFF2563EB,
-                          ).withValues(alpha: 0.35),
+                          shadowColor: AppTheme.primaryAccent.withValues(
+                            alpha: 0.35,
+                          ),
                         ),
                         child: isLoading
                             ? const SizedBox(
@@ -405,7 +405,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                               ),
                       ),
                       const SizedBox(height: 24),
-                      const Divider(color: Color(0xFFF1F5F9), height: 1),
+                      Divider(color: AppTheme.border, height: 1),
                       const SizedBox(height: 20),
                       // Already Have Account Prompt
                       Row(
@@ -415,7 +415,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                           Text(
                             'لديك حساب بالفعل؟ ',
                             style: GoogleFonts.cairo(
-                              color: const Color(0xFF64748B),
+                              color: AppTheme.textLight,
                               fontSize: 13,
                             ),
                           ),
@@ -441,7 +441,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                             child: Text(
                               'تسجيل الدخول',
                               style: GoogleFonts.cairo(
-                                color: const Color(0xFF2563EB),
+                                color: AppTheme.primaryAccent,
                                 fontWeight: FontWeight.w900,
                                 fontSize: 13,
                               ),
@@ -457,7 +457,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                   'LinkApp © 2026 جميع الحقوق محفوظة',
                   textAlign: TextAlign.center,
                   style: GoogleFonts.cairo(
-                    color: const Color(0xFF94A3B8),
+                    color: AppTheme.textLight,
                     fontSize: 11,
                     fontWeight: FontWeight.w500,
                   ),

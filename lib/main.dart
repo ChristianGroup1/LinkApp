@@ -156,14 +156,16 @@ class SupabaseConfigurationErrorApp extends StatelessWidget {
     return AnimatedBuilder(
       animation: ThemeController.instance,
       builder: (context, _) {
+        final themeMode = ThemeController.instance.themeMode;
         AppTheme.setBrightness(ThemeController.instance.resolvedBrightness);
         return MaterialApp(
+          key: ValueKey(themeMode),
           title: 'Link Church Management',
           debugShowCheckedModeBanner: false,
           theme: AppTheme.platformTheme,
           darkTheme: AppTheme.platformDarkTheme,
-          themeMode: ThemeController.instance.themeMode,
-          builder: _compactTextBuilder,
+          themeMode: themeMode,
+          builder: _appBuilder,
           home: Directionality(
             textDirection: TextDirection.rtl,
             child: Scaffold(
@@ -199,15 +201,17 @@ class MyApp extends StatelessWidget {
     return AnimatedBuilder(
       animation: ThemeController.instance,
       builder: (context, _) {
+        final themeMode = ThemeController.instance.themeMode;
         AppTheme.setBrightness(ThemeController.instance.resolvedBrightness);
         return MaterialApp(
+          key: ValueKey(themeMode),
           navigatorKey: navigatorKey,
           navigatorObservers: [appRouteObserver, _sentryNavigatorObserver],
           title: 'Link Church Management',
           debugShowCheckedModeBanner: false,
           theme: AppTheme.platformTheme,
           darkTheme: AppTheme.platformDarkTheme,
-          themeMode: ThemeController.instance.themeMode,
+          themeMode: themeMode,
           localizationsDelegates: const [
             GlobalMaterialLocalizations.delegate,
             GlobalWidgetsLocalizations.delegate,
@@ -215,7 +219,7 @@ class MyApp extends StatelessWidget {
           ],
           supportedLocales: const [Locale('ar', 'EG')],
           locale: const Locale('ar', 'EG'),
-          builder: _compactTextBuilder,
+          builder: _appBuilder,
           home: OfflineSyncListener(
             child: InvitationDeepLinkListener(
               child: AuthRecoveryListener(
@@ -237,6 +241,11 @@ class MyApp extends StatelessWidget {
       },
     );
   }
+}
+
+Widget _appBuilder(BuildContext context, Widget? child) {
+  AppTheme.setBrightness(Theme.of(context).brightness);
+  return _compactTextBuilder(context, child);
 }
 
 Widget _compactTextBuilder(BuildContext context, Widget? child) {

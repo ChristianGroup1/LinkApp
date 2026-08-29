@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/theme/theme_controller.dart';
 
 const String kLogoAsset = 'assets/images/link_logo.png';
 
@@ -13,64 +14,225 @@ class AuthShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final desktop = AppTheme.isNativeDesktop;
-    return Scaffold(
-      body: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topRight,
-                end: Alignment.bottomLeft,
-                colors: [
-                  Color(0xFFF7F7FF),
-                  Color(0xFFEEF2FF),
-                  Color(0xFFF8FAFC),
-                ],
-              ),
-            ),
-          ),
-          Positioned(
-            top: compact ? -60 : -40,
-            right: compact ? -40 : -60,
-            child: AuthGlow(
-              size: compact ? 220 : 280,
-              color: const Color(0xFF8DBDFF).withValues(alpha: 0.3),
-            ),
-          ),
-          Positioned(
-            bottom: compact ? -60 : -50,
-            left: compact ? -50 : -60,
-            child: AuthGlow(
-              size: compact ? 240 : 300,
-              color: AppTheme.primary.withValues(alpha: 0.22),
-            ),
-          ),
-          SafeArea(
-            child: SingleChildScrollView(
-              padding: EdgeInsets.fromLTRB(
-                desktop ? 48 : 22,
-                desktop ? 32 : 12,
-                desktop ? 48 : 22,
-                desktop ? 48 : 28,
-              ),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxWidth: desktop ? 640 : double.infinity,
-                    minHeight: compact
-                        ? 0
-                        : MediaQuery.of(context).size.height -
-                              MediaQuery.of(context).padding.vertical -
-                              (desktop ? 80 : 24),
+    return AnimatedBuilder(
+      animation: ThemeController.instance,
+      builder: (context, _) {
+        final isDark = AppTheme.isDark;
+        return Scaffold(
+          body: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topRight,
+                    end: Alignment.bottomLeft,
+                    colors: isDark
+                        ? const [
+                            Color(0xFF0B1120),
+                            Color(0xFF111827),
+                            Color(0xFF080D19),
+                          ]
+                        : const [
+                            Color(0xFFF7F7FF),
+                            Color(0xFFEEF2FF),
+                            Color(0xFFF8FAFC),
+                          ],
                   ),
-                  child: child,
+                ),
+              ),
+              Positioned(
+                top: compact ? -60 : -40,
+                right: compact ? -40 : -60,
+                child: AuthGlow(
+                  size: compact ? 220 : 280,
+                  color: (isDark ? AppTheme.primaryAccent : const Color(0xFF8DBDFF))
+                      .withValues(alpha: isDark ? 0.18 : 0.3),
+                ),
+              ),
+              Positioned(
+                bottom: compact ? -60 : -50,
+                left: compact ? -50 : -60,
+                child: AuthGlow(
+                  size: compact ? 240 : 300,
+                  color: AppTheme.primary.withValues(alpha: isDark ? 0.14 : 0.22),
+                ),
+              ),
+              SafeArea(
+                child: Stack(
+                  children: [
+                    SingleChildScrollView(
+                      padding: EdgeInsets.fromLTRB(
+                        desktop ? 48 : 22,
+                        desktop ? 32 : 12,
+                        desktop ? 48 : 22,
+                        desktop ? 48 : 28,
+                      ),
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxWidth: desktop ? 640 : double.infinity,
+                            minHeight: compact
+                                ? 0
+                                : MediaQuery.of(context).size.height -
+                                      MediaQuery.of(context).padding.vertical -
+                                      (desktop ? 80 : 24),
+                          ),
+                          child: child,
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      top: desktop ? 8 : 4,
+                      left: desktop ? 8 : 0,
+                      child: const AuthThemeToggle(),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// تبديل سريع بين الوضع الفاتح والداكن على شاشات الدخول.
+class AuthThemeToggle extends StatelessWidget {
+  const AuthThemeToggle({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: ThemeController.instance,
+      builder: (context, _) {
+        final isDark =
+            ThemeController.instance.resolvedBrightness == Brightness.dark;
+        return Material(
+          color: AppTheme.cardBackground,
+          elevation: 0,
+          shadowColor: Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+            side: BorderSide(color: AppTheme.border),
+          ),
+          child: InkWell(
+            onTap: () {
+              ThemeController.instance.setPreference(
+                isDark ? AppThemePreference.light : AppThemePreference.dark,
+              );
+            },
+            borderRadius: BorderRadius.circular(14),
+            child: Tooltip(
+              message: isDark ? 'الوضع الفاتح' : 'الوضع الداكن',
+              child: Padding(
+                padding: const EdgeInsets.all(10),
+                child: Icon(
+                  isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+                  color: AppTheme.primaryAccent,
+                  size: 22,
                 ),
               ),
             ),
           ),
+        );
+      },
+    );
+  }
+}
+
+class AuthFormCard extends StatelessWidget {
+  final List<Widget> children;
+  final EdgeInsetsGeometry padding;
+
+  const AuthFormCard({
+    super.key,
+    required this.children,
+    this.padding = const EdgeInsets.all(24),
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        color: AppTheme.cardBackground,
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: AppTheme.border.withValues(alpha: 0.55)),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.textDark.withValues(
+              alpha: AppTheme.isDark ? 0.28 : 0.06,
+            ),
+            blurRadius: 30,
+            offset: const Offset(0, 12),
+          ),
         ],
       ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        textDirection: TextDirection.rtl,
+        children: children,
+      ),
+    );
+  }
+}
+
+class AuthScreenHeader extends StatelessWidget {
+  final double logoSize;
+
+  const AuthScreenHeader({super.key, this.logoSize = 130});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        AuthLogoMark(size: logoSize),
+        SizedBox(height: logoSize >= 100 ? 14 : 12),
+      ],
+    );
+  }
+}
+
+class AuthScreenTitle extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final double titleSize;
+
+  const AuthScreenTitle({
+    super.key,
+    required this.title,
+    required this.subtitle,
+    this.titleSize = 20,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text(
+          title,
+          textAlign: TextAlign.center,
+          style: GoogleFonts.cairo(
+            fontSize: titleSize,
+            fontWeight: FontWeight.w900,
+            color: AppTheme.textDark,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          subtitle,
+          textAlign: TextAlign.center,
+          style: GoogleFonts.cairo(
+            color: AppTheme.textLight,
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            height: 1.5,
+          ),
+        ),
+        const SizedBox(height: 24),
+      ],
     );
   }
 }
@@ -100,7 +262,7 @@ class AuthBackButton extends StatelessWidget {
             padding: EdgeInsets.all(10),
             child: Icon(
               Icons.arrow_back_rounded,
-              color: AppTheme.primary,
+              color: AppTheme.primaryAccent,
               size: 24,
             ),
           ),
@@ -251,8 +413,6 @@ class AuthSoftTextField extends StatefulWidget {
 class _AuthSoftTextFieldState extends State<AuthSoftTextField> {
   bool _focused = false;
 
-  static const _fieldBg = Color(0xFFF8FAFC);
-  static const _fieldBorder = Color(0xFFE2E8F0);
   static final _borderRadius = BorderRadius.circular(16);
 
   InputBorder _outlineBorder(Color color, double width) {
@@ -268,7 +428,9 @@ class _AuthSoftTextFieldState extends State<AuthSoftTextField> {
         ? TextDirection.ltr
         : TextDirection.rtl;
     const fieldAlign = TextAlign.right;
-    final borderColor = _focused ? AppTheme.primary : _fieldBorder;
+    final fieldBg = AppTheme.surfaceMuted;
+    final fieldBorder = AppTheme.border;
+    final borderColor = _focused ? AppTheme.primaryAccent : fieldBorder;
     final borderWidth = _focused ? 1.5 : 1.0;
     final outline = _outlineBorder(borderColor, borderWidth);
 
@@ -309,16 +471,16 @@ class _AuthSoftTextFieldState extends State<AuthSoftTextField> {
               hintTextDirection: fieldDirection,
               alignLabelWithHint: true,
               hintStyle: GoogleFonts.cairo(
-                color: const Color(0xFF94A3B8),
+                color: AppTheme.textLight,
                 fontSize: 13,
                 fontWeight: FontWeight.w500,
                 height: 1.35,
               ),
               filled: true,
-              fillColor: _fieldBg,
+              fillColor: fieldBg,
               prefixIcon: Icon(
                 widget.icon,
-                color: _focused ? AppTheme.primary : AppTheme.textLight,
+                color: _focused ? AppTheme.primaryAccent : AppTheme.textLight,
                 size: 21,
               ),
               suffixIcon: widget.trailing,
@@ -456,7 +618,7 @@ class AuthModeToggle extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(5),
       decoration: BoxDecoration(
-        color: const Color(0xFFEEF2FF),
+        color: AppTheme.primaryLight,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppTheme.border.withValues(alpha: 0.7)),
       ),
@@ -505,7 +667,7 @@ class RegisterModeButton extends StatelessWidget {
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
         decoration: BoxDecoration(
-          color: selected ? Colors.white : Colors.transparent,
+          color: selected ? AppTheme.cardBackground : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
           border: selected
               ? Border.all(color: AppTheme.primary.withValues(alpha: 0.15))

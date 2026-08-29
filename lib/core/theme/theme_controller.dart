@@ -44,6 +44,7 @@ class ThemeController extends ChangeNotifier with WidgetsBindingObserver {
     _preference = AppThemePreference.fromStoredValue(
       preferences.getString(_preferenceKey),
     );
+    notifyListeners();
   }
 
   Future<void> setPreference(AppThemePreference preference) async {

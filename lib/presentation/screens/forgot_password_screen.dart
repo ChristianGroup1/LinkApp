@@ -9,6 +9,7 @@ class ForgotPasswordScreen extends StatefulWidget {
 
 class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   final _emailController = TextEditingController();
+  bool _emailSent = false;
 
   @override
   void dispose() {
@@ -42,13 +43,14 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         child: BlocConsumer<AuthBloc, AuthState>(
           listener: (context, state) {
             if (state is AuthPasswordResetEmailSent) {
+              setState(() => _emailSent = true);
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(
                     'تم إرسال رابط إعادة التعيين بنجاح إلى بريدك الإلكتروني 📩',
                     style: GoogleFonts.cairo(),
                   ),
-                  backgroundColor: Colors.green,
+                  backgroundColor: AppTheme.secondary,
                 ),
               );
             } else if (state is AuthPasswordResetError) {
@@ -71,50 +73,55 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   onPressed: isLoading ? null : () => Navigator.pop(context),
                 ),
                 const SizedBox(height: 12),
-                // Top App Logo Header
-                const Column(
-                  children: [AuthLogoMark(size: 130), SizedBox(height: 14)],
-                ),
+                const AuthScreenHeader(),
                 const SizedBox(height: 24),
-                // Main Floating White Card
-                Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: AppTheme.cardBackground,
-                    borderRadius: BorderRadius.circular(28),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.04),
-                        blurRadius: 24,
-                        offset: const Offset(0, 8),
+                AuthFormCard(
+                  children: [
+                    if (_emailSent) ...[
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: AppTheme.secondaryLight,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: AppTheme.secondary.withValues(alpha: 0.25),
+                          ),
+                        ),
+                        child: Row(
+                          textDirection: TextDirection.rtl,
+                          children: [
+                            const Icon(
+                              Icons.mark_email_read_outlined,
+                              color: AppTheme.secondary,
+                              size: 22,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                'تحقق من بريدك الإلكتروني وافتح الرابط لإكمال تعيين كلمة المرور.',
+                                style: GoogleFonts.cairo(
+                                  color: AppTheme.textDark,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  height: 1.5,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
+                      const SizedBox(height: 20),
                     ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    textDirection: TextDirection.rtl,
-                    children: [
-                      Text(
-                        'إعادة تعيين كلمة المرور',
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.cairo(
-                          color: const Color(0xFF0F172A),
-                          fontSize: 20,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'أدخل بريدك الإلكتروني وسنرسل لك رابطاً لإعادة تعيين كلمة المرور',
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.cairo(
-                          color: const Color(0xFF64748B),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      // Email Soft Grey Input
+                    AuthScreenTitle(
+                      title: _emailSent
+                          ? 'تم إرسال الرابط'
+                          : 'إعادة تعيين كلمة المرور',
+                      subtitle: _emailSent
+                          ? 'إذا لم يصلك البريد خلال دقائق، تحقق من مجلد الرسائل غير المرغوب فيها.'
+                          : 'أدخل بريدك الإلكتروني وسنرسل لك رابطاً لإعادة تعيين كلمة المرور',
+                      titleSize: 20,
+                    ),
+                    if (!_emailSent) ...[
                       const AuthFieldLabel('البريد الإلكتروني'),
                       AuthSoftTextField(
                         controller: _emailController,
@@ -124,21 +131,20 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                         keyboardType: TextInputType.emailAddress,
                       ),
                       const SizedBox(height: 28),
-                      // Submit Pill Button
                       SizedBox(
                         height: 52,
                         child: ElevatedButton(
                           onPressed: isLoading ? null : _submit,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF2563EB),
+                            backgroundColor: AppTheme.primaryAccent,
                             foregroundColor: Colors.white,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(26),
                             ),
                             elevation: 4,
-                            shadowColor: const Color(
-                              0xFF2563EB,
-                            ).withValues(alpha: 0.35),
+                            shadowColor: AppTheme.primaryAccent.withValues(
+                              alpha: 0.35,
+                            ),
                           ),
                           child: isLoading
                               ? const SizedBox(
@@ -159,8 +165,49 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                                 ),
                         ),
                       ),
+                    ] else ...[
+                      SizedBox(
+                        height: 52,
+                        child: OutlinedButton(
+                          onPressed: isLoading
+                              ? null
+                              : () => setState(() => _emailSent = false),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppTheme.primaryAccent,
+                            side: BorderSide(
+                              color: AppTheme.primaryAccent.withValues(
+                                alpha: 0.45,
+                              ),
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(26),
+                            ),
+                          ),
+                          child: Text(
+                            'إرسال رابط جديد',
+                            style: GoogleFonts.cairo(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextButton(
+                        onPressed: isLoading
+                            ? null
+                            : () => Navigator.pop(context),
+                        child: Text(
+                          'العودة لتسجيل الدخول',
+                          style: GoogleFonts.cairo(
+                            color: AppTheme.textLight,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
                     ],
-                  ),
+                  ],
                 ),
               ],
             );

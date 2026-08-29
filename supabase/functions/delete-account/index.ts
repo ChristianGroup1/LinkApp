@@ -13,6 +13,16 @@ function json(body: Record<string, unknown>, status = 200) {
   })
 }
 
+function churchDeletionErrorMessage(message: string) {
+  if (message.includes('another_active_admin_exists')) {
+    return 'في مدير نشط تاني في الخدمة. الحذف من التطبيق هيمسح حسابك بس. لو عايز تمسح كل بيانات الخدمة، علّق المدير التاني من الخدام والصلاحيات ثم حاول مرة أخرى.'
+  }
+  if (message.includes('requester_is_not_active_admin')) {
+    return 'حسابك موقوف أو ليس لديك صلاحية مدير نشطة لحذف الخدمة.'
+  }
+  return 'تعذر حذف الكنيسة وبياناتها. حاول مرة أخرى أو تواصل مع الدعم.'
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -45,7 +55,7 @@ Deno.serve(async (req) => {
 
     const { data: profile, error: profileError } = await adminClient
       .from('profiles')
-      .select('church_id, role')
+      .select('church_id, role, is_active')
       .eq('id', user.id)
       .maybeSingle()
 
@@ -59,6 +69,7 @@ Deno.serve(async (req) => {
 
     if (
       profile?.church_id &&
+      profile.is_active &&
       (profile.role === 'church_admin' || profile.role === 'super_admin')
     ) {
       const { count, error: adminsError } = await adminClient
@@ -90,8 +101,7 @@ Deno.serve(async (req) => {
           })
           return json(
             {
-              error:
-                'تعذر حذف الكنيسة وبياناتها. تأكد من تشغيل تحديث قاعدة البيانات الخاص بحذف آخر مدير.',
+              error: churchDeletionErrorMessage(churchDeletionError.message),
               code: 'church_delete_failed',
             },
             409,
