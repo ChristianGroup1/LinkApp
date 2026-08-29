@@ -3,9 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import 'connectivity_service.dart';
-import '../repositories/database_repository.dart';
 import '../../logic/auth/auth_bloc.dart';
+import '../repositories/database_repository.dart';
+import 'connectivity_service.dart';
 
 class OfflineSyncListener extends StatefulWidget {
   final Widget child;

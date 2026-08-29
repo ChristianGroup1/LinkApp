@@ -2,17 +2,18 @@ import 'dart:async';
 
 import 'package:app_links/app_links.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
 
 import 'core/analytics/app_analytics_service.dart';
 import 'core/auth/password_recovery_link.dart';
-import 'core/navigation/app_route_observer.dart';
 import 'core/invitations/invitation_deep_link_listener.dart';
+import 'core/navigation/app_route_observer.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_controller.dart';
 import 'data/offline/connectivity_service.dart';
@@ -51,6 +52,12 @@ void main() async {
 }
 
 Future<void> _startApp() async {
+  AppTheme.configureBundledFonts();
+  LicenseRegistry.addLicense(() async* {
+    final license = await rootBundle.loadString('assets/fonts/OFL-Cairo.txt');
+    yield LicenseEntryWithLineBreaks(const ['google_fonts', 'Cairo'], license);
+  });
+
   // 1) Compile-time defines (production CI / explicit --dart-define-from-file)
   // 2) Bundled .env asset (local dev — works without IDE flags)
   await dotenv.load(fileName: '.env', isOptional: true);

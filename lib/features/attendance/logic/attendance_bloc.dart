@@ -246,7 +246,7 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
     on<LoadAttendanceSheet>((event, emit) async {
       emit(AttendanceLoading());
       try {
-        _recordsSubscription?.cancel();
+        unawaited(_recordsSubscription?.cancel());
 
         List<MemberEntity> members;
         if (event.session.classId != null) {
@@ -262,7 +262,7 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
         final Map<String, AttendanceStatus> statusMap = {};
 
         if (records.isNotEmpty) {
-          for (var m in members) {
+          for (final m in members) {
             final record = records.where((r) => r.memberId == m.id).firstOrNull;
             statusMap[m.id] = record?.status ?? AttendanceStatus.absent;
           }
@@ -282,14 +282,14 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
             final prevRecords = await repository.getAttendanceRecords(
               prevSession.id,
             );
-            for (var m in members) {
+            for (final m in members) {
               final prevRecord = prevRecords
                   .where((r) => r.memberId == m.id)
                   .firstOrNull;
               statusMap[m.id] = prevRecord?.status ?? AttendanceStatus.absent;
             }
           } else {
-            for (var m in members) {
+            for (final m in members) {
               statusMap[m.id] = AttendanceStatus.absent;
             }
           }
@@ -325,7 +325,7 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
         final newMap = Map<String, AttendanceStatus>.from(
           currentState.statusMap,
         );
-        for (var record in event.records) {
+        for (final record in event.records) {
           newMap[record.memberId] = record.status;
         }
         final updated = currentState.copyWith(statusMap: newMap);
@@ -417,7 +417,7 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
         final newMap = Map<String, AttendanceStatus>.from(
           currentState.statusMap,
         );
-        for (var m in currentState.filteredMembers) {
+        for (final m in currentState.filteredMembers) {
           newMap[m.id] = event.status;
         }
 
@@ -557,7 +557,7 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
 
   @override
   Future<void> close() {
-    _recordsSubscription?.cancel();
+    unawaited(_recordsSubscription?.cancel());
     return super.close();
   }
 }

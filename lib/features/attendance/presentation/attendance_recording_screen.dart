@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart' as intl;
-import '../../../core/theme/app_theme.dart';
-import '../../../core/attendance/qr_attendance_scan_result.dart';
+
 import '../../../core/attendance/qr_attendance_platform.dart';
+import '../../../core/attendance/qr_attendance_scan_result.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../data/models/models.dart';
 import '../../../data/offline/offline_save_result.dart';
 import '../../../data/repositories/database_repository.dart';
@@ -527,7 +528,7 @@ class _AttendanceRecordingScreenState extends State<AttendanceRecordingScreen> {
               children: [
                 Text(
                   dayLabel,
-                  style: GoogleFonts.outfit(
+                  style: GoogleFonts.cairo(
                     fontSize: 22,
                     fontWeight: FontWeight.w900,
                     color: AppTheme.primary,
@@ -672,7 +673,7 @@ class _AttendanceRecordingScreenState extends State<AttendanceRecordingScreen> {
                             if (member.code != null)
                               Text(
                                 'كود: ${member.code}',
-                                style: GoogleFonts.outfit(
+                                style: GoogleFonts.cairo(
                                   fontSize: 11,
                                   color: AppTheme.textLight,
                                 ),

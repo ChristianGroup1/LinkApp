@@ -557,7 +557,7 @@ void showInviteHelperDialog(
                               const SizedBox(height: 12),
                               Text(
                                 generatedCode!,
-                                style: GoogleFonts.outfit(
+                                style: GoogleFonts.cairo(
                                   fontSize: 26,
                                   fontWeight: FontWeight.w900,
                                   color: AppTheme.textDark,

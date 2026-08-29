@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -6,11 +8,11 @@ import '../../../core/theme/app_theme.dart';
 import '../../../data/models/models.dart';
 import '../../../data/repositories/database_repository.dart';
 import '../../../shared/ui/app_states.dart';
+import '../../church/logic/church_bloc.dart';
 import '../logic/attendance_bloc.dart';
 import 'attendance_recording_screen.dart';
-import '../../church/logic/church_bloc.dart';
-import 'widgets/attendance_date_picker.dart';
 import 'widgets/attendance_body.dart';
+import 'widgets/attendance_date_picker.dart';
 
 class WeeklyAttendanceScreen extends StatefulWidget {
   const WeeklyAttendanceScreen({super.key});
@@ -292,20 +294,22 @@ class _WeeklyAttendanceScreenState extends State<WeeklyAttendanceScreen> {
           ),
         );
       }
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => BlocProvider.value(
-            value: attendanceBloc,
-            child: AttendanceRecordingScreen(session: session),
+      unawaited(
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => BlocProvider.value(
+              value: attendanceBloc,
+              child: AttendanceRecordingScreen(session: session),
+            ),
           ),
-        ),
-      ).then((_) {
-        if (!mounted) return;
-        attendanceBloc.add(
-          LoadAttendanceSessions(meetingId: meetingId, classId: classId),
-        );
-      });
+        ).then((_) {
+          if (!mounted) return;
+          attendanceBloc.add(
+            LoadAttendanceSessions(meetingId: meetingId, classId: classId),
+          );
+        }),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

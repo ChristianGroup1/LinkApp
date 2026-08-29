@@ -144,7 +144,7 @@ Widget _sessionAttendanceStatChip({
                 const SizedBox(width: 3),
                 Text(
                   '${value ?? 0}',
-                  style: GoogleFonts.outfit(
+                  style: GoogleFonts.cairo(
                     fontSize: 13,
                     fontWeight: FontWeight.w800,
                     color: color,
@@ -724,7 +724,7 @@ class _SessionTileState extends State<_SessionTile> {
                     children: [
                       Text(
                         dayLabel,
-                        style: GoogleFonts.outfit(
+                        style: GoogleFonts.cairo(
                           fontSize: 22,
                           fontWeight: FontWeight.w900,
                           color: AppTheme.primary,

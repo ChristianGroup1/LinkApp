@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -405,20 +407,22 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
                                 );
 
                                 if (bloc != null) {
-                                  rootNavigator
-                                      .push(
-                                        MaterialPageRoute(
-                                          builder: (_) => BlocProvider.value(
-                                            value: bloc,
-                                            child: AttendanceRecordingScreen(
-                                              session: newSession,
+                                  unawaited(
+                                    rootNavigator
+                                        .push(
+                                          MaterialPageRoute(
+                                            builder: (_) => BlocProvider.value(
+                                              value: bloc,
+                                              child: AttendanceRecordingScreen(
+                                                session: newSession,
+                                              ),
                                             ),
                                           ),
-                                        ),
-                                      )
-                                      .then((_) {
-                                        if (mounted) _loadSessions();
-                                      });
+                                        )
+                                        .then((_) {
+                                          if (mounted) _loadSessions();
+                                        }),
+                                  );
                                 }
                               } catch (e) {
                                 setModalState(() => isSubmitting = false);
@@ -604,7 +608,7 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
                                                 classId: session.classId,
                                               );
                                           if (!mounted) return;
-                                          _loadSessions();
+                                          unawaited(_loadSessions());
                                           if (!synced && mounted) {
                                             messenger.showSnackBar(
                                               SnackBar(

@@ -138,7 +138,7 @@ class ReportsBloc extends Bloc<ReportsEvent, ReportsState> {
         // 3. Process Member Statistics
         final memberStats = <Map<String, dynamic>>[];
         final attendanceDaysByMemberId = <String, List<MemberAttendanceDay>>{};
-        for (var row in rawStats.where(
+        for (final row in rawStats.where(
           (row) => visibleMemberIds.contains(row['member_id'] as String),
         )) {
           final memberId = row['member_id'] as String;
@@ -157,14 +157,14 @@ class ReportsBloc extends Bloc<ReportsEvent, ReportsState> {
 
         // 4. Process Class-level Statistics
         final classStats = <Map<String, dynamic>>[];
-        for (var cls in visibleClasses) {
+        for (final cls in visibleClasses) {
           final classMembers = visibleMembers
               .where((m) => m.sundaySchoolClassId == cls.id)
               .toList();
           if (classMembers.isNotEmpty) {
             double totalPercentage = 0;
             int count = 0;
-            for (var m in classMembers) {
+            for (final m in classMembers) {
               final mStat = rawStatsByMemberId[m.id];
               if (mStat != null) {
                 totalPercentage += (mStat['attendance_percentage'] as num)
@@ -185,7 +185,7 @@ class ReportsBloc extends Bloc<ReportsEvent, ReportsState> {
 
         // 5. Process Meeting-level Statistics
         final meetingStats = <Map<String, dynamic>>[];
-        for (var mtg in visibleMeetings) {
+        for (final mtg in visibleMeetings) {
           if (mtg.kind == MeetingKind.sundaySchool) {
             final classIds = visibleClasses
                 .where((c) => c.meetingId == mtg.id)
@@ -197,7 +197,7 @@ class ReportsBloc extends Bloc<ReportsEvent, ReportsState> {
             if (groupedMeetingMembers.isNotEmpty) {
               double totalPercentage = 0;
               int count = 0;
-              for (var m in groupedMeetingMembers) {
+              for (final m in groupedMeetingMembers) {
                 final mStat = rawStatsByMemberId[m.id];
                 if (mStat != null) {
                   totalPercentage += (mStat['attendance_percentage'] as num)
@@ -225,7 +225,7 @@ class ReportsBloc extends Bloc<ReportsEvent, ReportsState> {
             if (mtgMembers.isNotEmpty) {
               double totalPercentage = 0;
               int count = 0;
-              for (var m in mtgMembers) {
+              for (final m in mtgMembers) {
                 final mStat = rawStatsByMemberId[m.id];
                 if (mStat != null) {
                   totalPercentage += (mStat['attendance_percentage'] as num)
@@ -313,7 +313,7 @@ class ReportsBloc extends Bloc<ReportsEvent, ReportsState> {
           for (final entry in recordResults) entry.key: entry.value,
         };
 
-        for (var session in sessionsList) {
+        for (final session in sessionsList) {
           final records = recordsBySessionId[session.id] ?? [];
           final meetingName =
               meetingsById[session.meetingId]?.nameAr ?? 'اجتماع غير محدد';
@@ -321,7 +321,7 @@ class ReportsBloc extends Bloc<ReportsEvent, ReportsState> {
               ? null
               : classesById[session.classId]?.nameAr;
 
-          for (var record in records) {
+          for (final record in records) {
             attendanceDaysByMemberId
                 .putIfAbsent(record.memberId, () => [])
                 .add(
@@ -361,19 +361,19 @@ class ReportsBloc extends Bloc<ReportsEvent, ReportsState> {
         }
 
         final monthlyGroups = <int, List<AttendanceSessionEntity>>{};
-        for (var session in sessionsList) {
+        for (final session in sessionsList) {
           final month = session.sessionDate.month;
           monthlyGroups.putIfAbsent(month, () => []).add(session);
         }
 
-        for (var entry in monthlyGroups.entries) {
+        for (final entry in monthlyGroups.entries) {
           final monthIndex = entry.key - 1;
           int presentCount = 0;
           int totalCount = 0;
 
-          for (var s in entry.value) {
+          for (final s in entry.value) {
             final records = recordsBySessionId[s.id] ?? [];
-            for (var r in records) {
+            for (final r in records) {
               if (r.status == AttendanceStatus.present) {
                 presentCount++;
               }

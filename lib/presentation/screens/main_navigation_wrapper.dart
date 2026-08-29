@@ -3,25 +3,26 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import '../widgets/in_app_spotlight_overlay.dart';
-import 'app_tour_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../logic/auth/auth_bloc.dart';
-import '../../core/theme/app_theme.dart';
+
 import '../../core/notifications/meeting_reminder_service.dart';
-import '../../features/attendance/logic/auto_attendance_session_service.dart';
+import '../../core/theme/app_theme.dart';
+import '../../data/offline/connectivity_service.dart';
 import '../../data/repositories/database_repository.dart';
+import '../../features/attendance/logic/auto_attendance_session_service.dart';
+import '../../features/attendance/presentation/weekly_attendance_screen.dart';
 import '../../features/church/logic/church_bloc.dart';
 import '../../features/church/presentation/dashboard_screen.dart';
-import '../../features/attendance/presentation/weekly_attendance_screen.dart';
-import '../../features/members/presentation/members_list_screen.dart';
 import '../../features/church/presentation/settings_screen.dart';
+import '../../features/members/presentation/members_list_screen.dart';
+import '../../logic/auth/auth_bloc.dart';
 import '../../logic/home/home_bloc.dart';
-import '../../data/offline/connectivity_service.dart';
+import '../../shared/data/app_data_changes.dart';
 import '../../shared/ui/bubble_bottom_nav.dart';
 import '../../shared/ui/offline_banner.dart';
 import '../../shared/ui/tab_navigator.dart';
-import '../../shared/data/app_data_changes.dart';
+import '../widgets/in_app_spotlight_overlay.dart';
+import 'app_tour_screen.dart';
 
 class MainNavigationWrapper extends StatefulWidget {
   static final GlobalKey<State<MainNavigationWrapper>> wrapperKey =

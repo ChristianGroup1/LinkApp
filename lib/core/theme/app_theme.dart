@@ -1,9 +1,15 @@
-import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
   static Brightness _brightness = Brightness.light;
+
+  /// Use the bundled Cairo files under `assets/fonts/` and never fetch
+  /// Google Fonts at runtime. Call once from `main` before any widget builds.
+  static void configureBundledFonts() {
+    GoogleFonts.config.allowRuntimeFetching = false;
+  }
 
   static void setBrightness(Brightness brightness) {
     _brightness = brightness;

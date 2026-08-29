@@ -246,7 +246,7 @@ class _ReportsScreenState extends State<ReportsScreen>
                                   ),
                                   child: Text(
                                     '$pct%',
-                                    style: GoogleFonts.outfit(
+                                    style: GoogleFonts.cairo(
                                       fontWeight: FontWeight.bold,
                                       color: _getProgressColor(pct),
                                       fontSize: 12,
@@ -360,7 +360,7 @@ class _ReportsScreenState extends State<ReportsScreen>
                   ),
                   Text(
                     '$pct%',
-                    style: GoogleFonts.outfit(
+                    style: GoogleFonts.cairo(
                       fontWeight: FontWeight.w800,
                       color: const Color(0xFF10B981),
                       fontSize: 16,
@@ -452,7 +452,7 @@ class _ReportsScreenState extends State<ReportsScreen>
                 ),
                 child: Text(
                   '$pct%',
-                  style: GoogleFonts.outfit(
+                  style: GoogleFonts.cairo(
                     fontWeight: FontWeight.w900,
                     color: AppTheme.primary,
                     fontSize: 13,
@@ -616,7 +616,7 @@ class _ReportsScreenState extends State<ReportsScreen>
           const SizedBox(height: 6),
           Text(
             '$count',
-            style: GoogleFonts.outfit(
+            style: GoogleFonts.cairo(
               fontSize: 18,
               fontWeight: FontWeight.w900,
               color: color,

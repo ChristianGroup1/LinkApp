@@ -95,6 +95,12 @@ class DeleteMemberEvent extends MembersEvent {
 
 class ClearMembersFlashMessage extends MembersEvent {}
 
+class MembersRealtimeUpdated extends MembersEvent {
+  final List<MemberEntity> members;
+
+  MembersRealtimeUpdated(this.members);
+}
+
 // STATES
 abstract class MembersState {}
 
@@ -153,6 +159,10 @@ class MembersError extends MembersState {
 // BLOC
 class MembersBloc extends Bloc<MembersEvent, MembersState> {
   final DatabaseRepository repository;
+  StreamSubscription<List<MemberEntity>>? _membersSubscription;
+  bool _isAdmin = false;
+  Set<String> _viewClassIds = {};
+  Set<String> _viewMeetingIds = {};
 
   MembersBloc({required this.repository}) : super(MembersInitial()) {
     on<LoadMembers>((event, emit) async {
@@ -160,18 +170,17 @@ class MembersBloc extends Bloc<MembersEvent, MembersState> {
       try {
         final profile = await repository.getCurrentProfile();
         final members = await repository.getAllMembers();
-        final isAdmin =
+        _isAdmin =
             profile != null &&
             (profile.role == AppRole.superAdmin ||
                 profile.role == AppRole.churchAdmin);
 
-        List<MemberEntity> scoped = members;
-        if (!isAdmin && profile != null) {
+        if (!_isAdmin && profile != null) {
           final assignments = await Future.wait([
             repository.getUserClassAssignments(profile.id),
             repository.getUserMeetingAssignments(profile.id),
           ]);
-          final classIds = assignments[0]
+          _viewClassIds = assignments[0]
               .where(
                 (a) =>
                     (a['can_take_attendance'] as bool? ?? true) ||
@@ -179,7 +188,7 @@ class MembersBloc extends Bloc<MembersEvent, MembersState> {
               )
               .map((a) => a['class_id'] as String)
               .toSet();
-          final meetingIds = assignments[1]
+          _viewMeetingIds = assignments[1]
               .where(
                 (a) =>
                     (a['can_take_attendance'] as bool? ?? true) ||
@@ -187,23 +196,26 @@ class MembersBloc extends Bloc<MembersEvent, MembersState> {
               )
               .map((a) => a['meeting_id'] as String)
               .toSet();
-          scoped = members
-              .where(
-                (m) =>
-                    (m.sundaySchoolClassId != null &&
-                        classIds.contains(m.sundaySchoolClassId)) ||
-                    (m.meetingId != null && meetingIds.contains(m.meetingId)),
-              )
-              .toList();
+        } else {
+          _viewClassIds = {};
+          _viewMeetingIds = {};
         }
 
+        final scoped = _scopeMembers(members);
         emit(
           MembersLoaded(
             allMembers: scoped,
-            filteredMembers: scoped.where((m) => m.isActive).toList(),
+            filteredMembers: _applyMemberFilters(
+              scoped,
+              query: '',
+              classIdFilter: null,
+              meetingIdFilter: null,
+              scopeFilter: null,
+            ),
             flashMessage: event.flashMessage,
           ),
         );
+        _ensureRealtimeSubscription();
       } catch (e) {
         try {
           final members = await repository.getAllMembers();
@@ -214,6 +226,7 @@ class MembersBloc extends Bloc<MembersEvent, MembersState> {
               flashMessage: event.flashMessage,
             ),
           );
+          _ensureRealtimeSubscription();
         } catch (_) {
           emit(MembersError('فشل تحميل الأعضاء: ${e.toString()}'));
         }
@@ -223,50 +236,15 @@ class MembersBloc extends Bloc<MembersEvent, MembersState> {
     on<SearchAndFilterMembers>((event, emit) {
       final currentState = state;
       if (currentState is MembersLoaded) {
-        var filtered = currentState.allMembers;
-
-        // Filter by active status (show active by default)
-        filtered = filtered.where((m) => m.isActive).toList();
-
-        // Filter by scope
-        if (event.scopeFilter != null && event.scopeFilter != 'all') {
-          filtered = filtered
-              .where((m) => m.scope.value == event.scopeFilter)
-              .toList();
-        }
-
-        // Filter by class
-        if (event.classIdFilter != null && event.classIdFilter!.isNotEmpty) {
-          filtered = filtered
-              .where((m) => m.sundaySchoolClassId == event.classIdFilter)
-              .toList();
-        }
-
-        // Filter by meeting
-        if (event.meetingIdFilter != null &&
-            event.meetingIdFilter!.isNotEmpty) {
-          filtered = filtered
-              .where((m) => m.meetingId == event.meetingIdFilter)
-              .toList();
-        }
-
-        // Filter by search query
-        if (event.query.trim().isNotEmpty) {
-          final queryLower = event.query.toLowerCase();
-          filtered = filtered
-              .where(
-                (m) =>
-                    m.fullName.toLowerCase().contains(queryLower) ||
-                    (m.code != null &&
-                        m.code!.toLowerCase().contains(queryLower)) ||
-                    (m.phone != null && m.phone!.contains(queryLower)),
-              )
-              .toList();
-        }
-
         emit(
           currentState.copyWith(
-            filteredMembers: filtered,
+            filteredMembers: _applyMemberFilters(
+              currentState.allMembers,
+              query: event.query,
+              classIdFilter: event.classIdFilter,
+              meetingIdFilter: event.meetingIdFilter,
+              scopeFilter: event.scopeFilter,
+            ),
             query: event.query,
             classIdFilter: event.classIdFilter,
             meetingIdFilter: event.meetingIdFilter,
@@ -274,6 +252,24 @@ class MembersBloc extends Bloc<MembersEvent, MembersState> {
           ),
         );
       }
+    });
+
+    on<MembersRealtimeUpdated>((event, emit) {
+      final currentState = state;
+      if (currentState is! MembersLoaded) return;
+      final scoped = _scopeMembers(event.members);
+      emit(
+        currentState.copyWith(
+          allMembers: scoped,
+          filteredMembers: _applyMemberFilters(
+            scoped,
+            query: currentState.query,
+            classIdFilter: currentState.classIdFilter,
+            meetingIdFilter: currentState.meetingIdFilter,
+            scopeFilter: currentState.scopeFilter,
+          ),
+        ),
+      );
     });
 
     on<CreateMember>((event, emit) async {
@@ -372,5 +368,67 @@ class MembersBloc extends Bloc<MembersEvent, MembersState> {
         emit(current.copyWith(clearFlashMessage: true));
       }
     });
+  }
+
+  void _ensureRealtimeSubscription() {
+    _membersSubscription ??= repository.subscribeToMembers().listen((members) {
+      add(MembersRealtimeUpdated(members));
+    });
+  }
+
+  List<MemberEntity> _scopeMembers(List<MemberEntity> members) {
+    if (_isAdmin) return members;
+    return [
+      for (final member in members)
+        if ((member.sundaySchoolClassId != null &&
+                _viewClassIds.contains(member.sundaySchoolClassId)) ||
+            (member.meetingId != null &&
+                _viewMeetingIds.contains(member.meetingId)))
+          member,
+    ];
+  }
+
+  List<MemberEntity> _applyMemberFilters(
+    List<MemberEntity> members, {
+    required String query,
+    required String? classIdFilter,
+    required String? meetingIdFilter,
+    required String? scopeFilter,
+  }) {
+    var filtered = members.where((m) => m.isActive).toList();
+
+    if (scopeFilter != null && scopeFilter != 'all') {
+      filtered = filtered
+          .where((m) => m.scope.value == scopeFilter)
+          .toList();
+    }
+    if (classIdFilter != null && classIdFilter.isNotEmpty) {
+      filtered = filtered
+          .where((m) => m.sundaySchoolClassId == classIdFilter)
+          .toList();
+    }
+    if (meetingIdFilter != null && meetingIdFilter.isNotEmpty) {
+      filtered = filtered
+          .where((m) => m.meetingId == meetingIdFilter)
+          .toList();
+    }
+    if (query.trim().isNotEmpty) {
+      final queryLower = query.toLowerCase();
+      filtered = filtered
+          .where(
+            (m) =>
+                m.fullName.toLowerCase().contains(queryLower) ||
+                (m.code != null && m.code!.toLowerCase().contains(queryLower)) ||
+                (m.phone != null && m.phone!.contains(queryLower)),
+          )
+          .toList();
+    }
+    return filtered;
+  }
+
+  @override
+  Future<void> close() {
+    unawaited(_membersSubscription?.cancel());
+    return super.close();
   }
 }

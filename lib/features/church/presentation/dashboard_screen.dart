@@ -2,19 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart' as intl;
+
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/models.dart';
+import '../../../logic/home/home_bloc.dart';
+import '../../../presentation/screens/app_tour_screen.dart';
+import '../../../presentation/widgets/in_app_spotlight_overlay.dart';
 import '../../../shared/ui/app_states.dart';
 import '../../../shared/ui/app_widgets.dart';
 import '../../attendance/presentation/attendance_records_screen.dart';
 import '../../follow_up/presentation/follow_up_screen.dart';
 import '../../meetings/presentation/meetings_list_screen.dart';
 import '../../reports/presentation/reports_screen.dart';
-import '../../../presentation/widgets/in_app_spotlight_overlay.dart';
-import '../../../presentation/screens/app_tour_screen.dart';
-import 'servants_permissions_screen.dart';
-import '../../../logic/home/home_bloc.dart';
 import '../logic/church_bloc.dart';
+import 'servants_permissions_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
   final VoidCallback onStartAttendance;

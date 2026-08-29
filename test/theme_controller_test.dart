@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
+import 'package:google_fonts/google_fonts.dart';
+import 'package:link/core/theme/app_theme.dart';
 import 'package:link/core/theme/theme_controller.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -29,6 +30,16 @@ void main() {
     expect(controller.themeMode, ThemeMode.light);
 
     await controller.setPreference(AppThemePreference.system);
+  });
+
+  test('bundled Cairo fonts disable Google Fonts runtime fetching', () {
+    final previous = GoogleFonts.config.allowRuntimeFetching;
+    addTearDown(() {
+      GoogleFonts.config.allowRuntimeFetching = previous;
+    });
+
+    AppTheme.configureBundledFonts();
+    expect(GoogleFonts.config.allowRuntimeFetching, isFalse);
   });
 
   test('falls back to the system theme for an unknown saved value', () async {

@@ -92,7 +92,7 @@ class UserProfileCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     profile.email!,
-                    style: GoogleFonts.outfit(
+                    style: GoogleFonts.cairo(
                       color: Colors.white.withValues(alpha: 0.75),
                       fontSize: 12,
                     ),
@@ -681,7 +681,7 @@ class _ServantAssignmentsSection extends StatelessWidget {
                   ),
                   style: TextButton.styleFrom(
                     padding: EdgeInsets.zero,
-                    minimumSize: const Size(0, 0),
+                    minimumSize: Size.zero,
                   ),
                 ),
               ),

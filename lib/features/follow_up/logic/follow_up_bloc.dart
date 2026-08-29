@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../data/models/models.dart';
 import '../../../data/offline/offline_messages.dart';
@@ -84,10 +86,13 @@ class FollowUpError extends FollowUpState {
 // BLOC
 class FollowUpBloc extends Bloc<FollowUpEvent, FollowUpState> {
   final DatabaseRepository repository;
+  StreamSubscription<List<FollowUpEntity>>? _followUpsSubscription;
 
   FollowUpBloc({required this.repository}) : super(FollowUpInitial()) {
     on<LoadFollowUpData>((event, emit) async {
-      emit(FollowUpLoading());
+      if (state is! FollowUpDataLoaded) {
+        emit(FollowUpLoading());
+      }
       try {
         final baseData = await Future.wait([
           repository.getAllMembers(),
@@ -245,6 +250,7 @@ class FollowUpBloc extends Bloc<FollowUpEvent, FollowUpState> {
             flashMessage: event.flashMessage,
           ),
         );
+        _ensureRealtimeSubscription();
       } catch (e) {
         emit(FollowUpError('فشل تحميل بيانات المتابعة: ${e.toString()}'));
       }
@@ -286,6 +292,18 @@ class FollowUpBloc extends Bloc<FollowUpEvent, FollowUpState> {
         emit(current.copyWith(clearFlashMessage: true));
       }
     });
+  }
+
+  void _ensureRealtimeSubscription() {
+    _followUpsSubscription ??= repository.subscribeToFollowUps().listen((_) {
+      add(LoadFollowUpData());
+    });
+  }
+
+  @override
+  Future<void> close() {
+    unawaited(_followUpsSubscription?.cancel());
+    return super.close();
   }
 }
 

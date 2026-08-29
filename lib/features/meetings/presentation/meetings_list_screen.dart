@@ -1,18 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
+
 import '../../../core/navigation/app_route_observer.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/models.dart';
 import '../../../data/repositories/database_repository.dart';
 import '../../../shared/ui/app_states.dart';
-import '../logic/meetings_bloc.dart';
 import '../../church/logic/church_bloc.dart';
-import 'widgets/meeting_dialogs.dart';
+import '../logic/meetings_bloc.dart';
 import 'add_edit_meeting_screen.dart';
-import 'widgets/meeting_card.dart';
 import 'widgets/class_card.dart';
 import 'widgets/meeting_assignment_helpers.dart';
+import 'widgets/meeting_card.dart';
+import 'widgets/meeting_dialogs.dart';
 
 class MeetingsListScreen extends StatefulWidget {
   const MeetingsListScreen({super.key});

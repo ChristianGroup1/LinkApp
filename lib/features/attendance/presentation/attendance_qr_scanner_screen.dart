@@ -6,8 +6,8 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
-import '../../../core/attendance/member_qr_scan_session.dart';
 import '../../../core/attendance/camera_permission_guidance.dart';
+import '../../../core/attendance/member_qr_scan_session.dart';
 import '../../../core/attendance/qr_attendance_preview.dart';
 import '../../../core/attendance/qr_attendance_scan_result.dart';
 import '../../../core/theme/app_theme.dart';

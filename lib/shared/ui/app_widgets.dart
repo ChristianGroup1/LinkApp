@@ -139,7 +139,7 @@ class AppStatCard extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             value,
-            style: GoogleFonts.outfit(
+            style: GoogleFonts.cairo(
               fontWeight: FontWeight.w900,
               fontSize: 18,
               color: AppTheme.textDark,

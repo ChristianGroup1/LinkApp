@@ -417,7 +417,6 @@ class _MemberAttendanceSection extends StatefulWidget {
 
 class _MemberAttendanceSectionState extends State<_MemberAttendanceSection> {
   late Future<List<MemberAttendanceHistoryEntry>> _historyFuture;
-  bool _showAll = false;
 
   @override
   void initState() {
@@ -429,7 +428,6 @@ class _MemberAttendanceSectionState extends State<_MemberAttendanceSection> {
   void didUpdateWidget(covariant _MemberAttendanceSection oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.memberId != widget.memberId) {
-      _showAll = false;
       _loadHistory();
     }
   }

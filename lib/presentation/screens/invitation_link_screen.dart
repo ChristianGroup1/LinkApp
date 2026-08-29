@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../../core/invitations/invitation_preview.dart';
 import '../../core/invitations/invitation_identity.dart';
+import '../../core/invitations/invitation_preview.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/repositories/database_repository.dart';
 import '../../logic/auth/auth_bloc.dart';

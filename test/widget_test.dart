@@ -3,15 +3,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
 import 'package:link/core/invitations/invitation_preview.dart';
 import 'package:link/core/theme/app_theme.dart';
 import 'package:link/core/theme/theme_controller.dart';
+import 'package:link/data/models/models.dart';
 import 'package:link/data/offline/invitation_create_result.dart';
 import 'package:link/data/offline/member_create_draft.dart';
 import 'package:link/data/offline/offline_save_result.dart';
-import 'package:link/data/models/models.dart';
 import 'package:link/data/repositories/database_repository.dart';
 import 'package:link/features/attendance/logic/attendance_bloc.dart'
     as attendance;
@@ -23,6 +21,7 @@ import 'package:link/presentation/screens/app_tour_screen.dart';
 import 'package:link/presentation/screens/invitation_link_screen.dart';
 import 'package:link/presentation/screens/login_screen.dart';
 import 'package:link/presentation/screens/my_invitations_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 Future<void> _settle(WidgetTester tester) async {
   for (int i = 0; i < 15; i++) {
@@ -331,6 +330,78 @@ void main() {
       );
     },
   );
+
+  test(
+    'attendance sheet applies realtime records from another servant',
+    () async {
+      final repository = TestRepository();
+      final bloc = attendance.AttendanceBloc(repository: repository);
+      addTearDown(bloc.close);
+      final session = AttendanceSessionEntity(
+        id: 'session-realtime-1',
+        churchId: 'ch-1',
+        meetingId: 'mtg-1',
+        classId: 'cls-1',
+        sessionDate: DateTime(2026, 8, 29),
+        weekNumber: 35,
+      );
+
+      bloc.add(attendance.LoadAttendanceSheet(session));
+      await bloc.stream.firstWhere(
+        (state) => state is attendance.AttendanceSheetLoaded,
+      );
+
+      repository.attendanceRealtime.add([
+        const AttendanceRecordEntity(
+          id: 'rec-live-1',
+          sessionId: 'session-realtime-1',
+          memberId: 'mem-1',
+          status: AttendanceStatus.present,
+        ),
+      ]);
+
+      final updated =
+          await bloc.stream.firstWhere(
+                (state) =>
+                    state is attendance.AttendanceSheetLoaded &&
+                    state.statusMap['mem-1'] == AttendanceStatus.present,
+              )
+              as attendance.AttendanceSheetLoaded;
+
+      expect(updated.isDirty, isFalse);
+    },
+  );
+
+  test('members list applies realtime inserts from another servant', () async {
+    final repository = TestRepository();
+    final bloc = MembersBloc(repository: repository);
+    addTearDown(bloc.close);
+
+    bloc.add(LoadMembers());
+    await bloc.stream.firstWhere((state) => state is MembersLoaded);
+
+    repository.membersRealtime.add([
+      ...repository._members,
+      const MemberEntity(
+        id: 'mem-live',
+        churchId: 'ch-1',
+        fullName: 'يوسف حنا',
+        scope: MemberScope.sundaySchoolClass,
+        sundaySchoolClassId: 'cls-1',
+        isActive: true,
+      ),
+    ]);
+
+    final updated =
+        await bloc.stream.firstWhere(
+              (state) =>
+                  state is MembersLoaded &&
+                  state.allMembers.any((member) => member.id == 'mem-live'),
+            )
+            as MembersLoaded;
+
+    expect(updated.filteredMembers.map((member) => member.id), contains('mem-live'));
+  });
 
   test(
     'adding a saved member preserves the current attendance sheet state',
@@ -846,6 +917,10 @@ class TestRepository implements DatabaseRepository {
   final List<AttendanceSessionEntity> _sessions = [];
   final List<AttendanceRecordEntity> _records = [];
   final List<FollowUpEntity> _followUps = [];
+  final attendanceRealtime =
+      StreamController<List<AttendanceRecordEntity>>.broadcast();
+  final membersRealtime = StreamController<List<MemberEntity>>.broadcast();
+  final followUpsRealtime = StreamController<List<FollowUpEntity>>.broadcast();
 
   @override
   Future<AppProfile?> signInWithEmailAndPassword(
@@ -1477,7 +1552,17 @@ class TestRepository implements DatabaseRepository {
   Stream<List<AttendanceRecordEntity>> subscribeToAttendanceRecords(
     String sessionId,
   ) {
-    return Stream.value([]);
+    return attendanceRealtime.stream;
+  }
+
+  @override
+  Stream<List<MemberEntity>> subscribeToMembers() {
+    return membersRealtime.stream;
+  }
+
+  @override
+  Stream<List<FollowUpEntity>> subscribeToFollowUps() {
+    return followUpsRealtime.stream;
   }
 
   @override

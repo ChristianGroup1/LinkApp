@@ -1,17 +1,20 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
+
+import '../../../core/diagnostics/diagnostics_visibility.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
-import '../../../core/diagnostics/diagnostics_visibility.dart';
 import '../../../data/models/models.dart';
 import '../../../data/repositories/database_repository.dart';
 import '../../../logic/auth/auth_bloc.dart';
-import '../../../shared/ui/app_widgets.dart';
-import '../logic/church_bloc.dart';
-import '../../../presentation/widgets/in_app_spotlight_overlay.dart';
 import '../../../presentation/screens/app_tour_screen.dart';
 import '../../../presentation/screens/my_invitations_screen.dart';
+import '../../../presentation/widgets/in_app_spotlight_overlay.dart';
+import '../../../shared/ui/app_widgets.dart';
+import '../logic/church_bloc.dart';
 import 'servants_permissions_screen.dart';
 import 'widgets/compact_settings_dialog.dart';
 import 'widgets/settings_cards.dart';
@@ -183,11 +186,13 @@ class _ProfileActionsCard extends StatelessWidget {
               if (tourNotifier != null) {
                 tourNotifier.startTour();
               } else {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const AppTourScreen(),
-                    fullscreenDialog: true,
+                unawaited(
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const AppTourScreen(),
+                      fullscreenDialog: true,
+                    ),
                   ),
                 );
               }

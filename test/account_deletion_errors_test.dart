@@ -1,7 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-
 import 'package:link/core/auth/account_deletion_errors.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() {
   test('shows the server reason when Auth cleanup is incomplete', () {

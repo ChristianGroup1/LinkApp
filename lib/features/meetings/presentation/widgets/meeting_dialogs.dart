@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
+
 import '../../../../core/theme/app_theme.dart';
 import '../../../../data/models/models.dart';
 import '../../../../data/repositories/database_repository.dart';
@@ -166,7 +169,7 @@ Future<void> showAssignLeaderDialog(
   final profiles = await repo.getProfiles();
   if (!context.mounted) return;
 
-  showDialog(
+  await showDialog<void>(
     context: context,
     builder: (dialogContext) {
       return Directionality(
@@ -217,7 +220,7 @@ Future<void> showAssignOfficerDialog(
   final profiles = await repo.getProfiles();
   if (!context.mounted) return;
 
-  showDialog(
+  await showDialog<void>(
     context: context,
     builder: (dialogContext) {
       return Directionality(

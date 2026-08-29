@@ -1,10 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
+import 'package:link/data/models/models.dart';
 import 'package:link/data/offline/offline_cache.dart';
 import 'package:link/data/offline/offline_entity_json.dart';
 import 'package:link/data/offline/offline_write_queue.dart';
-import 'package:link/data/models/models.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
