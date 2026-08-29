@@ -541,7 +541,7 @@ summary:focus-visible {
 
 .steps,
 .features,
-.audience { padding-block: 8px 4px; }
+.audience { padding-block: 19px 38px;}
 
 .sectionHeading {
   max-width: 680px;
@@ -703,7 +703,7 @@ summary:focus-visible {
   line-height: 1.85;
 }
 
-.share { padding-block: 4px 8px; }
+.share { padding-block: 19px 38px; }
 
 .sharePanel {
   display: grid;
