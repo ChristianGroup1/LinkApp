@@ -104,7 +104,7 @@ export default function PrivacyPolicyPage() {
             We retain church, attendance, and account data for as long as necessary to provide the service to your church organization. Church administrators or servants may delete their account at any time from inside the app.
           </p>
           <p style={styles.paragraph}>
-            <strong>In-app deletion (Android &amp; iOS):</strong> open Settings, go to Account, tap &quot;Delete account permanently&quot;, then confirm in the dialog. If you are the sole active church administrator, your church data is deleted with your account. If another active administrator exists, only your personal account is removed.
+            <strong>In-app deletion (Android, iOS &amp; Windows):</strong> open Settings, go to Account, tap &quot;Delete account permanently&quot;, then confirm in the dialog. If you are the sole active church administrator, your church data is deleted with your account. If another active administrator exists, only your personal account is removed.
           </p>
           <div style={styles.contactBox}>
             If you cannot delete from the app, contact us at:{' '}

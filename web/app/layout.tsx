@@ -10,9 +10,9 @@ const cairo = Cairo({
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://linkchurch.space'),
-  title: 'Link — إدارة الخدمة والحضور والافتقاد',
+  title: 'Link — إدارة الخدمة والحضور والزيارات',
   description:
-    'تطبيق عربي للكنائس والخدمات: تسجيل الحضور، إدارة الاجتماعات والأعضاء، ومتابعة الافتقاد على Android وWindows.',
+    'تطبيق عربي للكنائس والخدمات: تسجيل الحضور، إدارة الاجتماعات والأعضاء، ومتابعة الزيارات على Android وWindows.',
   keywords: [
     'إدارة الكنيسة',
     'تسجيل حضور',
@@ -23,7 +23,7 @@ export const metadata: Metadata = {
   icons: { icon: '/link-logo.png', apple: '/link-logo.png' },
   openGraph: {
     title: 'Link — ركّز في الخدمة واترك التنظيم علينا',
-    description: 'إدارة الحضور والاجتماعات والأعضاء والافتقاد في مكان واحد.',
+    description: 'إدارة الحضور والاجتماعات والأعضاء والزيارات في مكان واحد.',
     images: ['/link-logo.png'],
     locale: 'ar_EG',
     type: 'website',
@@ -31,8 +31,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary',
-    title: 'Link — إدارة الخدمة والحضور والافتقاد',
-    description: 'منظومة عربية واحدة للاجتماعات والحضور والأعضاء والافتقاد.',
+    title: 'Link — إدارة الخدمة والحضور والزيارات',
+    description: 'منظومة عربية واحدة للاجتماعات والحضور والأعضاء والزيارات.',
     images: ['/link-logo.png'],
   },
 };

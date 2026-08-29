@@ -84,7 +84,7 @@ export const adminTables = {
     orderBy: 'recorded_at',
   },
   follow_ups: {
-    table: 'follow_ups', label: 'الافتقاد', description: 'متابعات الغياب والتواصل والنتيجة.',
+    table: 'follow_ups', label: 'الزيارات', description: 'متابعات الغياب والتواصل والنتيجة.',
     visibleColumns: ['contact_status', 'follow_up_date', 'member_id', 'responsible_user_id', 'church_id'],
     searchableColumns: ['reason', 'result'],
     editableColumns: ['church_id', 'member_id', 'session_id', 'reason', 'contact_status', 'result', 'responsible_user_id', 'follow_up_date', 'created_by'],

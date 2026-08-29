@@ -32,8 +32,8 @@ export default function SupportPage() {
         <div style={styles.section}>
           <h2 style={styles.heading}>حذف الحساب والبيانات</h2>
           <p style={styles.text}>
-            يمكنك حذف حسابك نهائياً من داخل التطبيق على Android وiOS عبر:
-            الإعدادات ← الحساب ← حذف الحساب نهائياً، ثم تأكيد الحذف من
+            يمكنك حذف حسابك نهائياً من داخل التطبيق على Android وiOS وWindows
+            عبر: الإعدادات ← الحساب ← حذف الحساب نهائياً، ثم تأكيد الحذف من
             النافذة. لا تحتاج كتابة أي جملة للتأكيد.
           </p>
           <p style={styles.text}>
