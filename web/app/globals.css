@@ -541,7 +541,7 @@ summary:focus-visible {
 
 .steps,
 .features,
-.audience { padding-block: 88px 24px; }
+.audience { padding-block: 8px 4px; }
 
 .sectionHeading {
   max-width: 680px;
@@ -646,7 +646,7 @@ summary:focus-visible {
 .featureIcon.color2 { color: var(--teal); background: #ecfdf5; }
 .featureIcon.color3 { color: #b45309; background: #fffbeb; }
 
-.audience { padding-bottom: 40px; }
+.audience { padding-bottom: 10px; }
 
 .faq { padding-block: 12px 4px; }
 
@@ -703,7 +703,7 @@ summary:focus-visible {
   line-height: 1.85;
 }
 
-.share { padding-block: 24px 88px; }
+.share { padding-block: 4px 8px; }
 
 .sharePanel {
   display: grid;
