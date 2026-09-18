@@ -407,55 +407,60 @@ class _DesktopScanSummary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-      decoration: BoxDecoration(
-        color: AppTheme.cardBackground,
+    // Material (not a decorated Container) so the SwitchListTile inside can
+    // paint its ink on it without the framework flagging a hidden splash.
+    return Material(
+      color: AppTheme.cardBackground,
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: messageColor.withValues(alpha: 0.45)),
+        side: BorderSide(color: messageColor.withValues(alpha: 0.45)),
       ),
-      child: Row(
-        children: [
-          Icon(messageIcon, color: messageColor, size: 28),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  message,
-                  style: GoogleFonts.cairo(
-                    color: AppTheme.textDark,
-                    fontWeight: FontWeight.w800,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+        child: Row(
+          children: [
+            Icon(messageIcon, color: messageColor, size: 28),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    message,
+                    style: GoogleFonts.cairo(
+                      color: AppTheme.textDark,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
-                ),
-                Text(
-                  '${preview.scannedPresent} حاضر بالـQR من ${preview.totalMembers}',
-                  style: GoogleFonts.cairo(color: AppTheme.textLight),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 16),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 300),
-            child: SwitchListTile.adaptive(
-              value: markUnscannedAbsent,
-              onChanged: onMarkUnscannedAbsentChanged,
-              contentPadding: EdgeInsets.zero,
-              title: Text(
-                'غير الممسوح غائب',
-                style: GoogleFonts.cairo(fontWeight: FontWeight.w800),
-              ),
-              subtitle: Text(
-                markUnscannedAbsent
-                    ? '${preview.willBeAbsent} سيُسجلون غياب'
-                    : 'لن تتغير حالتهم',
-                style: GoogleFonts.cairo(fontSize: 11),
+                  Text(
+                    '${preview.scannedPresent} حاضر بالـQR من ${preview.totalMembers}',
+                    style: GoogleFonts.cairo(color: AppTheme.textLight),
+                  ),
+                ],
               ),
             ),
-          ),
-        ],
+            const SizedBox(width: 16),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 300),
+              child: SwitchListTile.adaptive(
+                value: markUnscannedAbsent,
+                onChanged: onMarkUnscannedAbsentChanged,
+                contentPadding: EdgeInsets.zero,
+                title: Text(
+                  'غير الممسوح غائب',
+                  style: GoogleFonts.cairo(fontWeight: FontWeight.w800),
+                ),
+                subtitle: Text(
+                  markUnscannedAbsent
+                      ? '${preview.willBeAbsent} سيُسجلون غياب'
+                      : 'لن تتغير حالتهم',
+                  style: GoogleFonts.cairo(fontSize: 11),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -476,11 +481,14 @@ class _DesktopScannedMembersList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppTheme.cardBackground,
+    // Material (not a decorated Container) so the scanned-member ListTiles can
+    // paint their ink on it without the framework flagging a hidden splash.
+    return Material(
+      color: AppTheme.cardBackground,
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppTheme.border),
+        side: BorderSide(color: AppTheme.border),
       ),
       child: Column(
         children: [

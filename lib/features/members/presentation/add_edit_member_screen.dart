@@ -684,7 +684,9 @@ class _AddEditMemberScreenState extends State<AddEditMemberScreen> {
       // has no permission over; that assignment is not among the items, and a
       // value without a matching item crashes the dropdown. Show it empty and
       // let the servant pick one of their own assignments instead.
-      initialValue: _hasValidSelectedAssignment ? _selectedAssignmentValue : null,
+      initialValue: _hasValidSelectedAssignment
+          ? _selectedAssignmentValue
+          : null,
       isExpanded: true,
       itemHeight: 62,
       style: GoogleFonts.cairo(

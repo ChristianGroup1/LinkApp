@@ -47,6 +47,7 @@ void main() async {
     options.attachScreenshot = false;
     options.tracesSampleRate = 0.2;
     // Profiling is relative to sampled traces (4% of all transactions).
+    // ignore: experimental_member_use
     options.profilesSampleRate = 0.2;
   }, appRunner: _startApp);
 }
@@ -85,11 +86,9 @@ Future<void> _startApp() async {
       SentryWidget(
         child: const SupabaseConfigurationErrorApp(
           message:
-              'Missing SUPABASE_URL or SUPABASE_ANON_KEY.\n\n'
-              '1) Copy .env.example to .env and add your Supabase keys\n'
-              '2) Run: flutter clean && flutter pub get\n'
-              '3) Full restart the app (not hot reload)\n\n'
-              'Production builds can also pass --dart-define-from-file=.env',
+              'إعدادات الاتصال بالخادم غير مكتملة.\n\n'
+              'تأكد من وجود ملف .env وفيه SUPABASE_URL و SUPABASE_ANON_KEY، '
+              'ثم أعد تشغيل التطبيق بالكامل.',
         ),
       ),
     );
@@ -106,7 +105,9 @@ Future<void> _startApp() async {
     runApp(
       SentryWidget(
         child: SupabaseConfigurationErrorApp(
-          message: 'Supabase initialization failed: $error',
+          message:
+              'تعذر الاتصال بخادم البيانات.\n'
+              'تحقق من إعدادات Supabase والإنترنت ثم أعد تشغيل التطبيق.',
         ),
       ),
     );

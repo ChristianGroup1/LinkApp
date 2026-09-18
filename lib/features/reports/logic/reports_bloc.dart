@@ -1,4 +1,5 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../../core/errors/arabic_error_text.dart';
 import '../../../data/models/models.dart';
 import '../../../data/repositories/database_repository.dart';
 
@@ -452,7 +453,7 @@ class ReportsBloc extends Bloc<ReportsEvent, ReportsState> {
           ),
         );
       } catch (e) {
-        emit(ReportsError('فشل تحميل التقارير: ${e.toString()}'));
+        emit(ReportsError('فشل تحميل التقارير: ${arabicErrorText(e)}'));
       }
     });
   }

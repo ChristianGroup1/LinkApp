@@ -1,4 +1,5 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../../core/errors/arabic_error_text.dart';
 import '../../../data/models/models.dart';
 import '../../../data/offline/offline_messages.dart';
 import '../../../data/repositories/database_repository.dart';
@@ -42,8 +43,9 @@ class ChurchContextLoaded extends ChurchState {
     return ChurchContextLoaded(
       profile: profile ?? this.profile,
       church: church ?? this.church,
-      flashMessage:
-          clearFlashMessage ? null : (flashMessage ?? this.flashMessage),
+      flashMessage: clearFlashMessage
+          ? null
+          : (flashMessage ?? this.flashMessage),
     );
   }
 }
@@ -95,7 +97,7 @@ class ChurchBloc extends Bloc<ChurchEvent, ChurchState> {
             return;
           }
         } catch (_) {}
-        emit(ChurchError('فشل تحميل بيانات الكنيسة: ${e.toString()}'));
+        emit(ChurchError('فشل تحميل بيانات الكنيسة: ${arabicErrorText(e)}'));
       }
     });
 
@@ -123,7 +125,7 @@ class ChurchBloc extends Bloc<ChurchEvent, ChurchState> {
         } catch (e) {
           emit(
             currentState.copyWith(
-              flashMessage: 'فشل تحديث بيانات الكنيسة: ${e.toString()}',
+              flashMessage: 'فشل تحديث بيانات الكنيسة: ${arabicErrorText(e)}',
             ),
           );
         }

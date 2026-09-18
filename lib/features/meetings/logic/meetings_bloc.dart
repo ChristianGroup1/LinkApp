@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../../core/errors/arabic_error_text.dart';
 import '../../../core/notifications/meeting_reminder_service.dart';
 import '../../../data/models/models.dart';
 import '../../../data/offline/offline_messages.dart';
@@ -219,7 +220,7 @@ class MeetingsBloc extends Bloc<MeetingsEvent, MeetingsState> {
           MeetingReminderService.instance.syncForCurrentUser(repository),
         );
       } catch (e) {
-        emit(MeetingsError('فشل تحميل الاجتماعات: ${e.toString()}'));
+        emit(MeetingsError('فشل تحميل الاجتماعات: ${arabicErrorText(e)}'));
       }
     });
 
@@ -258,11 +259,11 @@ class MeetingsBloc extends Bloc<MeetingsEvent, MeetingsState> {
         if (previous is MeetingsLoaded) {
           emit(
             previous.copyWith(
-              flashMessage: 'فشل إنشاء الاجتماع: ${e.toString()}',
+              flashMessage: 'فشل إنشاء الاجتماع: ${arabicErrorText(e)}',
             ),
           );
         } else {
-          emit(MeetingsError('فشل إنشاء الاجتماع: ${e.toString()}'));
+          emit(MeetingsError('فشل إنشاء الاجتماع: ${arabicErrorText(e)}'));
         }
       }
     });
@@ -292,11 +293,11 @@ class MeetingsBloc extends Bloc<MeetingsEvent, MeetingsState> {
         if (previous is MeetingsLoaded) {
           emit(
             previous.copyWith(
-              flashMessage: 'فشل تعديل الاجتماع: ${e.toString()}',
+              flashMessage: 'فشل تعديل الاجتماع: ${arabicErrorText(e)}',
             ),
           );
         } else {
-          emit(MeetingsError('فشل تعديل الاجتماع: ${e.toString()}'));
+          emit(MeetingsError('فشل تعديل الاجتماع: ${arabicErrorText(e)}'));
         }
       }
     });
@@ -314,11 +315,11 @@ class MeetingsBloc extends Bloc<MeetingsEvent, MeetingsState> {
         if (previous is MeetingsLoaded) {
           emit(
             previous.copyWith(
-              flashMessage: 'فشل حذف الاجتماع: ${e.toString()}',
+              flashMessage: 'فشل حذف الاجتماع: ${arabicErrorText(e)}',
             ),
           );
         } else {
-          emit(MeetingsError('فشل حذف الاجتماع: ${e.toString()}'));
+          emit(MeetingsError('فشل حذف الاجتماع: ${arabicErrorText(e)}'));
         }
       }
     });
@@ -340,10 +341,12 @@ class MeetingsBloc extends Bloc<MeetingsEvent, MeetingsState> {
       } catch (e) {
         if (previous is MeetingsLoaded) {
           emit(
-            previous.copyWith(flashMessage: 'فشل إنشاء الفصل: ${e.toString()}'),
+            previous.copyWith(
+              flashMessage: 'فشل إنشاء الفصل: ${arabicErrorText(e)}',
+            ),
           );
         } else {
-          emit(MeetingsError('فشل إنشاء الفصل: ${e.toString()}'));
+          emit(MeetingsError('فشل إنشاء الفصل: ${arabicErrorText(e)}'));
         }
       }
     });
@@ -366,10 +369,12 @@ class MeetingsBloc extends Bloc<MeetingsEvent, MeetingsState> {
       } catch (e) {
         if (previous is MeetingsLoaded) {
           emit(
-            previous.copyWith(flashMessage: 'فشل تعديل الفصل: ${e.toString()}'),
+            previous.copyWith(
+              flashMessage: 'فشل تعديل الفصل: ${arabicErrorText(e)}',
+            ),
           );
         } else {
-          emit(MeetingsError('فشل تعديل الفصل: ${e.toString()}'));
+          emit(MeetingsError('فشل تعديل الفصل: ${arabicErrorText(e)}'));
         }
       }
     });
@@ -386,10 +391,12 @@ class MeetingsBloc extends Bloc<MeetingsEvent, MeetingsState> {
       } catch (e) {
         if (previous is MeetingsLoaded) {
           emit(
-            previous.copyWith(flashMessage: 'فشل حذف الفصل: ${e.toString()}'),
+            previous.copyWith(
+              flashMessage: 'فشل حذف الفصل: ${arabicErrorText(e)}',
+            ),
           );
         } else {
-          emit(MeetingsError('فشل حذف الفصل: ${e.toString()}'));
+          emit(MeetingsError('فشل حذف الفصل: ${arabicErrorText(e)}'));
         }
       }
     });
