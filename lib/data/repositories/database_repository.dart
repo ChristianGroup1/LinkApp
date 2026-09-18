@@ -269,6 +269,15 @@ abstract class DatabaseRepository {
   // Offline sync
   Future<void> syncPendingOfflineData();
   Future<bool> hasPendingOfflineData();
+
+  /// How many locally accepted changes the server refused for good. They stay on
+  /// the device so the interface can report them instead of losing the servant's
+  /// work silently.
+  Future<int> rejectedOfflineDataCount();
+
+  /// Forgets the refused changes once the user has dismissed the warning.
+  Future<void> clearRejectedOfflineData();
+
   Future<void> warmOfflineCache();
 }
 
@@ -349,6 +358,12 @@ abstract class _SupabaseRepositoryBase implements DatabaseRepository {
 
   @override
   Future<bool> hasPendingOfflineData() => _offlineWriter.hasPendingData();
+
+  @override
+  Future<int> rejectedOfflineDataCount() => _offlineWriter.rejectedDataCount();
+
+  @override
+  Future<void> clearRejectedOfflineData() => _offlineWriter.clearRejectedData();
 
   @override
   Future<void> warmOfflineCache() async {

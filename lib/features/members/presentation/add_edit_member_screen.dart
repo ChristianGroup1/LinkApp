@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../../core/errors/arabic_error_text.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/models.dart';
 import '../../../data/offline/offline_save_result.dart';
@@ -49,6 +48,7 @@ class _AddEditMemberScreenState extends State<AddEditMemberScreen> {
   List<SundaySchoolClassEntity> _classes = [];
   List<MeetingEntity> _meetings = [];
   bool _isLoadingDropdowns = true;
+  bool _hasAssignmentLoadError = false;
 
   @override
   void initState() {
@@ -84,33 +84,63 @@ class _AddEditMemberScreenState extends State<AddEditMemberScreen> {
   Future<void> _loadDropdownData() async {
     try {
       final repo = context.read<DatabaseRepository>();
+      final profile = await repo.getCurrentProfile();
+      if (profile == null) {
+        throw StateError('current profile is unavailable');
+      }
+      final isAdmin =
+          profile.role == AppRole.superAdmin ||
+          profile.role == AppRole.churchAdmin;
       final results = await Future.wait([
         repo.getAllSundaySchoolClasses(),
         repo.getMeetings(),
+        if (!isAdmin) repo.getUserClassAssignments(profile.id),
+        if (!isAdmin) repo.getUserMeetingAssignments(profile.id),
       ]);
       final classes = results[0] as List<SundaySchoolClassEntity>;
       final meetings = results[1] as List<MeetingEntity>;
+      final manageableClassIds = isAdmin
+          ? null
+          : (results[2] as List<Map<String, dynamic>>)
+                .where(
+                  (assignment) =>
+                      assignment['can_take_attendance'] as bool? ?? false,
+                )
+                .map((assignment) => assignment['class_id'] as String)
+                .toSet();
+      final manageableMeetingIds = isAdmin
+          ? null
+          : (results[3] as List<Map<String, dynamic>>)
+                .where(
+                  (assignment) =>
+                      assignment['can_take_attendance'] as bool? ?? false,
+                )
+                .map((assignment) => assignment['meeting_id'] as String)
+                .toSet();
 
       if (!mounted) return;
       setState(() {
         _classes = classes
             .where(
               (item) =>
-                  item.isActive ||
-                  item.id == widget.member?.sundaySchoolClassId ||
-                  item.id == widget.initialClassId,
+                  (isAdmin || manageableClassIds!.contains(item.id)) &&
+                  (item.isActive ||
+                      item.id == widget.member?.sundaySchoolClassId ||
+                      item.id == widget.initialClassId),
             )
             .toList();
         _meetings = meetings
             .where(
               (item) =>
                   item.kind != MeetingKind.sundaySchool &&
+                  (isAdmin || manageableMeetingIds!.contains(item.id)) &&
                   (item.isActive ||
                       item.id == widget.member?.meetingId ||
                       item.id == widget.initialMeetingId),
             )
             .toList();
         _isLoadingDropdowns = false;
+        _hasAssignmentLoadError = false;
 
         // Direct meetings appear first, then Sunday school classes.
         if (widget.member == null && !_hasValidSelectedAssignment) {
@@ -123,9 +153,12 @@ class _AddEditMemberScreenState extends State<AddEditMemberScreen> {
           }
         }
       });
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
-        setState(() => _isLoadingDropdowns = false);
+        setState(() {
+          _isLoadingDropdowns = false;
+          _hasAssignmentLoadError = true;
+        });
       }
     }
   }
@@ -241,11 +274,15 @@ class _AddEditMemberScreenState extends State<AddEditMemberScreen> {
     final parentPhone = _parentPhoneController.text.trim();
     final notes = _notesController.text.trim();
 
-    if (_selectedAssignmentValue == null) {
+    final isEdit = widget.member != null;
+
+    if (!_hasValidSelectedAssignment) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'الرجاء اختيار تبعية العضو أولاً',
+            isEdit
+                ? 'اختر اجتماعًا أو فصلًا لديك صلاحية تعديل أعضائه'
+                : 'اختر اجتماعًا أو فصلًا لديك صلاحية إضافة أعضاء إليه',
             style: GoogleFonts.cairo(),
           ),
           backgroundColor: AppTheme.accentRed,
@@ -310,12 +347,21 @@ class _AddEditMemberScreenState extends State<AddEditMemberScreen> {
     } catch (error) {
       if (!mounted) return;
       setState(() => _isSaving = false);
+      final rawError = error.toString().toLowerCase();
+      final isPermissionError =
+          rawError.contains('42501') ||
+          rawError.contains('row-level security') ||
+          rawError.contains('forbidden');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            widget.member == null
-                ? 'تعذّر إضافة العضو: ${arabicErrorText(error)}'
-                : 'تعذّر حفظ تعديلات العضو: ${arabicErrorText(error)}',
+            isPermissionError
+                ? isEdit
+                      ? 'ليس لديك صلاحية تعديل أعضاء هذه التبعية. اطلب من مدير الكنيسة تفعيل صلاحية تسجيل الحضور.'
+                      : 'ليس لديك صلاحية إضافة أعضاء لهذه التبعية. اطلب من مدير الكنيسة تفعيل صلاحية تسجيل الحضور.'
+                : isEdit
+                ? 'تعذّر حفظ تعديلات. حاول مرة أخرى.'
+                : 'تعذّر إضافة العضو. حاول مرة أخرى.',
             style: GoogleFonts.cairo(),
           ),
           backgroundColor: AppTheme.accentRed,
@@ -622,15 +668,25 @@ class _AddEditMemberScreenState extends State<AddEditMemberScreen> {
 
   Widget _buildAssignmentSelector() {
     if (_meetings.isEmpty && _classes.isEmpty) {
-      return const _AssignmentEmptyState(
+      return _AssignmentEmptyState(
         key: ValueKey('empty-assignments'),
-        icon: Icons.account_tree_outlined,
-        message: 'لا توجد اجتماعات أو فصول نشطة حاليًا',
+        icon: _hasAssignmentLoadError
+            ? Icons.cloud_off_outlined
+            : Icons.lock_outline_rounded,
+        message: _hasAssignmentLoadError
+            ? 'تعذّر تحميل صلاحيات التبعية. حاول فتح الشاشة مرة أخرى'
+            : 'لا يوجد اجتماع أو فصل لديك صلاحية إضافة أعضاء إليه',
       );
     }
     return DropdownButtonFormField<String>(
       key: const ValueKey('assignment-selector'),
-      initialValue: _selectedAssignmentValue,
+      // A member can be assigned to a class or meeting the signed-in servant
+      // has no permission over; that assignment is not among the items, and a
+      // value without a matching item crashes the dropdown. Show it empty and
+      // let the servant pick one of their own assignments instead.
+      initialValue: _hasValidSelectedAssignment
+          ? _selectedAssignmentValue
+          : null,
       isExpanded: true,
       itemHeight: 62,
       style: GoogleFonts.cairo(
@@ -643,6 +699,13 @@ class _AddEditMemberScreenState extends State<AddEditMemberScreen> {
         icon: Icons.account_tree_outlined,
         requiredField: true,
       ),
+      // The closed field reserves room for one line of text, so it shows the
+      // target name alone. The two-line label belongs to the opened menu, where
+      // itemHeight leaves space for both lines.
+      selectedItemBuilder: (context) => [
+        for (final item in _meetings) _AssignmentFieldLabel(title: item.nameAr),
+        for (final item in _classes) _AssignmentFieldLabel(title: item.nameAr),
+      ],
       items: [
         ..._meetings.map(
           (item) => DropdownMenuItem<String>(
@@ -668,6 +731,33 @@ class _AddEditMemberScreenState extends State<AddEditMemberScreen> {
         ),
       ],
       onChanged: _selectAssignment,
+    );
+  }
+}
+
+/// The single-line value shown inside the closed assignment field.
+///
+/// The field reserves one line of vertical space, so the two-line
+/// [_AssignmentOptionLabel] the menu uses would overflow it. `height` is set
+/// explicitly so the line box stays inside that space whatever the loaded
+/// font's own metrics are.
+class _AssignmentFieldLabel extends StatelessWidget {
+  final String title;
+
+  const _AssignmentFieldLabel({required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      title,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: GoogleFonts.cairo(
+        color: AppTheme.textDark,
+        fontSize: 13,
+        height: 1.2,
+        fontWeight: FontWeight.w800,
+      ),
     );
   }
 }

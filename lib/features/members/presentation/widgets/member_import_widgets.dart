@@ -3,8 +3,8 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../data/models/models.dart';
+import '../../../../data/offline/member_import_history.dart';
 import '../../data/member_excel_service.dart';
-import '../../data/member_import_history.dart';
 
 /// What the user chose from the import result dialog.
 enum ImportResultAction { close, retryFailed, undo }
@@ -246,7 +246,10 @@ Future<MemberImportConfirmation?> showMemberImportPreviewDialog(
                   ...result.warnings,
                 ]),
                 icon: const Icon(Icons.download_rounded),
-                label: Text('تنزيل الأخطاء (Excel)', style: GoogleFonts.cairo()),
+                label: Text(
+                  'تنزيل الأخطاء (Excel)',
+                  style: GoogleFonts.cairo(),
+                ),
               ),
             TextButton(
               onPressed: () => Navigator.pop(dialogContext),
@@ -446,7 +449,7 @@ Future<void> showMemberImportHistoryDialog(
           width: 480,
           child: entries.isEmpty
               ? Text(
-                  'لا توجد عمليات استيراد سابقة على هذا الجهاز',
+                  'لا توجد عمليات استيراد مسجلة لكنيستك على هذا الجهاز',
                   style: GoogleFonts.cairo(),
                 )
               : SizedBox(
@@ -692,7 +695,10 @@ class ImportHistoryTile extends StatelessWidget {
               ),
             ),
             if (entry.undone)
-              _ImportHistoryBadge(label: 'تم التراجع', color: AppTheme.accentRed)
+              _ImportHistoryBadge(
+                label: 'تم التراجع',
+                color: AppTheme.accentRed,
+              )
             else if (entry.cancelled)
               _ImportHistoryBadge(
                 label: 'أُوقف بأمان',

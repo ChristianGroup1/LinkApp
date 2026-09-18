@@ -97,9 +97,17 @@ abstract class _OfflineWriteHandlerBase {
 
   Future<bool> hasPendingData() async {
     final prefs = await SharedPreferences.getInstance();
-    final unsynced = prefs.getStringList('offline_unsynced_sessions') ?? [];
+    final unsynced =
+        prefs.getStringList(OfflineCache.unsyncedSessionsKey) ?? [];
     return unsynced.isNotEmpty || !(await queue.isEmpty());
   }
+
+  /// Changes the server refused for good, so the interface can say so instead of
+  /// letting them sit invisible on the device.
+  Future<int> rejectedDataCount() => queue.rejectedCount();
+
+  /// Forgets the refused changes after the user has acknowledged the warning.
+  Future<void> clearRejectedData() => queue.clearRejected();
 
   Future<void> clear() => queue.clear();
 

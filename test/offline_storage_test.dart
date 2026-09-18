@@ -4,6 +4,7 @@ import 'package:link/data/offline/offline_cache.dart';
 import 'package:link/data/offline/offline_entity_json.dart';
 import 'package:link/data/offline/offline_write_queue.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -188,6 +189,47 @@ void main() {
       OfflineOpType.syncOrder.toSet(),
       hasLength(OfflineOpType.syncOrder.length),
     );
+  });
+
+  test('rejected operations are counted and cleared on acknowledgement', () async {
+    final queue = OfflineWriteQueue();
+    final operation = QueuedOperation(
+      id: 'op-refused',
+      type: OfflineOpType.memberUpdate,
+      payload: {'id': 'member-1'},
+      queuedAt: DateTime.utc(2026, 1, 1),
+    );
+
+    expect(await queue.rejectedCount(), 0);
+    await queue.reject(operation, 'row-level security');
+    expect(await queue.rejectedCount(), 1);
+
+    await queue.clearRejected();
+    expect(await queue.rejectedCount(), 0);
+  });
+
+  test('only unfixable server refusals count as permanent rejections', () {
+    expect(
+      isPermanentServerRejection(
+        PostgrestException(message: 'rls', code: '42501'),
+      ),
+      isTrue,
+    );
+    expect(
+      isPermanentServerRejection(
+        PostgrestException(message: 'duplicate', code: '23505'),
+      ),
+      isTrue,
+    );
+    // An expired session or a dropped connection can succeed later, so those
+    // operations must stay queued.
+    expect(
+      isPermanentServerRejection(
+        PostgrestException(message: 'JWT expired', code: 'PGRST301'),
+      ),
+      isFalse,
+    );
+    expect(isPermanentServerRejection(Exception('connection reset')), isFalse);
   });
 
   test(

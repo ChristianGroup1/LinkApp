@@ -15,6 +15,7 @@ import 'package:link/features/attendance/logic/attendance_bloc.dart'
     as attendance;
 import 'package:link/features/meetings/logic/meetings_bloc.dart';
 import 'package:link/features/members/logic/members_bloc.dart';
+import 'package:link/features/members/presentation/add_edit_member_screen.dart';
 import 'package:link/logic/auth/auth_bloc.dart';
 import 'package:link/main.dart';
 import 'package:link/presentation/screens/app_tour_screen.dart';
@@ -112,6 +113,7 @@ void main() {
         state.allMembers.any((member) => member.fullName == 'عضو جديد'),
         isTrue,
       );
+      expect(state.flashIsError, isFalse);
     },
   );
 
@@ -133,6 +135,134 @@ void main() {
     await expectLater(completion.future, throwsA(isA<StateError>()));
     expect((await errorState as MembersError).message, contains('تعذر الحفظ'));
   });
+
+  test('member RLS failure is shown as a clear permission message', () async {
+    final bloc = MembersBloc(repository: MemberPermissionFailureRepository());
+    addTearDown(bloc.close);
+    final completion = Completer<OfflineSaveResult<MemberEntity>>();
+    final errorState = bloc.stream.firstWhere((state) => state is MembersError);
+
+    bloc.add(
+      CreateMember(
+        fullName: 'عضو غير مسموح',
+        scope: MemberScope.meeting,
+        meetingId: 'mtg-read-only',
+        completion: completion,
+      ),
+    );
+
+    await expectLater(completion.future, throwsA(isA<StateError>()));
+    final message = (await errorState as MembersError).message;
+    expect(message, contains('صلاحية'));
+    expect(message, contains('كنيسة حسابك'));
+    expect(message, isNot(contains('PostgrestException')));
+    expect(message, isNot(contains('42501')));
+    expect(message, isNot(contains('row-level security')));
+  });
+
+  testWidgets(
+    'member form only offers assignments with attendance permission',
+    (tester) async {
+      final repository = AssignmentPermissionRepository();
+      final bloc = MembersBloc(repository: repository);
+      addTearDown(bloc.close);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: RepositoryProvider<DatabaseRepository>.value(
+            value: repository,
+            child: BlocProvider.value(
+              value: bloc,
+              child: const AddEditMemberScreen(),
+            ),
+          ),
+        ),
+      );
+      await _settle(tester);
+
+      expect(find.text('اجتماع مسموح'), findsOneWidget);
+      expect(find.text('اجتماع للقراءة'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'a refused member update asks for edit permission, not add permission',
+    (tester) async {
+      final repository = MemberEditPermissionFailureRepository();
+      final bloc = MembersBloc(repository: repository);
+      addTearDown(bloc.close);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: RepositoryProvider<DatabaseRepository>.value(
+            value: repository,
+            child: BlocProvider.value(
+              value: bloc,
+              child: AddEditMemberScreen(
+                member: MemberEditPermissionFailureRepository.member,
+              ),
+            ),
+          ),
+        ),
+      );
+      await _settle(tester);
+
+      await tester.tap(find.text('حفظ التعديلات'));
+      await _settle(tester);
+
+      expect(
+        find.textContaining('صلاحية تعديل أعضاء هذه التبعية'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('صلاحية إضافة أعضاء'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'member form survives a member assigned outside the servant permissions',
+    (tester) async {
+      // The servant manages one meeting, but the member being edited belongs
+      // to a class the servant has no permission over. That class is not among
+      // the dropdown items, so its id must not be handed to the dropdown as a
+      // selected value — doing so crashes the form.
+      final repository = AssignmentPermissionRepository();
+      final bloc = MembersBloc(repository: repository);
+      addTearDown(bloc.close);
+      const member = MemberEntity(
+        id: 'mem-2',
+        churchId: 'ch-1',
+        fullName: 'يوسف حنا',
+        scope: MemberScope.sundaySchoolClass,
+        sundaySchoolClassId: 'cls-unmanaged',
+        isActive: true,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: RepositoryProvider<DatabaseRepository>.value(
+            value: repository,
+            child: BlocProvider.value(
+              value: bloc,
+              child: const AddEditMemberScreen(member: member),
+            ),
+          ),
+        ),
+      );
+      await _settle(tester);
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('تبعية العضو *'), findsOneWidget);
+
+      // Saving without picking one of the permitted assignments is refused
+      // with guidance instead of sending a doomed request.
+      await tester.tap(find.text('حفظ التعديلات'));
+      await _settle(tester);
+      expect(
+        find.textContaining('اختر اجتماعًا أو فصلًا لديك صلاحية تعديل'),
+        findsOneWidget,
+      );
+    },
+  );
 
   test('signs out the recovery session after updating the password', () async {
     final repository = TestRepository();
@@ -400,7 +530,10 @@ void main() {
             )
             as MembersLoaded;
 
-    expect(updated.filteredMembers.map((member) => member.id), contains('mem-live'));
+    expect(
+      updated.filteredMembers.map((member) => member.id),
+      contains('mem-live'),
+    );
   });
 
   test(
@@ -1568,7 +1701,60 @@ class TestRepository implements DatabaseRepository {
   Future<bool> hasPendingOfflineData() async => false;
 
   @override
+  Future<int> rejectedOfflineDataCount() async => 0;
+
+  @override
+  Future<void> clearRejectedOfflineData() async {}
+
+  @override
   Future<void> warmOfflineCache() async {}
+}
+
+class AssignmentPermissionRepository extends TestRepository {
+  AssignmentPermissionRepository() {
+    _profile = const AppProfile(
+      id: 'servant-1',
+      churchId: 'ch-1',
+      fullName: 'خادم الاختبار',
+      role: AppRole.attendanceOfficer,
+    );
+    _meetings.addAll(const [
+      MeetingEntity(
+        id: 'mtg-allowed',
+        churchId: 'ch-1',
+        name: 'Allowed meeting',
+        nameAr: 'اجتماع مسموح',
+        kind: MeetingKind.normal,
+        weekday: 1,
+        isActive: true,
+      ),
+      MeetingEntity(
+        id: 'mtg-read-only',
+        churchId: 'ch-1',
+        name: 'Read-only meeting',
+        nameAr: 'اجتماع للقراءة',
+        kind: MeetingKind.normal,
+        weekday: 2,
+        isActive: true,
+      ),
+    ]);
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> getUserMeetingAssignments(
+    String userId,
+  ) async => [
+    {
+      'meeting_id': 'mtg-allowed',
+      'can_take_attendance': true,
+      'can_view_reports': true,
+    },
+    {
+      'meeting_id': 'mtg-read-only',
+      'can_take_attendance': false,
+      'can_view_reports': true,
+    },
+  ];
 }
 
 class InvitationMismatchRepository extends TestRepository {
@@ -1645,5 +1831,59 @@ class SaveFailureRepository extends TestRepository {
     String? notes,
   }) async {
     throw StateError('تعذر الحفظ');
+  }
+}
+
+class MemberPermissionFailureRepository extends TestRepository {
+  @override
+  Future<OfflineSaveResult<MemberEntity>> createMember({
+    DateTime? birthDate,
+    String? code,
+    required String fullName,
+    String? meetingId,
+    String? parentName,
+    String? parentPhone,
+    String? phone,
+    required MemberScope scope,
+    String? sundaySchoolClassId,
+    String? notes,
+  }) async {
+    throw StateError(
+      'PostgrestException: new row violates row-level security policy, code: 42501, details: Forbidden',
+    );
+  }
+}
+
+/// A servant who may open an existing member but has no attendance permission
+/// over its assignment, so the server refuses the update with SQLSTATE 42501.
+class MemberEditPermissionFailureRepository extends TestRepository {
+  static const member = MemberEntity(
+    id: 'mem-1',
+    churchId: 'ch-1',
+    fullName: 'مريم جرجس',
+    scope: MemberScope.sundaySchoolClass,
+    sundaySchoolClassId: 'cls-1',
+    code: 'LN-0047',
+    isActive: true,
+  );
+
+  @override
+  Future<OfflineSaveResult<MemberEntity>> updateMember({
+    required String id,
+    required String fullName,
+    required MemberScope scope,
+    String? sundaySchoolClassId,
+    String? meetingId,
+    String? phone,
+    String? parentName,
+    String? parentPhone,
+    String? code,
+    DateTime? birthDate,
+    required bool isActive,
+    String? notes,
+  }) async {
+    throw StateError(
+      'PostgrestException: new row violates row-level security policy, code: 42501, details: Forbidden',
+    );
   }
 }

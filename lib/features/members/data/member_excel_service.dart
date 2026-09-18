@@ -4,7 +4,7 @@ import 'package:csv/csv.dart';
 import 'package:excel/excel.dart';
 import 'package:flutter/foundation.dart';
 
-import '../../../core/errors/arabic_error_text.dart';
+import '../../../core/diagnostics/storage_write_error.dart';
 import '../../../data/models/models.dart';
 import '../../../data/offline/member_create_draft.dart';
 import '../../../data/offline/offline_save_result.dart';
@@ -391,7 +391,8 @@ class MemberImportWriter {
           MemberImportIssue(
             row: row.sourceRow,
             message:
-                'تم إنشاء العضو، لكن تعذر تحويله إلى غير نشط: ${_errorText(error)}',
+                'تم إنشاء العضو، لكن تعذر تحويله إلى غير نشط: '
+                '${_errorReason(error)}',
             suggestion: 'افتح بيانات العضو وعطّل حالة «نشط» يدويًا',
             sourceValues: row.toCsvValues(),
           ),
@@ -453,7 +454,7 @@ class MemberImportWriter {
             issues.add(
               MemberImportIssue(
                 row: item.row.sourceRow,
-                message: _errorText(error),
+                message: _errorText(error, action: 'إضافة العضو'),
                 suggestion:
                     'صحح البيانات أو الاتصال ثم اختر «إعادة محاولة الفاشل»',
                 sourceValues: item.row.toCsvValues(),
@@ -600,7 +601,7 @@ class MemberImportWriter {
         issues.add(
           MemberImportIssue(
             row: row.sourceRow,
-            message: _errorText(error),
+            message: _errorText(error, action: 'حفظ صف العضو'),
             suggestion: 'صحح البيانات أو الاتصال ثم اختر «إعادة محاولة الفاشل»',
             sourceValues: row.toCsvValues(),
             importRow: row,
@@ -630,7 +631,7 @@ class MemberImportWriter {
             row: 0,
             message:
                 'تعذر تنظيف الفصل الفارغ «${entry.value}»: '
-                '${_errorText(error)}',
+                '${_errorReason(error)}',
             suggestion: 'راجع الفصل واحذفه يدويًا إذا ظل فارغًا',
           ),
         );
@@ -661,7 +662,7 @@ class MemberImportWriter {
             row: 0,
             message:
                 'تعذر تنظيف الاجتماع الفارغ «${entry.value}»: '
-                '${_errorText(error)}',
+                '${_errorReason(error)}',
             suggestion: 'راجع الاجتماع واحذفه يدويًا إذا ظل فارغًا',
           ),
         );
@@ -725,7 +726,7 @@ class MemberImportWriter {
         issues.add(
           MemberImportIssue(
             row: 0,
-            message: 'تعذر حذف عضو أنشأه الاستيراد: ${_errorText(error)}',
+            message: 'تعذر حذف عضو أنشأه الاستيراد: ${_errorReason(error)}',
             suggestion: 'احذف العضو يدويًا من قائمة الأعضاء',
           ),
         );
@@ -756,7 +757,7 @@ class MemberImportWriter {
             row: 0,
             message:
                 'تعذر استرجاع بيانات «${previous.fullName}»: '
-                '${_errorText(error)}',
+                '${_errorReason(error)}',
             suggestion: 'راجع بيانات العضو وصححها يدويًا',
           ),
         );
@@ -783,7 +784,7 @@ class MemberImportWriter {
         issues.add(
           MemberImportIssue(
             row: 0,
-            message: 'تعذر حذف فصل أنشأه الاستيراد: ${_errorText(error)}',
+            message: 'تعذر حذف فصل أنشأه الاستيراد: ${_errorReason(error)}',
             suggestion: 'احذف الفصل يدويًا إذا ظل فارغًا',
           ),
         );
@@ -812,7 +813,7 @@ class MemberImportWriter {
         issues.add(
           MemberImportIssue(
             row: 0,
-            message: 'تعذر حذف اجتماع أنشأه الاستيراد: ${_errorText(error)}',
+            message: 'تعذر حذف اجتماع أنشأه الاستيراد: ${_errorReason(error)}',
             suggestion: 'احذف الاجتماع يدويًا إذا ظل فارغًا',
           ),
         );
@@ -829,7 +830,13 @@ class MemberImportWriter {
     );
   }
 
-  static String _errorText(Object error) => arabicErrorText(error);
+  /// Full, actionable sentence for the primary import action.
+  static String _errorText(Object error, {required String action}) =>
+      StorageWriteError.from(error).message(action: action);
+
+  /// Bare reason, for messages that already describe what failed.
+  static String _errorReason(Object error) =>
+      StorageWriteError.from(error).summary;
 }
 
 class _PendingMemberCreate {

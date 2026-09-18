@@ -62,6 +62,7 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
   bool _blocsInitialized = false;
   bool _offlineListenersAttached = false;
   bool _hasPendingSync = false;
+  int _rejectedSyncCount = 0;
   StreamSubscription<AppDataChange>? _dataChangeSubscription;
   Timer? _dataChangeDebounce;
   final Set<AppDataArea> _pendingDataAreas = {};
@@ -286,16 +287,27 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
   }
 
   Future<void> _loadPendingSyncState() async {
-    final pending = await context
-        .read<DatabaseRepository>()
-        .hasPendingOfflineData();
+    final repository = context.read<DatabaseRepository>();
+    final pending = await repository.hasPendingOfflineData();
+    final rejected = await repository.rejectedOfflineDataCount();
     if (mounted) {
-      setState(() => _hasPendingSync = pending);
+      setState(() {
+        _hasPendingSync = pending;
+        _rejectedSyncCount = rejected;
+      });
     }
   }
 
   void _onConnectivityChanged() {
     unawaited(_loadPendingSyncState());
+  }
+
+  Future<void> _dismissRejectedSyncWarning() async {
+    final repository = context.read<DatabaseRepository>();
+    await repository.clearRejectedOfflineData();
+    if (mounted) {
+      setState(() => _rejectedSyncCount = 0);
+    }
   }
 
   void _onAppDataChanged(AppDataChange change) {
@@ -556,6 +568,15 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
         ValueListenableBuilder<bool>(
           valueListenable: ConnectivityService.instance.isOnline,
           builder: (context, online, _) {
+            // Refused changes happen while online (the server answered), so
+            // this warning must not wait for the device to lose connection.
+            if (_rejectedSyncCount > 0) {
+              return OfflineBanner(
+                hasPendingSync: _hasPendingSync,
+                rejectedCount: _rejectedSyncCount,
+                onDismissRejected: _dismissRejectedSyncWarning,
+              );
+            }
             if (online) return const SizedBox.shrink();
             return OfflineBanner(hasPendingSync: _hasPendingSync);
           },

@@ -40,7 +40,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       textDirection: TextDirection.rtl,
       child: AuthShell(
         compact: true,
-        child: BlocConsumer<AuthBloc, AuthState>(
+        builder: (context) => BlocConsumer<AuthBloc, AuthState>(
           listener: (context, state) {
             if (state is AuthPasswordResetEmailSent) {
               setState(() => _emailSent = true);

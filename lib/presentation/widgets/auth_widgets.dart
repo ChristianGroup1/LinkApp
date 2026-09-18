@@ -5,11 +5,15 @@ import '../../core/theme/theme_controller.dart';
 
 const String kLogoAsset = 'assets/images/link_logo.png';
 
+void _dependOnAppliedTheme(BuildContext context) {
+  Theme.of(context);
+}
+
 class AuthShell extends StatelessWidget {
-  final Widget child;
+  final WidgetBuilder builder;
   final bool compact;
 
-  const AuthShell({super.key, required this.child, this.compact = false});
+  const AuthShell({super.key, required this.builder, this.compact = false});
 
   @override
   Widget build(BuildContext context) {
@@ -17,80 +21,96 @@ class AuthShell extends StatelessWidget {
     return AnimatedBuilder(
       animation: ThemeController.instance,
       builder: (context, _) {
-        final isDark = AppTheme.isDark;
-        return Scaffold(
-          body: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topRight,
-                    end: Alignment.bottomLeft,
-                    colors: isDark
-                        ? const [
-                            Color(0xFF0B1120),
-                            Color(0xFF111827),
-                            Color(0xFF080D19),
-                          ]
-                        : const [
-                            Color(0xFFF7F7FF),
-                            Color(0xFFEEF2FF),
-                            Color(0xFFF8FAFC),
-                          ],
+        final brightness = ThemeController.instance.resolvedBrightness;
+        AppTheme.setBrightness(brightness);
+        final isDark = brightness == Brightness.dark;
+        final theme = isDark
+            ? AppTheme.platformDarkTheme
+            : AppTheme.platformTheme;
+        return Theme(
+          data: theme,
+          child: Scaffold(
+            backgroundColor: Colors.transparent,
+            body: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topRight,
+                      end: Alignment.bottomLeft,
+                      colors: isDark
+                          ? const [
+                              Color(0xFF0B1120),
+                              Color(0xFF111827),
+                              Color(0xFF080D19),
+                            ]
+                          : const [
+                              Color(0xFFF7F7FF),
+                              Color(0xFFEEF2FF),
+                              Color(0xFFF8FAFC),
+                            ],
+                    ),
                   ),
                 ),
-              ),
-              Positioned(
-                top: compact ? -60 : -40,
-                right: compact ? -40 : -60,
-                child: AuthGlow(
-                  size: compact ? 220 : 280,
-                  color: (isDark ? AppTheme.primaryAccent : const Color(0xFF8DBDFF))
-                      .withValues(alpha: isDark ? 0.18 : 0.3),
+                Positioned(
+                  top: compact ? -60 : -40,
+                  right: compact ? -40 : -60,
+                  child: AuthGlow(
+                    size: compact ? 220 : 280,
+                    color:
+                        (isDark
+                                ? AppTheme.primaryAccent
+                                : const Color(0xFF8DBDFF))
+                            .withValues(alpha: isDark ? 0.18 : 0.3),
+                  ),
                 ),
-              ),
-              Positioned(
-                bottom: compact ? -60 : -50,
-                left: compact ? -50 : -60,
-                child: AuthGlow(
-                  size: compact ? 240 : 300,
-                  color: AppTheme.primary.withValues(alpha: isDark ? 0.14 : 0.22),
+                Positioned(
+                  bottom: compact ? -60 : -50,
+                  left: compact ? -50 : -60,
+                  child: AuthGlow(
+                    size: compact ? 240 : 300,
+                    color: AppTheme.primary.withValues(
+                      alpha: isDark ? 0.14 : 0.22,
+                    ),
+                  ),
                 ),
-              ),
-              SafeArea(
-                child: Stack(
-                  children: [
-                    SingleChildScrollView(
-                      padding: EdgeInsets.fromLTRB(
-                        desktop ? 48 : 22,
-                        desktop ? 32 : 12,
-                        desktop ? 48 : 22,
-                        desktop ? 48 : 28,
-                      ),
-                      child: Center(
-                        child: ConstrainedBox(
-                          constraints: BoxConstraints(
-                            maxWidth: desktop ? 640 : double.infinity,
-                            minHeight: compact
-                                ? 0
-                                : MediaQuery.of(context).size.height -
-                                      MediaQuery.of(context).padding.vertical -
-                                      (desktop ? 80 : 24),
+                SafeArea(
+                  child: Stack(
+                    children: [
+                      SingleChildScrollView(
+                        padding: EdgeInsets.fromLTRB(
+                          desktop ? 48 : 22,
+                          desktop ? 32 : 12,
+                          desktop ? 48 : 22,
+                          desktop ? 48 : 28,
+                        ),
+                        child: Center(
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxWidth: desktop ? 640 : double.infinity,
+                              minHeight: compact
+                                  ? 0
+                                  : MediaQuery.of(context).size.height -
+                                        MediaQuery.of(
+                                          context,
+                                        ).padding.vertical -
+                                        (desktop ? 80 : 24),
+                            ),
+                            child: builder(context),
                           ),
-                          child: child,
                         ),
                       ),
-                    ),
-                    Positioned(
-                      top: desktop ? 8 : 4,
-                      left: desktop ? 8 : 0,
-                      child: const AuthThemeToggle(),
-                    ),
-                  ],
+                      Positioned(
+                        top: desktop ? 8 : 4,
+                        left: desktop ? 8 : 0,
+                        child: const AuthThemeToggle(),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         );
       },
@@ -107,8 +127,9 @@ class AuthThemeToggle extends StatelessWidget {
     return AnimatedBuilder(
       animation: ThemeController.instance,
       builder: (context, _) {
-        final isDark =
-            ThemeController.instance.resolvedBrightness == Brightness.dark;
+        final brightness = ThemeController.instance.resolvedBrightness;
+        AppTheme.setBrightness(brightness);
+        final isDark = brightness == Brightness.dark;
         return Material(
           color: AppTheme.cardBackground,
           elevation: 0,
@@ -142,6 +163,34 @@ class AuthThemeToggle extends StatelessWidget {
   }
 }
 
+class AuthCheckbox extends StatelessWidget {
+  final bool value;
+  final ValueChanged<bool?>? onChanged;
+
+  const AuthCheckbox({super.key, required this.value, this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    _dependOnAppliedTheme(context);
+    return SizedBox(
+      height: 22,
+      width: 22,
+      child: Checkbox(
+        value: value,
+        onChanged: onChanged,
+        fillColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? AppTheme.primaryAccent
+              : Colors.transparent,
+        ),
+        checkColor: Colors.white,
+        side: BorderSide(color: AppTheme.border, width: 1.5),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+      ),
+    );
+  }
+}
+
 class AuthFormCard extends StatelessWidget {
   final List<Widget> children;
   final EdgeInsetsGeometry padding;
@@ -154,6 +203,7 @@ class AuthFormCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    _dependOnAppliedTheme(context);
     return Container(
       padding: padding,
       decoration: BoxDecoration(
@@ -209,6 +259,7 @@ class AuthScreenTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    _dependOnAppliedTheme(context);
     return Column(
       children: [
         Text(
@@ -245,6 +296,7 @@ class AuthBackButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    _dependOnAppliedTheme(context);
     return Align(
       alignment: Alignment.centerRight,
       child: Material(
@@ -303,6 +355,7 @@ class AuthTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    _dependOnAppliedTheme(context);
     return Column(
       children: [
         Text(
@@ -337,6 +390,7 @@ class AuthFieldLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    _dependOnAppliedTheme(context);
     return Padding(
       padding: const EdgeInsetsDirectional.only(bottom: 8, start: 2, end: 2),
       child: Text(
@@ -360,6 +414,7 @@ class AuthFormSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    _dependOnAppliedTheme(context);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(22, 22, 22, 24),
@@ -424,6 +479,7 @@ class _AuthSoftTextFieldState extends State<AuthSoftTextField> {
 
   @override
   Widget build(BuildContext context) {
+    _dependOnAppliedTheme(context);
     final fieldDirection = widget.latinInput
         ? TextDirection.ltr
         : TextDirection.rtl;
@@ -460,6 +516,9 @@ class _AuthSoftTextFieldState extends State<AuthSoftTextField> {
             textDirection: fieldDirection,
             textAlign: fieldAlign,
             cursorColor: AppTheme.primary,
+            keyboardAppearance: AppTheme.isDark
+                ? Brightness.dark
+                : Brightness.light,
             style: GoogleFonts.cairo(
               color: AppTheme.textDark,
               fontSize: 14,
@@ -516,6 +575,7 @@ class AuthPrimaryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    _dependOnAppliedTheme(context);
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -615,6 +675,7 @@ class AuthModeToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    _dependOnAppliedTheme(context);
     return Container(
       padding: const EdgeInsets.all(5),
       decoration: BoxDecoration(
@@ -660,6 +721,7 @@ class RegisterModeButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    _dependOnAppliedTheme(context);
     return InkWell(
       borderRadius: BorderRadius.circular(12),
       onTap: onTap,

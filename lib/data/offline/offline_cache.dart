@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../shared/data/app_models.dart';
+import 'member_import_history.dart';
 import 'offline_entity_json.dart';
 
 /// Persists Supabase row JSON locally for offline reads.
@@ -23,6 +24,14 @@ class OfflineCache {
       'offline_cache_meeting_assignments_meeting_';
   static const _profilesPrefix = 'offline_cache_profiles_';
   static const _invitationsPrefix = 'offline_cache_invitations_';
+
+  /// Attendance status caches, keyed by session id. Written by the attendance
+  /// repository and the offline sync paths rather than by this cache, so the key
+  /// names live here and those writers reference them.
+  static const attendanceRecordsPrefix = 'offline_attendance_records_';
+
+  /// Sessions that still hold attendance records waiting to be synced.
+  static const unsyncedSessionsKey = 'offline_unsynced_sessions';
 
   Future<void> saveProfile(Map<String, dynamic> row) async {
     await _write(_profileKey, row);
@@ -446,6 +455,8 @@ class OfflineCache {
     await saveInvitations(churchId, invitations.map(invitationToJson).toList());
   }
 
+  /// Removes every church-scoped value this device keeps, so the next account
+  /// that signs in never reads the previous church's data.
   Future<void> clearAll() async {
     final prefs = await SharedPreferences.getInstance();
     final keys = prefs
@@ -453,6 +464,7 @@ class OfflineCache {
         .where(
           (key) =>
               key == _profileKey ||
+              key == unsyncedSessionsKey ||
               key.startsWith(_churchPrefix) ||
               key.startsWith(_meetingsPrefix) ||
               key.startsWith(_classesPrefix) ||
@@ -465,7 +477,9 @@ class OfflineCache {
               key.startsWith(_classAssignmentsByClassPrefix) ||
               key.startsWith(_meetingAssignmentsByMeetingPrefix) ||
               key.startsWith(_profilesPrefix) ||
-              key.startsWith(_invitationsPrefix),
+              key.startsWith(_invitationsPrefix) ||
+              key.startsWith(attendanceRecordsPrefix) ||
+              key.startsWith(MemberImportHistoryStore.keyPrefix),
         )
         .toList();
     for (final key in keys) {
