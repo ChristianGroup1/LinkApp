@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class QueuedOperation {
   final String id;
@@ -31,6 +32,28 @@ class QueuedOperation {
       queuedAt: DateTime.parse(json['queued_at'] as String),
     );
   }
+}
+
+/// True when the server refused an operation in a way that repeating it can
+/// never fix, because the same payload will always be rejected.
+///
+/// PostgreSQL states the reason in the SQLSTATE the request fails with:
+///
+/// * `22xxx` — the value itself is unusable (too long, unparseable, out of range).
+/// * `23xxx` — an integrity rule rejects it (required value missing, unique code
+///   already used, parent row gone, check constraint failed).
+/// * `42xxx` — the access rule rejects it (row-level security refused the row,
+///   the account lost permission over the target).
+///
+/// Everything else — connection resets, timeouts, an expired session, a server
+/// busy with another transaction — may succeed on a later attempt, so callers
+/// keep those queued.
+bool isPermanentServerRejection(Object error) {
+  final code = error is PostgrestException ? error.code : null;
+  if (code == null) return false;
+  return code.startsWith('22') ||
+      code.startsWith('23') ||
+      code.startsWith('42');
 }
 
 abstract class OfflineOpType {
@@ -90,6 +113,11 @@ abstract class OfflineOpType {
 class OfflineWriteQueue {
   static const _queueKey = 'offline_write_queue';
   static const _idMapKey = 'offline_id_mappings';
+  static const _rejectedKey = 'offline_write_rejected';
+
+  /// How many refused operations are kept on the device so nothing the servant
+  /// wrote is thrown away without a trace.
+  static const _maxRejected = 20;
 
   // SharedPreferences has no atomic read/modify/write operation. Keep queue and
   // id-map mutations serialized across all queue instances so simultaneous UI
@@ -174,7 +202,53 @@ class OfflineWriteQueue {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_queueKey);
       await prefs.remove(_idMapKey);
+      await prefs.remove(_rejectedKey);
     });
+  }
+
+  /// Sets an operation aside when the server refused it for good.
+  ///
+  /// A refused operation can never succeed on a retry, and leaving it in the
+  /// queue would block every later change behind it, so it is moved here. The
+  /// payload is kept — it names a record the servant wrote — and the count is
+  /// reported to the interface instead of disappearing silently.
+  Future<void> reject(QueuedOperation operation, String reason) async {
+    await _serialize(() async {
+      final prefs = await SharedPreferences.getInstance();
+      final rejected = [
+        {...operation.toJson(), 'reason': reason},
+        ..._decodeRejected(prefs.getString(_rejectedKey)),
+      ];
+      await prefs.setString(
+        _rejectedKey,
+        jsonEncode(rejected.take(_maxRejected).toList()),
+      );
+    });
+  }
+
+  /// How many accepted-then-refused operations this device is still holding.
+  Future<int> rejectedCount() async {
+    final prefs = await SharedPreferences.getInstance();
+    return _decodeRejected(prefs.getString(_rejectedKey)).length;
+  }
+
+  /// Drops the refused operations once the user has acknowledged them, so the
+  /// warning does not follow them forever after they re-entered the data.
+  Future<void> clearRejected() async {
+    await _serialize(() async {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_rejectedKey);
+    });
+  }
+
+  List<dynamic> _decodeRejected(String? raw) {
+    if (raw == null || raw.isEmpty) return const [];
+    try {
+      final decoded = jsonDecode(raw);
+      return decoded is List ? decoded : const [];
+    } catch (_) {
+      return const [];
+    }
   }
 
   Future<String> generateId(String prefix) async {

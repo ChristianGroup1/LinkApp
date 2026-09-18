@@ -837,7 +837,20 @@ for all using (public.is_church_admin(church_id)) with check (public.is_church_a
 
 -- 8.6 Members (admins + servants with attendance permissions)
 create policy "members_select_access" on public.members
-for select using (public.can_access_member(id));
+for select to authenticated using (
+  church_id = (select public.current_church_id())
+  and (
+    public.is_church_admin(church_id)
+    or (
+      sunday_school_class_id is not null
+      and public.can_access_class(sunday_school_class_id)
+    )
+    or (
+      meeting_id is not null
+      and public.can_access_meeting(meeting_id)
+    )
+  )
+);
 create policy "members_manage" on public.members
 for all using (
   public.is_church_admin(church_id)

@@ -21,9 +21,18 @@ mixin _OfflineWriteSync on _OfflineWriteHandlerBase {
         if (done) {
           await queue.remove(operation.id);
         }
-      } catch (_) {
-        // Keep remaining operations for the next sync attempt.
-        break;
+      } catch (error) {
+        if (!isPermanentServerRejection(error)) {
+          // A connection drop, a timeout, or an expired session: the operation
+          // may succeed later, and every later change may depend on this one,
+          // so keep the queue in order and try again on the next sync.
+          break;
+        }
+        // The server will refuse this payload every time — for example the
+        // servant no longer has permission over the target, or the record is
+        // gone. Set it aside so the changes queued behind it can still upload.
+        await queue.reject(operation, error.toString());
+        await queue.remove(operation.id);
       }
     }
   }
@@ -419,31 +428,33 @@ mixin _OfflineWriteSync on _OfflineWriteHandlerBase {
     String newSessionId,
   ) async {
     final prefs = await SharedPreferences.getInstance();
-    final oldKey = 'offline_attendance_records_$oldSessionId';
-    final newKey = 'offline_attendance_records_$newSessionId';
+    final oldKey = '${OfflineCache.attendanceRecordsPrefix}$oldSessionId';
+    final newKey = '${OfflineCache.attendanceRecordsPrefix}$newSessionId';
     final raw = prefs.getString(oldKey);
     if (raw == null) return;
     await prefs.setString(newKey, raw);
     await prefs.remove(oldKey);
-    final unsynced = prefs.getStringList('offline_unsynced_sessions') ?? [];
+    final unsynced =
+        prefs.getStringList(OfflineCache.unsyncedSessionsKey) ?? [];
     if (unsynced.contains(oldSessionId)) {
       unsynced
         ..remove(oldSessionId)
         ..add(newSessionId);
-      await prefs.setStringList('offline_unsynced_sessions', unsynced);
+      await prefs.setStringList(OfflineCache.unsyncedSessionsKey, unsynced);
     }
   }
 
   @override
   Future<void> _syncAttendanceWithRemapping() async {
     final prefs = await SharedPreferences.getInstance();
-    final unsynced = prefs.getStringList('offline_unsynced_sessions') ?? [];
+    final unsynced =
+        prefs.getStringList(OfflineCache.unsyncedSessionsKey) ?? [];
     if (unsynced.isEmpty) return;
 
     final toRemove = <String>[];
     for (final sessionId in unsynced) {
       final resolvedSessionId = await queue.resolveId(sessionId);
-      final cacheKey = 'offline_attendance_records_$sessionId';
+      final cacheKey = '${OfflineCache.attendanceRecordsPrefix}$sessionId';
       final cachedData = prefs.getString(cacheKey);
       if (cachedData == null) {
         toRemove.add(sessionId);
@@ -479,7 +490,7 @@ mixin _OfflineWriteSync on _OfflineWriteHandlerBase {
 
     if (toRemove.isNotEmpty) {
       unsynced.removeWhere(toRemove.contains);
-      await prefs.setStringList('offline_unsynced_sessions', unsynced);
+      await prefs.setStringList(OfflineCache.unsyncedSessionsKey, unsynced);
     }
   }
 

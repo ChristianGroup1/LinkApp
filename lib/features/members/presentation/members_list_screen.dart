@@ -6,13 +6,14 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:printing/printing.dart';
 
+import '../../../core/diagnostics/storage_write_error.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/models.dart';
+import '../../../data/offline/member_import_history.dart';
 import '../../../data/repositories/database_repository.dart';
 import '../../../logic/home/home_bloc.dart';
 import '../../../shared/ui/app_states.dart';
 import '../data/member_excel_service.dart';
-import '../data/member_import_history.dart';
 import '../data/member_qr_pdf_service.dart';
 import '../logic/members_bloc.dart';
 import 'add_edit_member_screen.dart';
@@ -37,7 +38,6 @@ class _MembersListScreenState extends State<MembersListScreen> {
   bool _excelBusy = false;
   final _excelService = MemberExcelService();
   final _importWriter = MemberImportWriter();
-  final _historyStore = MemberImportHistoryStore();
   final _qrPdfService = MemberQrPdfService();
 
   List<SundaySchoolClassEntity> _classes = [];
@@ -115,7 +115,9 @@ class _MembersListScreenState extends State<MembersListScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(state.flashMessage!, style: GoogleFonts.cairo()),
-              backgroundColor: AppTheme.accentRed,
+              backgroundColor: state.flashIsError
+                  ? AppTheme.accentRed
+                  : AppTheme.secondary,
             ),
           );
           context.read<MembersBloc>().add(ClearMembersFlashMessage());
@@ -920,6 +922,8 @@ class _MembersListScreenState extends State<MembersListScreen> {
     }
 
     final repository = context.read<DatabaseRepository>();
+    final historyStore = await _importHistoryStore(repository);
+    if (!context.mounted) return;
     final fileName = picked.files.single.name;
     final undoData = MemberImportUndoData();
     var totalCreated = 0;
@@ -977,19 +981,21 @@ class _MembersListScreenState extends State<MembersListScreen> {
       break;
     }
 
-    await _historyStore.add(
-      MemberImportHistoryEntry(
-        id: DateTime.now().microsecondsSinceEpoch.toString(),
-        date: DateTime.now(),
-        fileName: fileName,
-        created: totalCreated,
-        updated: totalUpdated,
-        skipped: totalSkipped,
-        failed: lastFailed,
-        cancelled: cancelled,
-        undone: undone,
-      ),
-    );
+    if (historyStore != null) {
+      await historyStore.add(
+        MemberImportHistoryEntry(
+          id: DateTime.now().microsecondsSinceEpoch.toString(),
+          date: DateTime.now(),
+          fileName: fileName,
+          created: totalCreated,
+          updated: totalUpdated,
+          skipped: totalSkipped,
+          failed: lastFailed,
+          cancelled: cancelled,
+          undone: undone,
+        ),
+      );
+    }
   }
 
   Future<bool> _confirmAndUndoImport(
@@ -1068,8 +1074,36 @@ class _MembersListScreenState extends State<MembersListScreen> {
     return true;
   }
 
+  /// Opens the import log of the church that the signed-in account belongs to,
+  /// so a device that also hosted another church never shows its runs.
+  ///
+  /// Reading the profile reaches the server. The log is only a convenience, so
+  /// a failed read returns null instead of throwing: an import the servant has
+  /// already confirmed must still run.
+  Future<MemberImportHistoryStore?> _importHistoryStore(
+    DatabaseRepository repository,
+  ) async {
+    try {
+      final profile = await repository.getCurrentProfile();
+      return MemberImportHistoryStore(churchId: profile?.churchId);
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> _showImportHistory(BuildContext context) async {
-    final entries = await _historyStore.load();
+    final repository = context.read<DatabaseRepository>();
+    final store = await _importHistoryStore(repository);
+    if (!context.mounted) return;
+    if (store == null) {
+      _showExcelSnack(
+        context,
+        'تعذّر تحميل سجل الاستيراد. تحقق من الاتصال وأعد المحاولة',
+        isError: true,
+      );
+      return;
+    }
+    final entries = await store.load();
     if (!context.mounted) return;
     await showMemberImportHistoryDialog(context, entries);
   }
@@ -1135,7 +1169,7 @@ class _MembersListScreenState extends State<MembersListScreen> {
       if (context.mounted) {
         _showExcelSnack(
           context,
-          'تعذر تنفيذ العملية: ${error.toString().replaceAll('Exception: ', '')}',
+          StorageWriteError.from(error).message(action: 'تنفيذ العملية'),
           isError: true,
         );
       }

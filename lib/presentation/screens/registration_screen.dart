@@ -136,7 +136,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       textDirection: TextDirection.rtl,
       child: AuthShell(
         compact: true,
-        child: BlocConsumer<AuthBloc, AuthState>(
+        builder: (context) => BlocConsumer<AuthBloc, AuthState>(
           listener: (context, state) {
             if (state is AuthAuthenticated) {
               Navigator.of(context).popUntil((route) => route.isFirst);
@@ -189,268 +189,243 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                   ],
                 ),
                 const SizedBox(height: 24),
-                // Main Floating White Card
-                Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: AppTheme.cardBackground,
-                    borderRadius: BorderRadius.circular(28),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.06),
-                        blurRadius: 30,
-                        offset: const Offset(0, 12),
+                AuthFormCard(
+                  children: [
+                    Text(
+                      _isInvitationLinkFlow
+                          ? 'إكمال الانضمام'
+                          : 'إنشاء حساب جديد',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.cairo(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w900,
+                        color: AppTheme.textDark,
                       ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _isInvitationLinkFlow
+                          ? 'أنشئ كلمة مرور لحسابك وانضم للكنيسة'
+                          : 'أدخل بياناتك لإنشاء حساب خادم جديد',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.cairo(
+                        color: AppTheme.textLight,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    // Name Input
+                    const AuthFieldLabel('الاسم الكامل'),
+                    AuthSoftTextField(
+                      controller: _nameController,
+                      hint: 'أدخل اسمك الكامل',
+                      icon: Icons.person_outline_rounded,
+                    ),
+                    const SizedBox(height: 16),
+                    // Church Name Input (if not invitation link flow)
+                    if (!_isInvitationLinkFlow) ...[
+                      const AuthFieldLabel('اسم الكنيسة'),
+                      AuthSoftTextField(
+                        controller: _churchController,
+                        hint: 'أدخل اسم الكنيسة',
+                        icon: Icons.church_outlined,
+                      ),
+                      const SizedBox(height: 16),
                     ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    textDirection: TextDirection.rtl,
-                    children: [
-                      Text(
-                        _isInvitationLinkFlow
-                            ? 'إكمال الانضمام'
-                            : 'إنشاء حساب جديد',
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.cairo(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w900,
-                          color: AppTheme.textDark,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _isInvitationLinkFlow
-                            ? 'أنشئ كلمة مرور لحسابك وانضم للكنيسة'
-                            : 'أدخل بياناتك لإنشاء حساب خادم جديد',
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.cairo(
+                    // Email Input
+                    const AuthFieldLabel('البريد الإلكتروني'),
+                    AuthSoftTextField(
+                      controller: _emailController,
+                      hint: 'example@domain.com',
+                      icon: Icons.alternate_email_rounded,
+                      latinInput: true,
+                      readOnly: _isInvitationLinkFlow,
+                      keyboardType: TextInputType.emailAddress,
+                    ),
+                    const SizedBox(height: 16),
+                    // Phone Input
+                    const AuthFieldLabel('رقم الهاتف (اختياري)'),
+                    AuthSoftTextField(
+                      controller: _phoneController,
+                      hint: '01xxxxxxxxx',
+                      icon: Icons.phone_outlined,
+                      keyboardType: TextInputType.phone,
+                      latinInput: true,
+                    ),
+                    const SizedBox(height: 16),
+                    // Password Input
+                    const AuthFieldLabel('كلمة المرور'),
+                    AuthSoftTextField(
+                      controller: _passwordController,
+                      hint: '••••••••',
+                      icon: Icons.lock_outline_rounded,
+                      obscureText: _obscurePassword,
+                      trailing: IconButton(
+                        onPressed: isLoading
+                            ? null
+                            : () => setState(
+                                () => _obscurePassword = !_obscurePassword,
+                              ),
+                        icon: Icon(
+                          _obscurePassword
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
                           color: AppTheme.textLight,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
+                          size: 20,
                         ),
                       ),
-                      const SizedBox(height: 24),
-                      // Name Input
-                      const AuthFieldLabel('الاسم الكامل'),
-                      AuthSoftTextField(
-                        controller: _nameController,
-                        hint: 'أدخل اسمك الكامل',
-                        icon: Icons.person_outline_rounded,
-                      ),
-                      const SizedBox(height: 16),
-                      // Church Name Input (if not invitation link flow)
-                      if (!_isInvitationLinkFlow) ...[
-                        const AuthFieldLabel('اسم الكنيسة'),
-                        AuthSoftTextField(
-                          controller: _churchController,
-                          hint: 'أدخل اسم الكنيسة',
-                          icon: Icons.church_outlined,
+                    ),
+                    const SizedBox(height: 16),
+                    const AuthFieldLabel('تأكيد كلمة المرور'),
+                    AuthSoftTextField(
+                      controller: _confirmPasswordController,
+                      hint: 'أعد إدخال كلمة المرور',
+                      icon: Icons.lock_reset_rounded,
+                      obscureText: _obscureConfirmPassword,
+                      trailing: IconButton(
+                        onPressed: isLoading
+                            ? null
+                            : () => setState(
+                                () => _obscureConfirmPassword =
+                                    !_obscureConfirmPassword,
+                              ),
+                        icon: Icon(
+                          _obscureConfirmPassword
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
+                          color: AppTheme.textLight,
+                          size: 20,
                         ),
-                        const SizedBox(height: 16),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    // Terms & Conditions Checkbox
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      textDirection: TextDirection.rtl,
+                      children: [
+                        AuthCheckbox(
+                          value: _acceptedTerms,
+                          onChanged: isLoading
+                              ? null
+                              : (value) => setState(
+                                  () => _acceptedTerms = value ?? false,
+                                ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: isLoading
+                                ? null
+                                : () => setState(
+                                    () => _acceptedTerms = !_acceptedTerms,
+                                  ),
+                            child: Text.rich(
+                              TextSpan(
+                                text: 'أوافق على ',
+                                children: [
+                                  TextSpan(
+                                    text: 'شروط الخدمة وسياسة الخصوصية',
+                                    style: GoogleFonts.cairo(
+                                      color: AppTheme.primaryAccent,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                  const TextSpan(text: ' الخاصة بـ LinkApp'),
+                                ],
+                              ),
+                              textAlign: TextAlign.right,
+                              style: GoogleFonts.cairo(
+                                fontSize: 12,
+                                color: AppTheme.textLight,
+                              ),
+                            ),
+                          ),
+                        ),
                       ],
-                      // Email Input
-                      const AuthFieldLabel('البريد الإلكتروني'),
-                      AuthSoftTextField(
-                        controller: _emailController,
-                        hint: 'example@domain.com',
-                        icon: Icons.alternate_email_rounded,
-                        latinInput: true,
-                        readOnly: _isInvitationLinkFlow,
-                        keyboardType: TextInputType.emailAddress,
+                    ),
+                    const SizedBox(height: 24),
+                    // Vibrant Blue Pill Button
+                    FilledButton(
+                      onPressed: isLoading ? null : _submit,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppTheme.primaryAccent,
+                        minimumSize: const Size.fromHeight(52),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(26),
+                        ),
+                        elevation: 4,
+                        shadowColor: AppTheme.primaryAccent.withValues(
+                          alpha: 0.35,
+                        ),
                       ),
-                      const SizedBox(height: 16),
-                      // Phone Input
-                      const AuthFieldLabel('رقم الهاتف (اختياري)'),
-                      AuthSoftTextField(
-                        controller: _phoneController,
-                        hint: '01xxxxxxxxx',
-                        icon: Icons.phone_outlined,
-                        keyboardType: TextInputType.phone,
-                        latinInput: true,
-                      ),
-                      const SizedBox(height: 16),
-                      // Password Input
-                      const AuthFieldLabel('كلمة المرور'),
-                      AuthSoftTextField(
-                        controller: _passwordController,
-                        hint: '••••••••',
-                        icon: Icons.lock_outline_rounded,
-                        obscureText: _obscurePassword,
-                        trailing: IconButton(
-                          onPressed: isLoading
-                              ? null
-                              : () => setState(
-                                  () => _obscurePassword = !_obscurePassword,
-                                ),
-                          icon: Icon(
-                            _obscurePassword
-                                ? Icons.visibility_outlined
-                                : Icons.visibility_off_outlined,
+                      child: isLoading
+                          ? const SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                                color: Colors.white,
+                              ),
+                            )
+                          : Text(
+                              _isInvitationLinkFlow
+                                  ? 'إكمال وتأكيد الانضمام'
+                                  : 'إنشاء حساب جديد',
+                              style: GoogleFonts.cairo(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                    ),
+                    const SizedBox(height: 24),
+                    Divider(color: AppTheme.border, height: 1),
+                    const SizedBox(height: 20),
+                    // Already Have Account Prompt
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      textDirection: TextDirection.rtl,
+                      children: [
+                        Text(
+                          'لديك حساب بالفعل؟ ',
+                          style: GoogleFonts.cairo(
                             color: AppTheme.textLight,
-                            size: 20,
+                            fontSize: 13,
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 16),
-                      const AuthFieldLabel('تأكيد كلمة المرور'),
-                      AuthSoftTextField(
-                        controller: _confirmPasswordController,
-                        hint: 'أعد إدخال كلمة المرور',
-                        icon: Icons.lock_reset_rounded,
-                        obscureText: _obscureConfirmPassword,
-                        trailing: IconButton(
-                          onPressed: isLoading
+                        GestureDetector(
+                          onTap: isLoading
                               ? null
-                              : () => setState(
-                                  () => _obscureConfirmPassword =
-                                      !_obscureConfirmPassword,
-                                ),
-                          icon: Icon(
-                            _obscureConfirmPassword
-                                ? Icons.visibility_outlined
-                                : Icons.visibility_off_outlined,
-                            color: const Color(0xFF94A3B8),
-                            size: 20,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      // Terms & Conditions Checkbox
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        textDirection: TextDirection.rtl,
-                        children: [
-                          SizedBox(
-                            height: 22,
-                            width: 22,
-                            child: Checkbox(
-                              value: _acceptedTerms,
-                              onChanged: isLoading
-                                  ? null
-                                  : (value) => setState(
-                                      () => _acceptedTerms = value ?? false,
-                                    ),
-                              activeColor: AppTheme.primaryAccent,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: GestureDetector(
-                              onTap: isLoading
-                                  ? null
-                                  : () => setState(
-                                      () => _acceptedTerms = !_acceptedTerms,
-                                    ),
-                              child: Text.rich(
-                                TextSpan(
-                                  text: 'أوافق على ',
-                                  children: [
-                                    TextSpan(
-                                      text: 'شروط الخدمة وسياسة الخصوصية',
-                                      style: GoogleFonts.cairo(
-                                        color: AppTheme.primaryAccent,
-                                        fontWeight: FontWeight.w800,
+                              : () {
+                                  if (_isInvitationLinkFlow) {
+                                    Navigator.pushReplacement(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => LoginScreen(
+                                          initialEmail: widget.initialEmail,
+                                          invitationToken:
+                                              widget.invitationToken,
+                                        ),
                                       ),
-                                    ),
-                                    const TextSpan(text: ' الخاصة بـ LinkApp'),
-                                  ],
-                                ),
-                                textAlign: TextAlign.right,
-                                style: GoogleFonts.cairo(
-                                  fontSize: 12,
-                                  color: AppTheme.textLight,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-                      // Vibrant Blue Pill Button
-                      FilledButton(
-                        onPressed: isLoading ? null : _submit,
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppTheme.primaryAccent,
-                          minimumSize: const Size.fromHeight(52),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(26),
-                          ),
-                          elevation: 4,
-                          shadowColor: AppTheme.primaryAccent.withValues(
-                            alpha: 0.35,
-                          ),
-                        ),
-                        child: isLoading
-                            ? const SizedBox(
-                                width: 22,
-                                height: 22,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2.5,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : Text(
-                                _isInvitationLinkFlow
-                                    ? 'إكمال وتأكيد الانضمام'
-                                    : 'إنشاء حساب جديد',
-                                style: GoogleFonts.cairo(
-                                  color: Colors.white,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                      ),
-                      const SizedBox(height: 24),
-                      Divider(color: AppTheme.border, height: 1),
-                      const SizedBox(height: 20),
-                      // Already Have Account Prompt
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        textDirection: TextDirection.rtl,
-                        children: [
-                          Text(
-                            'لديك حساب بالفعل؟ ',
+                                    );
+                                  } else {
+                                    Navigator.pop(context);
+                                  }
+                                },
+                          child: Text(
+                            'تسجيل الدخول',
                             style: GoogleFonts.cairo(
-                              color: AppTheme.textLight,
+                              color: AppTheme.primaryAccent,
+                              fontWeight: FontWeight.w900,
                               fontSize: 13,
                             ),
                           ),
-                          GestureDetector(
-                            onTap: isLoading
-                                ? null
-                                : () {
-                                    if (_isInvitationLinkFlow) {
-                                      Navigator.pushReplacement(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) => LoginScreen(
-                                            initialEmail: widget.initialEmail,
-                                            invitationToken:
-                                                widget.invitationToken,
-                                          ),
-                                        ),
-                                      );
-                                    } else {
-                                      Navigator.pop(context);
-                                    }
-                                  },
-                            child: Text(
-                              'تسجيل الدخول',
-                              style: GoogleFonts.cairo(
-                                color: AppTheme.primaryAccent,
-                                fontWeight: FontWeight.w900,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 28),
                 Text(

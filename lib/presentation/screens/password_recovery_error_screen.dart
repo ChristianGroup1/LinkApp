@@ -19,7 +19,7 @@ class PasswordRecoveryErrorScreen extends StatelessWidget {
       textDirection: TextDirection.rtl,
       child: AuthShell(
         compact: true,
-        child: Column(
+        builder: (context) => Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const SizedBox(height: 16),

@@ -192,7 +192,7 @@ mixin _SupabaseAttendanceRepository on _SupabaseRepositoryBase {
   ) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final cacheKey = 'offline_attendance_records_$sessionId';
+      final cacheKey = '${OfflineCache.attendanceRecordsPrefix}$sessionId';
       final cachedData = prefs.getString(cacheKey);
       if (cachedData != null) {
         final parsed = _parseOfflineAttendanceCache(cachedData);
@@ -242,10 +242,11 @@ mixin _SupabaseAttendanceRepository on _SupabaseRepositoryBase {
         .upsert(rows, onConflict: 'session_id,member_id');
 
     final prefs = await SharedPreferences.getInstance();
-    final unsynced = prefs.getStringList('offline_unsynced_sessions') ?? [];
+    final unsynced =
+        prefs.getStringList(OfflineCache.unsyncedSessionsKey) ?? [];
     if (unsynced.contains(sessionId)) {
       unsynced.remove(sessionId);
-      await prefs.setStringList('offline_unsynced_sessions', unsynced);
+      await prefs.setStringList(OfflineCache.unsyncedSessionsKey, unsynced);
     }
     await _writeOfflineAttendanceCache(sessionId, statusesByMemberId);
     return true;
@@ -278,10 +279,11 @@ mixin _SupabaseAttendanceRepository on _SupabaseRepositoryBase {
       try {
         final prefs = await SharedPreferences.getInstance();
         await _writeOfflineAttendanceCache(sessionId, statusesByMemberId);
-        final unsynced = prefs.getStringList('offline_unsynced_sessions') ?? [];
+        final unsynced =
+            prefs.getStringList(OfflineCache.unsyncedSessionsKey) ?? [];
         if (!unsynced.contains(sessionId)) {
           unsynced.add(sessionId);
-          await prefs.setStringList('offline_unsynced_sessions', unsynced);
+          await prefs.setStringList(OfflineCache.unsyncedSessionsKey, unsynced);
         }
         AppDataChanges.instance.notify({AppDataArea.attendance});
         return false;
@@ -297,7 +299,7 @@ mixin _SupabaseAttendanceRepository on _SupabaseRepositoryBase {
     DateTime? queuedAt,
   }) async {
     final prefs = await SharedPreferences.getInstance();
-    final cacheKey = 'offline_attendance_records_$sessionId';
+    final cacheKey = '${OfflineCache.attendanceRecordsPrefix}$sessionId';
     final payload = {
       'queued_at': (queuedAt ?? DateTime.now()).toIso8601String(),
       'statuses': statusesByMemberId.map(

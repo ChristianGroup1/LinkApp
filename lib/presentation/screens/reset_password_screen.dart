@@ -59,7 +59,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
       textDirection: TextDirection.rtl,
       child: AuthShell(
         compact: true,
-        child: BlocConsumer<AuthBloc, AuthState>(
+        builder: (context) => BlocConsumer<AuthBloc, AuthState>(
           listener: (context, state) {
             if (state is AuthPasswordUpdated) {
               ScaffoldMessenger.of(context).showSnackBar(
@@ -134,9 +134,9 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                         onPressed: isLoading
                             ? null
                             : () => setState(
-                                  () => _obscureConfirmPassword =
-                                      !_obscureConfirmPassword,
-                                ),
+                                () => _obscureConfirmPassword =
+                                    !_obscureConfirmPassword,
+                              ),
                         icon: Icon(
                           _obscureConfirmPassword
                               ? Icons.visibility_outlined

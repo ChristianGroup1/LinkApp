@@ -265,6 +265,15 @@ class AppTheme {
         color: _lightBorder.withValues(alpha: 0.8),
         thickness: 1,
       ),
+      checkboxTheme: CheckboxThemeData(
+        fillColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? primaryAccent
+              : Colors.transparent,
+        ),
+        checkColor: const WidgetStatePropertyAll(Colors.white),
+        side: const BorderSide(color: _lightBorder, width: 1.5),
+      ),
     );
   }
 
@@ -516,6 +525,15 @@ class AppTheme {
               ? const Color(0xFF312E81)
               : _darkBorder,
         ),
+      ),
+      checkboxTheme: CheckboxThemeData(
+        fillColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? darkPrimary
+              : Colors.transparent,
+        ),
+        checkColor: const WidgetStatePropertyAll(Colors.white),
+        side: const BorderSide(color: _darkBorder, width: 1.5),
       ),
     );
   }

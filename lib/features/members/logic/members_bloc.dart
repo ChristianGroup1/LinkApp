@@ -1,18 +1,26 @@
 import 'dart:async';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../../core/diagnostics/storage_write_error.dart';
 import '../../../data/models/models.dart';
 import '../../../data/offline/offline_messages.dart';
 import '../../../data/offline/offline_save_result.dart';
 import '../../../data/repositories/database_repository.dart';
+
+String _memberWriteErrorMessage(Object error, {required bool isCreate}) {
+  return StorageWriteError.from(
+    error,
+  ).message(action: isCreate ? 'إضافة العضو' : 'حفظ تعديلات العضو');
+}
 
 // EVENTS
 abstract class MembersEvent {}
 
 class LoadMembers extends MembersEvent {
   final String? flashMessage;
+  final bool flashIsError;
 
-  LoadMembers({this.flashMessage});
+  LoadMembers({this.flashMessage, this.flashIsError = false});
 }
 
 class SearchAndFilterMembers extends MembersEvent {
@@ -116,6 +124,7 @@ class MembersLoaded extends MembersState {
   final String? meetingIdFilter;
   final String? scopeFilter;
   final String? flashMessage;
+  final bool flashIsError;
 
   MembersLoaded({
     required this.allMembers,
@@ -125,6 +134,7 @@ class MembersLoaded extends MembersState {
     this.meetingIdFilter,
     this.scopeFilter,
     this.flashMessage,
+    this.flashIsError = false,
   });
 
   MembersLoaded copyWith({
@@ -135,6 +145,7 @@ class MembersLoaded extends MembersState {
     String? meetingIdFilter,
     String? scopeFilter,
     String? flashMessage,
+    bool? flashIsError,
     bool clearFlashMessage = false,
   }) {
     return MembersLoaded(
@@ -147,6 +158,9 @@ class MembersLoaded extends MembersState {
       flashMessage: clearFlashMessage
           ? null
           : (flashMessage ?? this.flashMessage),
+      flashIsError: clearFlashMessage
+          ? false
+          : (flashIsError ?? this.flashIsError),
     );
   }
 }
@@ -213,6 +227,7 @@ class MembersBloc extends Bloc<MembersEvent, MembersState> {
               scopeFilter: null,
             ),
             flashMessage: event.flashMessage,
+            flashIsError: event.flashIsError,
           ),
         );
         _ensureRealtimeSubscription();
@@ -224,6 +239,7 @@ class MembersBloc extends Bloc<MembersEvent, MembersState> {
               allMembers: members,
               filteredMembers: members.where((m) => m.isActive).toList(),
               flashMessage: event.flashMessage,
+              flashIsError: event.flashIsError,
             ),
           );
           _ensureRealtimeSubscription();
@@ -297,12 +313,11 @@ class MembersBloc extends Bloc<MembersEvent, MembersState> {
         event.completion?.complete(result);
       } catch (e, stackTrace) {
         event.completion?.completeError(e, stackTrace);
+        final message = _memberWriteErrorMessage(e, isCreate: true);
         if (previous is MembersLoaded) {
-          emit(
-            previous.copyWith(flashMessage: 'فشل إضافة العضو: ${e.toString()}'),
-          );
+          emit(previous.copyWith(flashMessage: message, flashIsError: true));
         } else {
-          emit(MembersError('فشل إضافة العضو: ${e.toString()}'));
+          emit(MembersError(message));
         }
       }
     });
@@ -334,14 +349,11 @@ class MembersBloc extends Bloc<MembersEvent, MembersState> {
         event.completion?.complete(result);
       } catch (e, stackTrace) {
         event.completion?.completeError(e, stackTrace);
+        final message = _memberWriteErrorMessage(e, isCreate: false);
         if (previous is MembersLoaded) {
-          emit(
-            previous.copyWith(
-              flashMessage: 'فشل تعديل بيانات العضو: ${e.toString()}',
-            ),
-          );
+          emit(previous.copyWith(flashMessage: message, flashIsError: true));
         } else {
-          emit(MembersError('فشل تعديل بيانات العضو: ${e.toString()}'));
+          emit(MembersError(message));
         }
       }
     });
@@ -354,7 +366,10 @@ class MembersBloc extends Bloc<MembersEvent, MembersState> {
       } catch (e) {
         if (previous is MembersLoaded) {
           emit(
-            previous.copyWith(flashMessage: 'فشل حذف العضو: ${e.toString()}'),
+            previous.copyWith(
+              flashMessage: 'فشل حذف العضو: ${e.toString()}',
+              flashIsError: true,
+            ),
           );
         } else {
           emit(MembersError('فشل حذف العضو: ${e.toString()}'));
@@ -398,9 +413,7 @@ class MembersBloc extends Bloc<MembersEvent, MembersState> {
     var filtered = members.where((m) => m.isActive).toList();
 
     if (scopeFilter != null && scopeFilter != 'all') {
-      filtered = filtered
-          .where((m) => m.scope.value == scopeFilter)
-          .toList();
+      filtered = filtered.where((m) => m.scope.value == scopeFilter).toList();
     }
     if (classIdFilter != null && classIdFilter.isNotEmpty) {
       filtered = filtered
@@ -408,9 +421,7 @@ class MembersBloc extends Bloc<MembersEvent, MembersState> {
           .toList();
     }
     if (meetingIdFilter != null && meetingIdFilter.isNotEmpty) {
-      filtered = filtered
-          .where((m) => m.meetingId == meetingIdFilter)
-          .toList();
+      filtered = filtered.where((m) => m.meetingId == meetingIdFilter).toList();
     }
     if (query.trim().isNotEmpty) {
       final queryLower = query.toLowerCase();
@@ -418,7 +429,8 @@ class MembersBloc extends Bloc<MembersEvent, MembersState> {
           .where(
             (m) =>
                 m.fullName.toLowerCase().contains(queryLower) ||
-                (m.code != null && m.code!.toLowerCase().contains(queryLower)) ||
+                (m.code != null &&
+                    m.code!.toLowerCase().contains(queryLower)) ||
                 (m.phone != null && m.phone!.contains(queryLower)),
           )
           .toList();

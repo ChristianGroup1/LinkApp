@@ -130,7 +130,7 @@ class _LoginScreenState extends State<LoginScreen> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: AuthShell(
-        child: BlocConsumer<AuthBloc, AuthState>(
+        builder: (context) => BlocConsumer<AuthBloc, AuthState>(
           listener: (context, state) {
             if (state is AuthAuthenticated) {
               final inviteToken = widget.invitationToken;
@@ -165,213 +165,187 @@ class _LoginScreenState extends State<LoginScreen> {
                   ],
                 ),
                 const SizedBox(height: 24),
-                // Main Floating White Card
-                Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: AppTheme.cardBackground,
-                    borderRadius: BorderRadius.circular(28),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.06),
-                        blurRadius: 30,
-                        offset: const Offset(0, 12),
+                AuthFormCard(
+                  children: [
+                    Text(
+                      'تسجيل الدخول',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.cairo(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w900,
+                        color: AppTheme.textDark,
                       ),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    textDirection: TextDirection.rtl,
-                    children: [
-                      Text(
-                        'تسجيل الدخول',
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.cairo(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w900,
-                          color: AppTheme.textDark,
-                        ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'أدخل البريد الإلكتروني وكلمة المرور للبدء',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.cairo(
+                        color: AppTheme.textLight,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'أدخل البريد الإلكتروني وكلمة المرور للبدء',
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.cairo(
-                          color: AppTheme.textLight,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      // Email Soft Grey Input
-                      const AuthFieldLabel('البريد الإلكتروني'),
-                      AuthSoftTextField(
-                        controller: _emailController,
-                        hint: 'البريد الإلكتروني أو اسم المستخدم',
-                        icon: Icons.alternate_email_rounded,
-                        latinInput: true,
-                        readOnly: _hasInvitationEmail,
-                        keyboardType: TextInputType.emailAddress,
-                      ),
-                      const SizedBox(height: 16),
-                      // Password Soft Grey Input
-                      Row(
-                        textDirection: TextDirection.rtl,
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          const Expanded(child: AuthFieldLabel('كلمة المرور')),
-                          TextButton(
-                            onPressed: isLoading
-                                ? null
-                                : () => Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) =>
-                                          const ForgotPasswordScreen(),
-                                    ),
-                                  ),
-                            style: TextButton.styleFrom(
-                              padding: EdgeInsets.zero,
-                              minimumSize: Size.zero,
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ),
-                            child: Text(
-                              'نسيت كلمة المرور؟',
-                              style: GoogleFonts.cairo(
-                                color: AppTheme.primaryAccent,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      AuthSoftTextField(
-                        controller: _passwordController,
-                        hint: 'كلمة المرور',
-                        icon: Icons.lock_outline_rounded,
-                        obscureText: obscure,
-                        trailing: IconButton(
+                    ),
+                    const SizedBox(height: 24),
+                    // Email Soft Grey Input
+                    const AuthFieldLabel('البريد الإلكتروني'),
+                    AuthSoftTextField(
+                      controller: _emailController,
+                      hint: 'البريد الإلكتروني أو اسم المستخدم',
+                      icon: Icons.alternate_email_rounded,
+                      latinInput: true,
+                      readOnly: _hasInvitationEmail,
+                      keyboardType: TextInputType.emailAddress,
+                    ),
+                    const SizedBox(height: 16),
+                    // Password Soft Grey Input
+                    Row(
+                      textDirection: TextDirection.rtl,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        const Expanded(child: AuthFieldLabel('كلمة المرور')),
+                        TextButton(
                           onPressed: isLoading
                               ? null
-                              : () => setState(() => obscure = !obscure),
-                          icon: Icon(
-                            obscure
-                                ? Icons.visibility_outlined
-                                : Icons.visibility_off_outlined,
-                            color: AppTheme.textLight,
-                            size: 20,
+                              : () => Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        const ForgotPasswordScreen(),
+                                  ),
+                                ),
+                          style: TextButton.styleFrom(
+                            padding: EdgeInsets.zero,
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           ),
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      Row(
-                        textDirection: TextDirection.rtl,
-                        children: [
-                          SizedBox(
-                            height: 22,
-                            width: 22,
-                            child: Checkbox(
-                              value: remember,
-                              onChanged: isLoading
-                                  ? null
-                                  : (value) => setState(
-                                      () => remember = value ?? false,
-                                    ),
-                              activeColor: AppTheme.primaryAccent,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(6),
-                              ),
+                          child: Text(
+                            'نسيت كلمة المرور؟',
+                            style: GoogleFonts.cairo(
+                              color: AppTheme.primaryAccent,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12,
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          GestureDetector(
-                            onTap: isLoading
-                                ? null
-                                : () => setState(() => remember = !remember),
-                            child: Text(
-                              'تذكرني',
-                              style: GoogleFonts.cairo(
-                                color: AppTheme.textLight,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-                      // Vibrant Blue Pill Button
-                      FilledButton(
-                        onPressed: isLoading ? null : _submitLogin,
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppTheme.primaryAccent,
-                          minimumSize: const Size.fromHeight(52),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(26),
-                          ),
-                          elevation: 4,
-                          shadowColor: AppTheme.primaryAccent.withValues(
-                            alpha: 0.35,
-                          ),
                         ),
-                        child: isLoading
-                            ? const SizedBox(
-                                width: 22,
-                                height: 22,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2.5,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : Text(
-                                'تسجيل الدخول',
-                                style: GoogleFonts.cairo(
-                                  color: Colors.white,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
+                      ],
+                    ),
+                    AuthSoftTextField(
+                      controller: _passwordController,
+                      hint: 'كلمة المرور',
+                      icon: Icons.lock_outline_rounded,
+                      obscureText: obscure,
+                      trailing: IconButton(
+                        onPressed: isLoading
+                            ? null
+                            : () => setState(() => obscure = !obscure),
+                        icon: Icon(
+                          obscure
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
+                          color: AppTheme.textLight,
+                          size: 20,
+                        ),
                       ),
-                      const SizedBox(height: 24),
-                      Divider(color: AppTheme.border, height: 1),
-                      const SizedBox(height: 20),
-                      // Registration Link Prompt inside card
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        textDirection: TextDirection.rtl,
-                        children: [
-                          Text(
-                            'ليس لديك حساب؟ ',
+                    ),
+                    const SizedBox(height: 14),
+                    Row(
+                      textDirection: TextDirection.rtl,
+                      children: [
+                        AuthCheckbox(
+                          value: remember,
+                          onChanged: isLoading
+                              ? null
+                              : (value) =>
+                                    setState(() => remember = value ?? false),
+                        ),
+                        const SizedBox(width: 8),
+                        GestureDetector(
+                          onTap: isLoading
+                              ? null
+                              : () => setState(() => remember = !remember),
+                          child: Text(
+                            'تذكرني',
                             style: GoogleFonts.cairo(
                               color: AppTheme.textLight,
                               fontSize: 13,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
-                          GestureDetector(
-                            onTap: isLoading
-                                ? null
-                                : () => Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) => RegistrationScreen(
-                                        invitationToken: widget.invitationToken,
-                                        initialEmail: widget.initialEmail,
-                                      ),
-                                    ),
-                                  ),
-                            child: Text(
-                              'إنشاء حساب',
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                    // Vibrant Blue Pill Button
+                    FilledButton(
+                      onPressed: isLoading ? null : _submitLogin,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppTheme.primaryAccent,
+                        minimumSize: const Size.fromHeight(52),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(26),
+                        ),
+                        elevation: 4,
+                        shadowColor: AppTheme.primaryAccent.withValues(
+                          alpha: 0.35,
+                        ),
+                      ),
+                      child: isLoading
+                          ? const SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                                color: Colors.white,
+                              ),
+                            )
+                          : Text(
+                              'تسجيل الدخول',
                               style: GoogleFonts.cairo(
-                                color: AppTheme.primaryAccent,
-                                fontWeight: FontWeight.w900,
-                                fontSize: 13,
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
                               ),
                             ),
+                    ),
+                    const SizedBox(height: 24),
+                    Divider(color: AppTheme.border, height: 1),
+                    const SizedBox(height: 20),
+                    // Registration Link Prompt inside card
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      textDirection: TextDirection.rtl,
+                      children: [
+                        Text(
+                          'ليس لديك حساب؟ ',
+                          style: GoogleFonts.cairo(
+                            color: AppTheme.textLight,
+                            fontSize: 13,
                           ),
-                        ],
-                      ),
-                    ],
-                  ),
+                        ),
+                        GestureDetector(
+                          onTap: isLoading
+                              ? null
+                              : () => Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => RegistrationScreen(
+                                      invitationToken: widget.invitationToken,
+                                      initialEmail: widget.initialEmail,
+                                    ),
+                                  ),
+                                ),
+                          child: Text(
+                            'إنشاء حساب',
+                            style: GoogleFonts.cairo(
+                              color: AppTheme.primaryAccent,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 28),
                 Text(
