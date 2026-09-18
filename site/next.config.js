@@ -17,6 +17,15 @@ const nextConfig = {
       },
     ];
   },
+  async rewrites() {
+    return {
+      beforeFiles: [
+        // Flutter Web is emitted to public/app. Keep the marketing site and
+        // the full Flutter application on the same origin.
+        { source: '/app', destination: '/app/index.html' },
+      ],
+    };
+  },
 };
 
 module.exports = nextConfig;

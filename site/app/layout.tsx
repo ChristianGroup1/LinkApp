@@ -21,7 +21,6 @@ export const metadata: Metadata = {
     'Link',
   ],
   icons: { icon: '/link-logo.png', apple: '/link-logo.png' },
-  manifest: '/manifest.webmanifest',
   openGraph: {
     title: 'Link — ركّز في الخدمة واترك التنظيم علينا',
     description: 'إدارة الحضور والاجتماعات والأعضاء والزيارات في مكان واحد.',

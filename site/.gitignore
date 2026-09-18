@@ -4,3 +4,6 @@
 # dependencies and generated Next.js output
 node_modules/
 .next/
+
+# Generated Flutter Web PWA. CI builds it into this directory before Vercel.
+public/app/

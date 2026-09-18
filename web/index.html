@@ -18,13 +18,11 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="description" content="تطبيق إدارة الحضور والأعضاء والافتقاد لخدمة الكنيسة">
+  <meta name="description" content="إدارة الحضور والاجتماعات والأعضاء والافتقاد للكنائس والخدمات.">
   <meta name="theme-color" content="#4F46E5">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="apple-mobile-web-app-title" content="Link">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
@@ -32,51 +30,103 @@
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>Link — إدارة الحضور والافتقاد</title>
+  <title>Link — إدارة الخدمة</title>
   <link rel="manifest" href="manifest.json">
-
-  <style>
-    /* Simple splash shown until Flutter takes over the page. */
-    html, body {
-      margin: 0;
-      height: 100%;
-      background: #F8FAFC;
-    }
-    #boot-splash {
-      position: fixed;
-      inset: 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 16px;
-      font-family: system-ui, sans-serif;
-      color: #4F46E5;
-    }
-    #boot-splash .spinner {
-      width: 38px;
-      height: 38px;
-      border: 3px solid #E0E7FF;
-      border-top-color: #4F46E5;
-      border-radius: 50%;
-      animation: boot-spin 0.9s linear infinite;
-    }
-    @keyframes boot-spin { to { transform: rotate(360deg); } }
-  </style>
 </head>
 <body>
-  <div id="boot-splash">
-    <div class="spinner"></div>
-    <div>جارٍ تحميل التطبيق…</div>
-  </div>
-  <script src="flutter_bootstrap.js" async></script>
+  <aside id="pwa-install" class="pwa-install" hidden aria-live="polite">
+    <button id="pwa-install-close" class="pwa-install-close" type="button" aria-label="إخفاء">×</button>
+    <strong>ثبّت Link على جهازك</strong>
+    <span id="pwa-install-message">افتحه كتطبيق مستقل من الشاشة الرئيسية.</span>
+    <button id="pwa-install-button" class="pwa-install-button" type="button">تثبيت التطبيق</button>
+  </aside>
+  <style>
+    .pwa-install {
+      position: fixed;
+      z-index: 2147483647;
+      right: max(16px, env(safe-area-inset-right));
+      bottom: max(16px, env(safe-area-inset-bottom));
+      width: min(330px, calc(100vw - 32px));
+      display: grid;
+      gap: 8px;
+      padding: 16px 44px 16px 16px;
+      color: #fff;
+      background: #3730a3;
+      border: 1px solid rgba(255, 255, 255, .2);
+      border-radius: 18px;
+      box-shadow: 0 16px 42px rgba(15, 23, 42, .3);
+      font-family: Arial, sans-serif;
+      text-align: right;
+    }
+    .pwa-install strong { font-size: 15px; }
+    .pwa-install span { font-size: 13px; line-height: 1.6; opacity: .9; }
+    .pwa-install-button {
+      width: fit-content;
+      margin-top: 3px;
+      border: 0;
+      border-radius: 10px;
+      padding: 9px 13px;
+      color: #312e81;
+      background: #fff;
+      font: inherit;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .pwa-install-close {
+      position: absolute;
+      top: 7px;
+      right: 10px;
+      width: 28px;
+      height: 28px;
+      border: 0;
+      color: #fff;
+      background: transparent;
+      font-size: 24px;
+      line-height: 1;
+      cursor: pointer;
+    }
+  </style>
   <script>
-    // Flutter replaces the body content when the first frame renders; this is
-    // a safety net for engines that keep pre-existing nodes.
-    window.addEventListener('flutter-first-frame', function () {
-      var splash = document.getElementById('boot-splash');
-      if (splash) splash.remove();
-    });
+    (() => {
+      const installCard = document.getElementById('pwa-install');
+      const installButton = document.getElementById('pwa-install-button');
+      const installMessage = document.getElementById('pwa-install-message');
+      const closeButton = document.getElementById('pwa-install-close');
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+      const isIos = /iPad|iPhone|iPod/.test(window.navigator.userAgent) && !window.MSStream;
+      let deferredPrompt;
+
+      const hideInstall = () => { installCard.hidden = true; };
+      const showInstall = () => { installCard.hidden = false; };
+      closeButton.addEventListener('click', hideInstall);
+
+      if (isStandalone) return;
+
+      if (isIos) {
+        installMessage.textContent = 'على iPhone أو iPad: اضغط مشاركة ثم «إضافة إلى الشاشة الرئيسية».'.replace('مشاركة', 'زر المشاركة');
+        installButton.textContent = 'طريقة التثبيت';
+        installButton.addEventListener('click', () => showInstall());
+        showInstall();
+      }
+
+      window.addEventListener('beforeinstallprompt', (event) => {
+        event.preventDefault();
+        deferredPrompt = event;
+        showInstall();
+      });
+
+      installButton.addEventListener('click', async () => {
+        if (!deferredPrompt) return;
+        deferredPrompt.prompt();
+        await deferredPrompt.userChoice;
+        deferredPrompt = null;
+        hideInstall();
+      });
+
+      window.addEventListener('appinstalled', hideInstall);
+    })();
   </script>
+  <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

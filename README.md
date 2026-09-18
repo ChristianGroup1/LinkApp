@@ -30,3 +30,18 @@ The app loads keys from the bundled `.env` asset — no extra flags needed for l
 | **CI (GitHub)** | Push to `main` — workflow uses repo secrets `SUPABASE_URL` and `SUPABASE_ANON_KEY` |
 
 Do not commit `.env`. The anon key is embedded at build time; data access is enforced by Supabase RLS.
+
+## Website and PWA on one domain
+
+The public website lives in `site/`; the Flutter application is built from the
+same source as Android and is served by that site at `/app/`.
+
+```text
+https://linkchurch.space/       # public website
+https://linkchurch.space/app/   # full Flutter Web PWA
+```
+
+Run `make build-web` to build Flutter with the required `/app/` base path and
+copy it to `site/public/app`. The Vercel workflow performs the same step before
+deploying. In Vercel Project Settings, set **Root Directory** to `site` once;
+the domain remains `linkchurch.space`.

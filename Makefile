@@ -10,7 +10,9 @@ run:
 	flutter run $(FLUTTER_DEFINES)
 
 build-web:
-	flutter build web --release $(FLUTTER_DEFINES)
+	flutter build web --release --base-href /app/ $(FLUTTER_DEFINES)
+	mkdir -p site/public/app
+	rsync -a --delete build/web/ site/public/app/
 
 build-apk:
 	flutter build apk --release $(FLUTTER_DEFINES)
