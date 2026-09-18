@@ -45,3 +45,7 @@ Run `make build-web` to build Flutter with the required `/app/` base path and
 copy it to `site/public/app`. The Vercel workflow performs the same step before
 deploying. In Vercel Project Settings, set **Root Directory** to `site` once;
 the domain remains `linkchurch.space`.
+
+For the GitHub Actions deployment, add `VERCEL_TOKEN`, `VERCEL_ORG_ID`, and
+`VERCEL_PROJECT_ID` as repository secrets. Use the Action deployment for this
+project: it creates the Flutter PWA files before it runs the Vercel build.
