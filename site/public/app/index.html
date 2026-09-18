@@ -34,21 +34,17 @@
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
-  <aside id="pwa-install" class="pwa-install" hidden aria-live="polite">
-    <button id="pwa-install-close" class="pwa-install-close" type="button" aria-label="إخفاء">×</button>
-    <div class="pwa-install-row">
-      <img class="pwa-install-logo" src="icons/Icon-192.png" width="48" height="48" alt="Link" decoding="async">
-      <div class="pwa-install-copy">
-        <strong>ثبّت Link على جهازك</strong>
-        <span id="pwa-install-message">افتحه كتطبيق مستقل من الشاشة الرئيسية.</span>
-      </div>
-    </div>
-    <button id="pwa-install-button" class="pwa-install-button" type="button">تثبيت التطبيق</button>
-  </aside>
+  <!-- Host lives above Flutter's glass pane so dismiss clicks always land. -->
+  <div id="pwa-install-host"></div>
   <style>
-    .pwa-install {
+    #pwa-install-host {
       position: fixed !important;
+      inset: 0 !important;
       z-index: 2147483647 !important;
+      pointer-events: none !important;
+    }
+    .pwa-install {
+      position: absolute !important;
       inset-inline-end: max(16px, env(safe-area-inset-right));
       bottom: max(16px, env(safe-area-inset-bottom));
       width: min(330px, calc(100vw - 32px));
@@ -126,26 +122,59 @@
   </style>
   <script>
     (() => {
-      const installCard = document.getElementById('pwa-install');
-      const installButton = document.getElementById('pwa-install-button');
-      const installMessage = document.getElementById('pwa-install-message');
-      const closeButton = document.getElementById('pwa-install-close');
       const dismissKey = 'link-pwa-install-dismissed';
+      const host = document.getElementById('pwa-install-host');
       const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
       const isIos = /iPad|iPhone|iPod/.test(window.navigator.userAgent) && !window.MSStream;
-      let deferredPrompt;
+      const flutterSelectors = [
+        'flt-glass-pane',
+        'flutter-view',
+        'flt-scene-host',
+        'flt-semantics-host',
+        'canvas[flt-renderer]',
+        'canvas',
+      ].join(',');
+
+      let deferredPrompt = null;
       let dismissed = false;
+      let installCard = null;
+      let flutterObserver = null;
 
       try { dismissed = localStorage.getItem(dismissKey) === '1'; } catch (_) {}
 
-      const bringToFront = () => {
-        document.body.appendChild(installCard);
+      const setFlutterPointers = (enabled) => {
+        document.querySelectorAll(flutterSelectors).forEach((el) => {
+          if (enabled) {
+            el.style.removeProperty('pointer-events');
+          } else {
+            el.style.setProperty('pointer-events', 'none', 'important');
+          }
+        });
+      };
+
+      const stopWatchingFlutter = () => {
+        if (flutterObserver) {
+          flutterObserver.disconnect();
+          flutterObserver = null;
+        }
+      };
+
+      const watchFlutter = () => {
+        stopWatchingFlutter();
+        flutterObserver = new MutationObserver(() => setFlutterPointers(false));
+        flutterObserver.observe(document.body, { childList: true, subtree: true });
+        setFlutterPointers(false);
       };
 
       const hideInstall = () => {
-        installCard.hidden = true;
-        installCard.setAttribute('hidden', '');
+        if (installCard) {
+          installCard.hidden = true;
+          installCard.setAttribute('hidden', '');
+        }
+        stopWatchingFlutter();
+        setFlutterPointers(true);
       };
+
       const dismissInstall = (event) => {
         if (event) {
           event.preventDefault();
@@ -158,36 +187,70 @@
         try { localStorage.setItem(dismissKey, '1'); } catch (_) {}
         hideInstall();
       };
+
+      const ensureCard = () => {
+        if (installCard) return installCard;
+        installCard = document.createElement('aside');
+        installCard.id = 'pwa-install';
+        installCard.className = 'pwa-install';
+        installCard.setAttribute('aria-live', 'polite');
+        installCard.hidden = true;
+        installCard.innerHTML = `
+          <button id="pwa-install-close" class="pwa-install-close" type="button" aria-label="إخفاء">×</button>
+          <div class="pwa-install-row">
+            <img class="pwa-install-logo" src="icons/Icon-192.png" width="48" height="48" alt="Link" decoding="async">
+            <div class="pwa-install-copy">
+              <strong>ثبّت Link على جهازك</strong>
+              <span id="pwa-install-message">افتحه كتطبيق مستقل من الشاشة الرئيسية.</span>
+            </div>
+          </div>
+          <button id="pwa-install-button" class="pwa-install-button" type="button">تثبيت التطبيق</button>
+        `;
+        host.appendChild(installCard);
+
+        const closeButton = installCard.querySelector('#pwa-install-close');
+        const installButton = installCard.querySelector('#pwa-install-button');
+        const onDismiss = (event) => dismissInstall(event);
+        ['pointerdown', 'touchstart', 'click'].forEach((type) => {
+          closeButton.addEventListener(type, onDismiss, { capture: true, passive: false });
+        });
+
+        installButton.addEventListener('click', async (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          if (isIos && !deferredPrompt) return;
+          if (!deferredPrompt) return;
+          deferredPrompt.prompt();
+          await deferredPrompt.userChoice;
+          deferredPrompt = null;
+          dismissInstall();
+        }, true);
+
+        return installCard;
+      };
+
       const showInstall = () => {
         if (dismissed || isStandalone) return;
-        bringToFront();
-        installCard.hidden = false;
-        installCard.removeAttribute('hidden');
+        const card = ensureCard();
+        if (isIos) {
+          card.querySelector('#pwa-install-message').textContent =
+            'على iPhone أو iPad: اضغط زر المشاركة ثم «إضافة إلى الشاشة الرئيسية».';
+          card.querySelector('#pwa-install-button').textContent = 'حسناً، فهمت';
+          card.querySelector('#pwa-install-button').onclick = (event) => dismissInstall(event);
+        }
+        card.hidden = false;
+        card.removeAttribute('hidden');
+        document.documentElement.appendChild(host);
+        watchFlutter();
       };
 
-      const bindDismiss = (el) => {
-        const handler = (event) => dismissInstall(event);
-        el.addEventListener('pointerdown', handler, true);
-        el.addEventListener('touchstart', handler, { capture: true, passive: false });
-        el.addEventListener('click', handler, true);
-      };
-      bindDismiss(closeButton);
-
-      if (isStandalone) {
+      if (isStandalone || dismissed) {
         hideInstall();
         return;
       }
 
-      if (isIos) {
-        installMessage.textContent = 'على iPhone أو iPad: اضغط زر المشاركة ثم «إضافة إلى الشاشة الرئيسية».';
-        installButton.textContent = 'طريقة التثبيت';
-        installButton.addEventListener('click', (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          showInstall();
-        }, true);
-        showInstall();
-      }
+      // iOS has no beforeinstallprompt — show tip once until dismissed.
+      if (isIos) showInstall();
 
       window.addEventListener('beforeinstallprompt', (event) => {
         event.preventDefault();
@@ -195,19 +258,12 @@
         showInstall();
       });
 
-      installButton.addEventListener('click', async (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        if (!deferredPrompt) return;
-        deferredPrompt.prompt();
-        await deferredPrompt.userChoice;
-        deferredPrompt = null;
-        dismissInstall();
-      }, true);
-
       window.addEventListener('appinstalled', () => dismissInstall());
       window.addEventListener('flutter-first-frame', () => {
-        if (!installCard.hidden) bringToFront();
+        if (installCard && !installCard.hidden) {
+          document.documentElement.appendChild(host);
+          setFlutterPointers(false);
+        }
       });
     })();
   </script>

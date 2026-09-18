@@ -320,6 +320,12 @@ class _AuthRecoveryListenerState extends State<AuthRecoveryListener> {
   }
 
   Future<void> _initializeRecoveryLinks() async {
+    // PWA/web: Supabase returns users to the HTTPS /app/ URL with error params
+    // in the query or hash. Check the current location in addition to app_links.
+    if (kIsWeb) {
+      _handleRecoveryLink(Uri.base);
+    }
+
     try {
       final initialUri = await _appLinks.getInitialLink();
       if (initialUri != null) _handleRecoveryLink(initialUri);

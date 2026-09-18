@@ -1,11 +1,24 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:link/core/auth/password_recovery_link.dart';
 import 'package:link/presentation/screens/password_recovery_error_screen.dart';
 
 void main() {
-  test('uses the native app callback for password reset emails', () {
-    expect(passwordResetRedirectUrl, 'io.supabase.link://reset-password');
+  test('uses the native app callback outside the web/PWA build', () {
+    expect(passwordResetRedirectUrl, nativePasswordResetRedirectUrl);
+    expect(nativePasswordResetRedirectUrl, 'io.supabase.link://reset-password');
+  });
+
+  test('builds the PWA HTTPS callback fallback without dotenv', () {
+    expect(webPasswordResetRedirectUrl(), 'https://linkchurch.space/app/');
+  });
+
+  test('builds the PWA HTTPS callback when dotenv is loaded', () {
+    dotenv.loadFromString(
+      envString: 'INVITE_LINK_BASE_URL=https://linkchurch.space\n',
+    );
+    expect(webPasswordResetRedirectUrl(), 'https://linkchurch.space/app/');
   });
 
   group('extractPasswordRecoveryLinkError', () {
@@ -32,6 +45,18 @@ void main() {
       expect(error!.isExpiredOrUsed, isTrue);
     });
 
+    test('reads recovery errors from the PWA HTTPS callback', () {
+      final error = extractPasswordRecoveryLinkError(
+        Uri.parse(
+          'https://linkchurch.space/app/#error=access_denied&error_code=otp_expired&error_description=Email%20link%20is%20invalid%20or%20has%20expired',
+        ),
+      );
+
+      expect(error, isNotNull);
+      expect(error!.code, 'otp_expired');
+      expect(error.isExpiredOrUsed, isTrue);
+    });
+
     test('ignores valid reset links and invitation links', () {
       expect(
         extractPasswordRecoveryLinkError(
@@ -42,6 +67,14 @@ void main() {
       expect(
         extractPasswordRecoveryLinkError(
           Uri.parse('io.supabase.link://invite?error=access_denied'),
+        ),
+        isNull,
+      );
+      expect(
+        extractPasswordRecoveryLinkError(
+          Uri.parse(
+            'https://linkchurch.space/invite?t=token&error=access_denied',
+          ),
         ),
         isNull,
       );
