@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../../core/errors/arabic_error_text.dart';
 import '../../../core/notifications/meeting_reminder_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/models.dart';
@@ -236,8 +237,8 @@ class _AddEditMeetingScreenState extends State<AddEditMeetingScreen> {
         SnackBar(
           content: Text(
             _isEdit
-                ? 'تعذّر حفظ تعديلات الاجتماع: $error'
-                : 'تعذّر إضافة الاجتماع: $error',
+                ? 'تعذّر حفظ تعديلات الاجتماع: ${arabicErrorText(error)}'
+                : 'تعذّر إضافة الاجتماع: ${arabicErrorText(error)}',
             style: GoogleFonts.cairo(),
           ),
           backgroundColor: AppTheme.accentRed,

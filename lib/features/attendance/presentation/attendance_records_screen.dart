@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart' as intl;
 
+import '../../../core/errors/arabic_error_text.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/models.dart';
 import '../../../data/offline/offline_messages.dart';
@@ -430,7 +431,7 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
                                   messenger.showSnackBar(
                                     SnackBar(
                                       content: Text(
-                                        'فشل إنشاء الكشف: ${e.toString()}',
+                                        'فشل إنشاء الكشف: ${arabicErrorText(e)}',
                                         style: GoogleFonts.cairo(),
                                       ),
                                       backgroundColor: AppTheme.accentRed,
@@ -624,7 +625,7 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
                                           messenger.showSnackBar(
                                             SnackBar(
                                               content: Text(
-                                                'فشل حذف السجل: ${e.toString()}',
+                                                'فشل حذف السجل: ${arabicErrorText(e)}',
                                                 style: GoogleFonts.cairo(),
                                               ),
                                               backgroundColor:

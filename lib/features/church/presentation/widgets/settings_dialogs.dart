@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../../../core/errors/arabic_error_text.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../data/models/models.dart';
 import '../../../../data/offline/offline_messages.dart';
@@ -321,7 +322,7 @@ void showAddAssignmentDialog(
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                 content: Text(
-                                  'فشل الإسناد: ${e.toString()}',
+                                  'فشل الإسناد: ${arabicErrorText(e)}',
                                   style: GoogleFonts.cairo(),
                                 ),
                                 backgroundColor: AppTheme.accentRed,
@@ -651,7 +652,7 @@ void showInviteHelperDialog(
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text(
-                              'فشل توليد الكود: ${e.toString()}',
+                              'فشل توليد الكود: ${arabicErrorText(e)}',
                               style: GoogleFonts.cairo(),
                             ),
                             backgroundColor: AppTheme.accentRed,

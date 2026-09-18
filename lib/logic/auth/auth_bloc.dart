@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:bloc_concurrency/bloc_concurrency.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../core/errors/arabic_error_text.dart';
 import '../../data/models/models.dart';
 import '../../data/repositories/database_repository.dart';
 
@@ -166,7 +167,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         if (repository.hasActiveSession()) {
           emit(
             AuthProfileLoadFailed(
-              'تعذر تحميل بيانات الحساب بعد تحديث التطبيق: ${e.toString().replaceAll('Exception: ', '')}',
+              'تعذر تحميل بيانات الحساب بعد تحديث التطبيق: ${arabicErrorText(e)}',
             ),
           );
         } else {
@@ -208,7 +209,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           emit(AuthSignUpConfirmationSent(event.email));
         }
       } catch (e) {
-        emit(AuthError(e.toString().replaceAll('Exception: ', '')));
+        emit(AuthError(arabicErrorText(e)));
       }
     });
 
@@ -228,7 +229,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           emit(AuthSignUpConfirmationSent(event.email));
         }
       } catch (e) {
-        emit(AuthError(e.toString().replaceAll('Exception: ', '')));
+        emit(AuthError(arabicErrorText(e)));
       }
     });
 
@@ -248,7 +249,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           emit(AuthSignUpConfirmationSent(event.email));
         }
       } catch (e) {
-        emit(AuthError(e.toString().replaceAll('Exception: ', '')));
+        emit(AuthError(arabicErrorText(e)));
       }
     });
 
@@ -305,15 +306,5 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   }
 }
 
-String _loginErrorMessage(Object error) {
-  final message = error.toString().replaceAll('Exception: ', '');
-  final normalized = message.toLowerCase();
-
-  if (normalized.contains('certificate is not yet valid') ||
-      (normalized.contains('certificate_verify_failed') &&
-          normalized.contains('not yet valid'))) {
-    return 'تعذر إنشاء اتصال آمن لأن تاريخ أو وقت الجهاز غير صحيح. فعّل التاريخ والوقت التلقائيين ثم حاول مرة أخرى.';
-  }
-
-  return message;
-}
+String _loginErrorMessage(Object error) =>
+    arabicErrorText(error, fallback: 'تعذر تسجيل الدخول. حاول مرة أخرى.');

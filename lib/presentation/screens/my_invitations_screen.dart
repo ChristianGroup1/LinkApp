@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../core/errors/arabic_error_text.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/repositories/database_repository.dart';
 import '../../logic/auth/auth_bloc.dart';
@@ -78,10 +79,7 @@ class _MyInvitationsScreenState extends State<MyInvitationsScreen>
       if (!mounted) return;
       messenger.showSnackBar(
         SnackBar(
-          content: Text(
-            e.toString().replaceAll('Exception: ', ''),
-            style: GoogleFonts.cairo(),
-          ),
+          content: Text(arabicErrorText(e), style: GoogleFonts.cairo()),
           backgroundColor: AppTheme.accentRed,
         ),
       );
@@ -145,10 +143,7 @@ class _MyInvitationsScreenState extends State<MyInvitationsScreen>
       if (!mounted) return;
       messenger.showSnackBar(
         SnackBar(
-          content: Text(
-            e.toString().replaceAll('Exception: ', ''),
-            style: GoogleFonts.cairo(),
-          ),
+          content: Text(arabicErrorText(e), style: GoogleFonts.cairo()),
           backgroundColor: AppTheme.accentRed,
         ),
       );

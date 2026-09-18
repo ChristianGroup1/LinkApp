@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:bloc_concurrency/bloc_concurrency.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../core/errors/arabic_error_text.dart';
 import '../../data/models/models.dart';
 import '../../data/repositories/database_repository.dart';
 
@@ -322,7 +323,9 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         unawaited(repository.getAttendanceReportStats());
         unawaited(repository.warmOfflineCache());
       } catch (e) {
-        emit(HomeError('حدث خطأ أثناء تحميل لوحة البيانات: ${e.toString()}'));
+        emit(
+          HomeError('حدث خطأ أثناء تحميل لوحة البيانات: ${arabicErrorText(e)}'),
+        );
       }
     }, transformer: restartable());
   }

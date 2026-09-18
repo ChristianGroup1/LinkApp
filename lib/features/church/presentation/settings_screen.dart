@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/diagnostics/diagnostics_visibility.dart';
+import '../../../core/errors/arabic_error_text.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../data/models/models.dart';
@@ -129,11 +130,14 @@ class _ProfileActionsCard extends StatelessWidget {
   const _ProfileActionsCard({required this.profile});
 
   @override
-  Widget build(BuildContext context) => Container(
-    decoration: BoxDecoration(
-      color: AppTheme.cardBackground,
+  // Material (not a decorated Container) so the ListTiles inside can paint
+  // their ink splashes; a DecoratedBox between them and the Material hides it.
+  Widget build(BuildContext context) => Material(
+    color: AppTheme.cardBackground,
+    clipBehavior: Clip.antiAlias,
+    shape: RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(18),
-      border: Border.all(color: AppTheme.border.withValues(alpha: 0.8)),
+      side: BorderSide(color: AppTheme.border.withValues(alpha: 0.8)),
     ),
     child: Column(
       children: [
@@ -403,10 +407,7 @@ class _SupportTicketDialogFormState extends State<_SupportTicketDialogForm> {
       setState(() => _isSaving = false);
       ScaffoldMessenger.of(widget.hostContext).showSnackBar(
         SnackBar(
-          content: Text(
-            error.toString().replaceAll('Exception: ', ''),
-            style: GoogleFonts.cairo(),
-          ),
+          content: Text(arabicErrorText(error), style: GoogleFonts.cairo()),
           backgroundColor: AppTheme.accentRed,
         ),
       );
@@ -898,10 +899,7 @@ class _DeleteAccountCardState extends State<_DeleteAccountCard> {
       setState(() => _isDeleting = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            error.toString().replaceAll('Exception: ', ''),
-            style: GoogleFonts.cairo(),
-          ),
+          content: Text(arabicErrorText(error), style: GoogleFonts.cairo()),
           backgroundColor: AppTheme.accentRed,
         ),
       );

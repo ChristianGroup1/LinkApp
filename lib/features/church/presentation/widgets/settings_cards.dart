@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../../../core/errors/arabic_error_text.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../data/models/models.dart';
 import '../../../../data/repositories/database_repository.dart';
@@ -522,7 +523,7 @@ class _ServantTile extends StatelessWidget {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text(
-                            'فشل تحديث الدور: ${e.toString()}',
+                            'فشل تحديث الدور: ${arabicErrorText(e)}',
                             style: GoogleFonts.cairo(),
                           ),
                         ),

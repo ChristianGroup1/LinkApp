@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../core/diagnostics/storage_write_error.dart';
+import '../../../core/errors/arabic_error_text.dart';
 import '../../../data/models/models.dart';
 import '../../../data/offline/offline_messages.dart';
 import '../../../data/offline/offline_save_result.dart';
@@ -244,7 +245,7 @@ class MembersBloc extends Bloc<MembersEvent, MembersState> {
           );
           _ensureRealtimeSubscription();
         } catch (_) {
-          emit(MembersError('فشل تحميل الأعضاء: ${e.toString()}'));
+          emit(MembersError('فشل تحميل الأعضاء: ${arabicErrorText(e)}'));
         }
       }
     });
@@ -367,12 +368,18 @@ class MembersBloc extends Bloc<MembersEvent, MembersState> {
         if (previous is MembersLoaded) {
           emit(
             previous.copyWith(
-              flashMessage: 'فشل حذف العضو: ${e.toString()}',
+              flashMessage: StorageWriteError.from(
+                e,
+              ).message(action: 'حذف العضو'),
               flashIsError: true,
             ),
           );
         } else {
-          emit(MembersError('فشل حذف العضو: ${e.toString()}'));
+          emit(
+            MembersError(
+              StorageWriteError.from(e).message(action: 'حذف العضو'),
+            ),
+          );
         }
       }
     });

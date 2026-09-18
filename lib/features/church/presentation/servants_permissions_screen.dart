@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/errors/arabic_error_text.dart';
 import '../../../core/invitations/invitation_link.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/models.dart';
@@ -166,7 +167,7 @@ class _ServantsPermissionsScreenState extends State<ServantsPermissionsScreen> {
       _showSnack('تم تحديث دور ${servant.fullName}');
     } catch (e) {
       if (!mounted) return;
-      _showSnack('فشل تحديث الدور: ${e.toString()}', isError: true);
+      _showSnack('فشل تحديث الدور: ${arabicErrorText(e)}', isError: true);
     }
   }
 
@@ -237,7 +238,7 @@ class _ServantsPermissionsScreenState extends State<ServantsPermissionsScreen> {
       );
     } catch (error) {
       if (!mounted) return;
-      _showSnack(error.toString().replaceAll('Exception: ', ''), isError: true);
+      _showSnack(arabicErrorText(error), isError: true);
     }
   }
 
@@ -380,7 +381,10 @@ class _ServantsPermissionsScreenState extends State<ServantsPermissionsScreen> {
                               _showSnack('تم إسناد المهمة بنجاح');
                             } catch (e) {
                               if (!mounted) return;
-                              _showSnack('فشل الإسناد: $e', isError: true);
+                              _showSnack(
+                                'فشل الإسناد: ${arabicErrorText(e)}',
+                                isError: true,
+                              );
                             }
                           },
                     style: FilledButton.styleFrom(
@@ -435,7 +439,7 @@ class _ServantsPermissionsScreenState extends State<ServantsPermissionsScreen> {
         }
       }
       if (!mounted) return;
-      _showSnack(e.toString().replaceAll('Exception: ', ''), isError: true);
+      _showSnack(arabicErrorText(e), isError: true);
     }
   }
 
@@ -452,7 +456,7 @@ class _ServantsPermissionsScreenState extends State<ServantsPermissionsScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      _showSnack('فشل حذف الدعوة: ${e.toString()}', isError: true);
+      _showSnack('فشل حذف الدعوة: ${arabicErrorText(e)}', isError: true);
     }
   }
 
@@ -541,7 +545,7 @@ class _ServantsPermissionsScreenState extends State<ServantsPermissionsScreen> {
                         setDialogState(() => isSaving = false);
                         if (!mounted) return;
                         _showSnack(
-                          'تعذر تعديل الدعوة: ${error.toString().replaceAll('Exception: ', '')}',
+                          'تعذر تعديل الدعوة: ${arabicErrorText(error)}',
                           isError: true,
                         );
                       }
