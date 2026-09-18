@@ -47,8 +47,8 @@
   </aside>
   <style>
     .pwa-install {
-      position: fixed;
-      z-index: 2147483647;
+      position: fixed !important;
+      z-index: 2147483647 !important;
       inset-inline-end: max(16px, env(safe-area-inset-right));
       bottom: max(16px, env(safe-area-inset-bottom));
       width: min(330px, calc(100vw - 32px));
@@ -63,8 +63,12 @@
       box-shadow: 0 16px 42px rgba(15, 23, 42, .3);
       font-family: Arial, sans-serif;
       text-align: start;
-      pointer-events: auto;
+      pointer-events: auto !important;
+      touch-action: manipulation;
+      -webkit-user-select: none;
+      user-select: none;
     }
+    .pwa-install[hidden] { display: none !important; }
     .pwa-install-row {
       display: flex;
       align-items: center;
@@ -77,11 +81,13 @@
       border-radius: 12px;
       background: #fff;
       object-fit: cover;
+      pointer-events: none;
     }
     .pwa-install-copy {
       display: grid;
       gap: 4px;
       min-width: 0;
+      pointer-events: none;
     }
     .pwa-install strong { font-size: 15px; }
     .pwa-install span { font-size: 13px; line-height: 1.6; opacity: .9; }
@@ -97,21 +103,25 @@
       font-size: 13px;
       font-weight: 700;
       cursor: pointer;
+      pointer-events: auto !important;
+      touch-action: manipulation;
     }
     .pwa-install-close {
       position: absolute;
-      top: 7px;
-      inset-inline-end: 10px;
-      width: 36px;
-      height: 36px;
+      top: 4px;
+      inset-inline-end: 4px;
+      width: 44px;
+      height: 44px;
       border: 0;
       color: #fff;
-      background: transparent;
+      background: rgba(255, 255, 255, .12);
+      border-radius: 12px;
       font-size: 28px;
       line-height: 1;
       cursor: pointer;
-      z-index: 1;
-      pointer-events: auto;
+      z-index: 2;
+      pointer-events: auto !important;
+      touch-action: manipulation;
     }
   </style>
   <script>
@@ -124,28 +134,58 @@
       const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
       const isIos = /iPad|iPhone|iPod/.test(window.navigator.userAgent) && !window.MSStream;
       let deferredPrompt;
+      let dismissed = false;
 
-      const hideInstall = () => { installCard.hidden = true; };
-      const dismissInstall = () => {
+      try { dismissed = localStorage.getItem(dismissKey) === '1'; } catch (_) {}
+
+      const bringToFront = () => {
+        document.body.appendChild(installCard);
+      };
+
+      const hideInstall = () => {
+        installCard.hidden = true;
+        installCard.setAttribute('hidden', '');
+      };
+      const dismissInstall = (event) => {
+        if (event) {
+          event.preventDefault();
+          event.stopPropagation();
+          if (typeof event.stopImmediatePropagation === 'function') {
+            event.stopImmediatePropagation();
+          }
+        }
+        dismissed = true;
         try { localStorage.setItem(dismissKey, '1'); } catch (_) {}
         hideInstall();
       };
       const showInstall = () => {
-        try { if (localStorage.getItem(dismissKey) === '1') return; } catch (_) {}
+        if (dismissed || isStandalone) return;
+        bringToFront();
         installCard.hidden = false;
+        installCard.removeAttribute('hidden');
       };
-      closeButton.addEventListener('click', (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        dismissInstall();
-      });
 
-      if (isStandalone) return;
+      const bindDismiss = (el) => {
+        const handler = (event) => dismissInstall(event);
+        el.addEventListener('pointerdown', handler, true);
+        el.addEventListener('touchstart', handler, { capture: true, passive: false });
+        el.addEventListener('click', handler, true);
+      };
+      bindDismiss(closeButton);
+
+      if (isStandalone) {
+        hideInstall();
+        return;
+      }
 
       if (isIos) {
-        installMessage.textContent = 'على iPhone أو iPad: اضغط مشاركة ثم «إضافة إلى الشاشة الرئيسية».'.replace('مشاركة', 'زر المشاركة');
+        installMessage.textContent = 'على iPhone أو iPad: اضغط زر المشاركة ثم «إضافة إلى الشاشة الرئيسية».';
         installButton.textContent = 'طريقة التثبيت';
-        installButton.addEventListener('click', () => showInstall());
+        installButton.addEventListener('click', (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          showInstall();
+        }, true);
         showInstall();
       }
 
@@ -155,15 +195,20 @@
         showInstall();
       });
 
-      installButton.addEventListener('click', async () => {
+      installButton.addEventListener('click', async (event) => {
+        event.preventDefault();
+        event.stopPropagation();
         if (!deferredPrompt) return;
         deferredPrompt.prompt();
         await deferredPrompt.userChoice;
         deferredPrompt = null;
         dismissInstall();
-      });
+      }, true);
 
-      window.addEventListener('appinstalled', dismissInstall);
+      window.addEventListener('appinstalled', () => dismissInstall());
+      window.addEventListener('flutter-first-frame', () => {
+        if (!installCard.hidden) bringToFront();
+      });
     })();
   </script>
   <script src="flutter_bootstrap.js" async></script>
