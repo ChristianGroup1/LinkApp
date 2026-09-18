@@ -19,7 +19,7 @@
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="description" content="إدارة الحضور والاجتماعات والأعضاء والافتقاد للكنائس والخدمات.">
-  <meta name="theme-color" content="#4F46E5">
+  <meta name="theme-color" content="#0F3D5C">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
@@ -36,27 +36,52 @@
 <body>
   <aside id="pwa-install" class="pwa-install" hidden aria-live="polite">
     <button id="pwa-install-close" class="pwa-install-close" type="button" aria-label="إخفاء">×</button>
-    <strong>ثبّت Link على جهازك</strong>
-    <span id="pwa-install-message">افتحه كتطبيق مستقل من الشاشة الرئيسية.</span>
+    <div class="pwa-install-row">
+      <img class="pwa-install-logo" src="icons/Icon-192.png" width="48" height="48" alt="Link" decoding="async">
+      <div class="pwa-install-copy">
+        <strong>ثبّت Link على جهازك</strong>
+        <span id="pwa-install-message">افتحه كتطبيق مستقل من الشاشة الرئيسية.</span>
+      </div>
+    </div>
     <button id="pwa-install-button" class="pwa-install-button" type="button">تثبيت التطبيق</button>
   </aside>
   <style>
     .pwa-install {
       position: fixed;
       z-index: 2147483647;
-      right: max(16px, env(safe-area-inset-right));
+      inset-inline-end: max(16px, env(safe-area-inset-right));
       bottom: max(16px, env(safe-area-inset-bottom));
       width: min(330px, calc(100vw - 32px));
       display: grid;
-      gap: 8px;
-      padding: 16px 44px 16px 16px;
+      gap: 10px;
+      padding: 16px;
+      padding-inline-end: 44px;
       color: #fff;
-      background: #3730a3;
+      background: #0f3d5c;
       border: 1px solid rgba(255, 255, 255, .2);
       border-radius: 18px;
       box-shadow: 0 16px 42px rgba(15, 23, 42, .3);
       font-family: Arial, sans-serif;
-      text-align: right;
+      text-align: start;
+      pointer-events: auto;
+    }
+    .pwa-install-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .pwa-install-logo {
+      flex: 0 0 auto;
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      background: #fff;
+      object-fit: cover;
+    }
+    .pwa-install-copy {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
     }
     .pwa-install strong { font-size: 15px; }
     .pwa-install span { font-size: 13px; line-height: 1.6; opacity: .9; }
@@ -66,7 +91,7 @@
       border: 0;
       border-radius: 10px;
       padding: 9px 13px;
-      color: #312e81;
+      color: #0f3d5c;
       background: #fff;
       font: inherit;
       font-size: 13px;
@@ -76,15 +101,17 @@
     .pwa-install-close {
       position: absolute;
       top: 7px;
-      right: 10px;
-      width: 28px;
-      height: 28px;
+      inset-inline-end: 10px;
+      width: 36px;
+      height: 36px;
       border: 0;
       color: #fff;
       background: transparent;
-      font-size: 24px;
+      font-size: 28px;
       line-height: 1;
       cursor: pointer;
+      z-index: 1;
+      pointer-events: auto;
     }
   </style>
   <script>
@@ -93,13 +120,25 @@
       const installButton = document.getElementById('pwa-install-button');
       const installMessage = document.getElementById('pwa-install-message');
       const closeButton = document.getElementById('pwa-install-close');
+      const dismissKey = 'link-pwa-install-dismissed';
       const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
       const isIos = /iPad|iPhone|iPod/.test(window.navigator.userAgent) && !window.MSStream;
       let deferredPrompt;
 
       const hideInstall = () => { installCard.hidden = true; };
-      const showInstall = () => { installCard.hidden = false; };
-      closeButton.addEventListener('click', hideInstall);
+      const dismissInstall = () => {
+        try { localStorage.setItem(dismissKey, '1'); } catch (_) {}
+        hideInstall();
+      };
+      const showInstall = () => {
+        try { if (localStorage.getItem(dismissKey) === '1') return; } catch (_) {}
+        installCard.hidden = false;
+      };
+      closeButton.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        dismissInstall();
+      });
 
       if (isStandalone) return;
 
@@ -121,10 +160,10 @@
         deferredPrompt.prompt();
         await deferredPrompt.userChoice;
         deferredPrompt = null;
-        hideInstall();
+        dismissInstall();
       });
 
-      window.addEventListener('appinstalled', hideInstall);
+      window.addEventListener('appinstalled', dismissInstall);
     })();
   </script>
   <script src="flutter_bootstrap.js" async></script>
