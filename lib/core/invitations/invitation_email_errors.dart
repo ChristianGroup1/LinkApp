@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../core/errors/arabic_error_text.dart';
+
+import '../errors/arabic_error_text.dart';
 
 String invitationEmailErrorMessage(Object error) {
   if (error is FunctionException) {
@@ -21,14 +22,14 @@ String invitationEmailErrorMessage(Object error) {
       return 'غير مصرح بإرسال البريد. سجّل دخولك كمدير كنيسة وحاول مرة أخرى.';
     }
 
-    final readable = _extractErrorText(details);
-    if (readable.isNotEmpty) {
-      return 'فشل إرسال البريد: $readable';
-    }
-    return 'فشل إرسال البريد (خطأ ${error.status}).';
+    // Never surface the raw English function payload — map it, or fall back.
+    return arabicErrorText(
+      error,
+      fallback: 'فشل إرسال البريد (خطأ ${error.status}).',
+    );
   }
 
-  return arabicErrorText(error);
+  return arabicErrorText(error, fallback: 'فشل إرسال البريد. حاول مرة أخرى.');
 }
 
 String _extractErrorText(Object? details) {
