@@ -283,6 +283,12 @@ summary:focus-visible {
   box-shadow: 0 14px 30px rgba(15, 23, 42, 0.2);
 }
 
+.downloadButton.web {
+  background: var(--indigo);
+  color: white;
+  box-shadow: 0 14px 30px rgba(79, 70, 229, 0.24);
+}
+
 .downloadButton.desktop {
   color: var(--navy);
   border: 1px solid var(--line);
@@ -300,6 +306,18 @@ summary:focus-visible {
   width: 22px;
   height: 22px;
   flex-shrink: 0;
+}
+
+.webIcon {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  border-radius: 9px;
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1;
 }
 
 .windowsIcon { color: #2563eb; }
@@ -824,6 +842,17 @@ summary:focus-visible {
   box-shadow: none;
 }
 
+.desktopActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.webButton {
+  background: var(--navy);
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.18);
+}
+
 .desktopMockup {
   border: 7px solid #0f172a;
   border-radius: 16px;
@@ -1024,6 +1053,7 @@ summary:focus-visible {
   }
   .desktopCopy { text-align: center; }
   .desktopCopy ul { display: inline-grid; text-align: start; }
+  .desktopActions { justify-content: center; }
   .trustContent strong { width: 100%; text-align: center; }
 
   .ctaInner {
@@ -1104,4 +1134,93 @@ summary:focus-visible {
 
   .downloadButton:hover,
   .featureCard:hover { transform: none; }
+}
+
+/* Link Web PWA */
+.pwaLoginPage,
+.pwaAppPage,
+.pwaOffline {
+  min-height: 100dvh;
+  background: #f6f7ff;
+  color: #171a36;
+}
+
+.pwaLoginPage {
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.pwaLoginCard {
+  width: min(100%, 430px);
+  padding: 36px;
+  background: #fff;
+  border: 1px solid #e5e7ff;
+  border-radius: 28px;
+  box-shadow: 0 20px 60px rgb(54 56 125 / 12%);
+}
+
+.pwaLogo {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #26246a;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.pwaLoginCard h1 { margin: 30px 0 8px; font-size: 29px; }
+.pwaLoginCard > p { color: #62657d; line-height: 1.8; }
+.pwaLoginForm { display: grid; gap: 16px; margin-top: 24px; }
+.pwaLoginForm label { display: grid; gap: 7px; font-weight: 700; font-size: 14px; }
+.pwaLoginForm input {
+  width: 100%;
+  border: 1px solid #d9dcf3;
+  border-radius: 12px;
+  padding: 13px;
+  color: #171a36;
+  font: inherit;
+  direction: ltr;
+  text-align: left;
+}
+.pwaLoginForm input:focus { border-color: #5b55e8; outline: 3px solid rgb(91 85 232 / 15%); }
+.pwaLoginForm button,
+.pwaInstallButton {
+  border: 0;
+  border-radius: 12px;
+  padding: 13px 18px;
+  color: #fff;
+  background: #4f46e5;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 800;
+}
+.pwaError { border-radius: 12px; background: #fff1f2; color: #be123c !important; padding: 10px 12px; font-size: 14px; }
+.pwaBackLink { display: inline-block; margin-top: 24px; color: #4f46e5; font-size: 14px; }
+
+.pwaAppPage { padding: max(20px, env(safe-area-inset-top)) clamp(18px, 5vw, 72px) max(28px, env(safe-area-inset-bottom)); }
+.pwaAppHeader { display: flex; align-items: center; justify-content: space-between; max-width: 1050px; margin: 0 auto; }
+.pwaLogout { border: 1px solid #d9dcf3; border-radius: 10px; background: #fff; color: #45486a; padding: 9px 13px; cursor: pointer; font: inherit; }
+.pwaWelcome { max-width: 1050px; margin: 56px auto 30px; }
+.pwaWelcome > p { margin: 0; color: #62657d; font-weight: 700; }
+.pwaWelcome h1 { margin: 7px 0; font-size: clamp(32px, 5vw, 52px); line-height: 1.2; }
+.pwaWelcome > span { color: #5b55e8; font-weight: 800; }
+.pwaWelcome .pwaInstallButton { display: block; margin-top: 24px; }
+.pwaInstallHelp { max-width: 500px; margin: 24px 0 0; padding: 12px 14px; border-radius: 12px; background: #edefff; color: #39328d; line-height: 1.8; }
+.pwaActions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; max-width: 1050px; margin: 0 auto; }
+.pwaActions article { min-height: 208px; padding: 24px; border: 1px solid #e5e7ff; border-radius: 22px; background: #fff; box-shadow: 0 8px 24px rgb(54 56 125 / 6%); }
+.pwaActions article > span { display: grid; width: 42px; height: 42px; place-items: center; border-radius: 13px; color: #fff; background: #4f46e5; font-weight: 900; font-size: 22px; }
+.pwaActions h2 { margin: 20px 0 7px; font-size: 20px; }
+.pwaActions p { margin: 0; color: #62657d; line-height: 1.8; font-size: 14px; }
+.pwaAdminLink { display: block; width: fit-content; margin: 28px auto 0; border-radius: 12px; background: #171a36; color: #fff; padding: 13px 18px; text-decoration: none; font-weight: 800; }
+.pwaNote { max-width: 680px; margin: 44px auto 0; color: #73768e; text-align: center; font-size: 13px; line-height: 1.8; }
+.pwaOffline { display: grid; place-content: center; padding: 24px; text-align: center; }
+.pwaOffline p { max-width: 390px; color: #62657d; line-height: 1.8; }
+.pwaOffline a { margin: 12px auto 0; border-radius: 12px; padding: 12px 18px; background: #4f46e5; color: #fff; text-decoration: none; font-weight: 800; }
+
+@media (max-width: 700px) {
+  .pwaLoginCard { padding: 28px 20px; }
+  .pwaWelcome { margin-top: 42px; }
+  .pwaActions { grid-template-columns: 1fr; }
+  .pwaActions article { min-height: 0; }
 }

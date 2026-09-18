@@ -7,7 +7,7 @@ const links = [
   { href: '#how', label: 'كيف يعمل' },
   { href: '#features', label: 'المميزات' },
   { href: '#faq', label: 'أسئلة شائعة' },
-  { href: '#download', label: 'تحميل التطبيق' },
+  { href: '#download', label: 'استخدم Link' },
 ];
 
 function scrollToHash(hash: string) {
@@ -80,6 +80,7 @@ export function SiteHeader() {
               {link.label}
             </a>
           ))}
+          <a href="/app" onClick={() => setOpen(false)}>فتح Link Web</a>
           <a
             className="navCta"
             href="#download"

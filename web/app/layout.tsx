@@ -12,7 +12,7 @@ export const metadata: Metadata = {
   metadataBase: new URL('https://linkchurch.space'),
   title: 'Link — إدارة الخدمة والحضور والزيارات',
   description:
-    'تطبيق عربي للكنائس والخدمات: تسجيل الحضور، إدارة الاجتماعات والأعضاء، ومتابعة الزيارات على Android وWindows.',
+    'تطبيق عربي للكنائس والخدمات: تسجيل الحضور، إدارة الاجتماعات والأعضاء، ومتابعة الزيارات على الويب وAndroid وWindows.',
   keywords: [
     'إدارة الكنيسة',
     'تسجيل حضور',
@@ -21,6 +21,7 @@ export const metadata: Metadata = {
     'Link',
   ],
   icons: { icon: '/link-logo.png', apple: '/link-logo.png' },
+  manifest: '/manifest.webmanifest',
   openGraph: {
     title: 'Link — ركّز في الخدمة واترك التنظيم علينا',
     description: 'إدارة الحضور والاجتماعات والأعضاء والزيارات في مكان واحد.',

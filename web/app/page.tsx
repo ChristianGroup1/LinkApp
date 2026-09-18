@@ -79,8 +79,8 @@ const features = [
 const steps = [
   {
     number: '١',
-    title: 'حمّل التطبيق',
-    description: 'من Google Play على الموبايل، أو من حزمة Windows على الكمبيوتر.',
+    title: 'افتح Link بالطريقة المناسبة لك',
+    description: 'ادخل من المتصفح، أو حمّل التطبيق على Android، أو استخدمه على Windows.',
   },
   {
     number: '٢',
@@ -123,7 +123,7 @@ export default async function HomePage() {
         <section className="hero shell" aria-labelledby="hero-title">
           <div className="heroCopy">
             <p className="eyebrow">
-              <span /> منظومة واحدة لخدمة أكثر تنظيمًا
+              <span /> متاح الآن على الويب والموبايل والكمبيوتر
             </p>
             <h1 id="hero-title">
               ركّز في <em>الخدمة</em>
@@ -132,10 +132,17 @@ export default async function HomePage() {
             </h1>
             <p>
               تطبيق عربي للكنائس والخدمات: اجتماعات، حضور، أعضاء، وافتقاد —
-              بواجهة بسيطة تعمل على الموبايل والكمبيوتر حتى مع ضعف الإنترنت.
+              بنفس الحساب والبيانات، من المتصفح أو الموبايل أو الكمبيوتر.
             </p>
 
             <div className="downloadActions" id="download">
+              <a className="downloadButton web" href="/app">
+                <span className="webIcon" aria-hidden="true">↗</span>
+                <span>
+                  <small>بدون تحميل</small>
+                  افتح Link Web
+                </span>
+              </a>
               <a
                 className="downloadButton primary"
                 href={playStoreUrl}
@@ -164,6 +171,7 @@ export default async function HomePage() {
             </div>
             <ul className="platformNote">
               <li>Android</li>
+              <li>Link Web</li>
               <li>
                 <span dir="ltr">Windows 10 / 11</span>
               </li>
@@ -270,7 +278,7 @@ export default async function HomePage() {
             <span>مصمم للخدمة اليومية</span>
             <h2 id="features-title">كل ما تحتاجه لإدارة خدمتك بوضوح</h2>
             <p>
-              أدوات عملية، عربي واضح، وبياناتك متاحة على الموبايل والكمبيوتر.
+              أدوات عملية، عربي واضح، وبياناتك متاحة على الويب والموبايل والكمبيوتر.
             </p>
           </div>
           <div className="featureGrid">
@@ -307,27 +315,29 @@ export default async function HomePage() {
         <section className="desktopSection shell">
           <div className="desktopPanel">
             <div className="desktopCopy">
-              <span className="sectionTag">Link على الكمبيوتر</span>
-              <h2>نفس بيانات خدمتك، على شاشة أكبر</h2>
+              <span className="sectionTag">Link Web وWindows</span>
+              <h2>نفس بيانات خدمتك، من أي شاشة</h2>
               <p>
-                نسخة Windows تمنحك مساحة أوسع للمراجعة والإدارة، مع نفس الحساب
-                والمزامنة الموجودة على تطبيق Android.
+                افتح Link Web مباشرة من المتصفح أو استخدم نسخة Windows، مع نفس
+                الحساب والمزامنة الموجودة على تطبيق Android.
               </p>
               <ul>
+                <li>Link Web قابل للتثبيت على هاتفك أو جهازك</li>
                 <li>تسجيل الدخول بنفس حساب Link</li>
                 <li>مزامنة مباشرة وآمنة للبيانات</li>
-                <li>حزمة ZIP سهلة التشغيل على Windows 10 و11</li>
+                <li>نسخة Windows متاحة أيضًا على Windows 10 و11</li>
               </ul>
-              <a
-                className={`secondaryButton${hasDesktopRelease ? '' : ' pending'}`}
-                href={windowsHref}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                {hasDesktopRelease
-                  ? 'تنزيل نسخة Windows'
-                  : 'نسخة Windows تُجهّز للنشر'}
-              </a>
+              <div className="desktopActions">
+                <a className="secondaryButton webButton" href="/app">فتح Link Web</a>
+                <a
+                  className={`secondaryButton${hasDesktopRelease ? '' : ' pending'}`}
+                  href={windowsHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {hasDesktopRelease ? 'تنزيل نسخة Windows' : 'نسخة Windows تُجهّز للنشر'}
+                </a>
+              </div>
             </div>
             <div className="desktopMockup" aria-hidden="true">
               <div className="windowBar">
@@ -367,11 +377,9 @@ export default async function HomePage() {
             <Image src="/link-logo.png" alt="" width={80} height={80} />
             <div>
               <h2>ابدأ تنظيم خدمتك اليوم</h2>
-              <p>حمّل Link وسجّل دخولك — أدوات الخدمة كلها بين يديك.</p>
+              <p>افتح Link Web الآن أو حمّل التطبيق — أدوات الخدمة كلها بين يديك.</p>
             </div>
-            <a href={playStoreUrl} target="_blank" rel="noopener noreferrer">
-              تحميل من Google Play
-            </a>
+            <a href="/app">فتح Link Web</a>
           </div>
         </section>
       </main>
