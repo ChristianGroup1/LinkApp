@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/auth/auth_flow_capabilities.dart';
 import '../../../core/errors/arabic_error_text.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/models.dart';
@@ -12,6 +13,17 @@ import '../../../shared/ui/offline_editing.dart';
 import 'widgets/servants_widgets.dart';
 
 Future<bool?> openInviteServantScreen(BuildContext context) {
+  if (!supportsInvitations) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'الدعوات متاحة من تطبيق الموبايل فقط.',
+          style: GoogleFonts.cairo(),
+        ),
+      ),
+    );
+    return Future<bool?>.value(null);
+  }
   return Navigator.push<bool>(
     context,
     MaterialPageRoute(builder: (_) => const InviteServantScreen()),

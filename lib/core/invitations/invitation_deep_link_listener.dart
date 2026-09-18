@@ -12,8 +12,13 @@ import 'invitation_link.dart';
 
 class InvitationDeepLinkListener extends StatefulWidget {
   final Widget child;
+  final bool enabled;
 
-  const InvitationDeepLinkListener({super.key, required this.child});
+  const InvitationDeepLinkListener({
+    super.key,
+    required this.child,
+    this.enabled = true,
+  });
 
   @override
   State<InvitationDeepLinkListener> createState() =>
@@ -30,6 +35,7 @@ class _InvitationDeepLinkListenerState
   @override
   void initState() {
     super.initState();
+    if (!widget.enabled) return;
     _initializeLinks();
   }
 

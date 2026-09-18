@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../../../core/auth/auth_flow_capabilities.dart';
 import '../../../../core/errors/arabic_error_text.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../data/models/models.dart';
@@ -393,17 +394,18 @@ class ServantsManagementCard extends StatelessWidget {
                   color: AppTheme.primary,
                 ),
               ),
-              TextButton.icon(
-                onPressed: () => openInviteServantScreen(context),
-                icon: const Icon(Icons.add_link, size: 16),
-                label: Text(
-                  'دعوة خادم مساعد',
-                  style: GoogleFonts.cairo(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
+              if (supportsInvitations)
+                TextButton.icon(
+                  onPressed: () => openInviteServantScreen(context),
+                  icon: const Icon(Icons.add_link, size: 16),
+                  label: Text(
+                    'دعوة خادم مساعد',
+                    style: GoogleFonts.cairo(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
-              ),
             ],
           ),
           const Divider(height: 20),

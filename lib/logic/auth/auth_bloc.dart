@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:bloc_concurrency/bloc_concurrency.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../core/auth/auth_flow_capabilities.dart';
 import '../../core/errors/arabic_error_text.dart';
 import '../../data/models/models.dart';
 import '../../data/repositories/database_repository.dart';
@@ -214,6 +215,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     });
 
     on<SignUpWithInvitationTokenRequested>((event, emit) async {
+      if (!supportsInvitations) {
+        emit(
+          AuthError(
+            'إنشاء الحساب عبر الدعوة متاح من تطبيق الموبايل فقط.',
+          ),
+        );
+        return;
+      }
       emit(AuthLoading());
       try {
         final profile = await repository.signUpWithInvitationToken(
@@ -254,6 +263,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     });
 
     on<PasswordResetEmailRequested>((event, emit) async {
+      if (!supportsPasswordResetEmail) {
+        emit(
+          AuthPasswordResetError(
+            'إعادة تعيين كلمة المرور متاحة من تطبيق الموبايل فقط.',
+          ),
+        );
+        return;
+      }
       emit(AuthPasswordResetEmailLoading());
       try {
         await repository.sendPasswordResetEmail(event.email);

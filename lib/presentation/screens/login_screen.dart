@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../core/auth/auth_flow_capabilities.dart';
 import '../../core/errors/arabic_error_text.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/repositories/database_repository.dart';
@@ -206,29 +207,30 @@ class _LoginScreenState extends State<LoginScreen> {
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         const Expanded(child: AuthFieldLabel('كلمة المرور')),
-                        TextButton(
-                          onPressed: isLoading
-                              ? null
-                              : () => Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        const ForgotPasswordScreen(),
+                        if (supportsPasswordResetEmail)
+                          TextButton(
+                            onPressed: isLoading
+                                ? null
+                                : () => Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          const ForgotPasswordScreen(),
+                                    ),
                                   ),
-                                ),
-                          style: TextButton.styleFrom(
-                            padding: EdgeInsets.zero,
-                            minimumSize: Size.zero,
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          ),
-                          child: Text(
-                            'نسيت كلمة المرور؟',
-                            style: GoogleFonts.cairo(
-                              color: AppTheme.primaryAccent,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 12,
+                            style: TextButton.styleFrom(
+                              padding: EdgeInsets.zero,
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            child: Text(
+                              'نسيت كلمة المرور؟',
+                              style: GoogleFonts.cairo(
+                                color: AppTheme.primaryAccent,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 12,
+                              ),
                             ),
                           ),
-                        ),
                       ],
                     ),
                     AuthSoftTextField(

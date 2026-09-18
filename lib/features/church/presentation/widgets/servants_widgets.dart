@@ -64,14 +64,14 @@ class ServantsHeroHeader extends StatelessWidget {
   final int totalServants;
   final int pendingInvitations;
   final int totalAssignments;
-  final VoidCallback onInvite;
+  final VoidCallback? onInvite;
 
   const ServantsHeroHeader({
     super.key,
     required this.totalServants,
     required this.pendingInvitations,
     required this.totalAssignments,
-    required this.onInvite,
+    this.onInvite,
   });
 
   @override
@@ -130,47 +130,49 @@ class ServantsHeroHeader extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: onInvite,
-              borderRadius: BorderRadius.circular(14),
-              child: Ink(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                decoration: BoxDecoration(
-                  color: AppTheme.cardBackground,
-                  borderRadius: BorderRadius.circular(14),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.08),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(
-                      Icons.person_add_alt_1_rounded,
-                      size: 20,
-                      color: AppTheme.primary,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'دعوة خادم جديد',
-                      style: GoogleFonts.cairo(
-                        fontWeight: FontWeight.w900,
-                        fontSize: 14,
+          if (onInvite != null) ...[
+            const SizedBox(height: 16),
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: onInvite,
+                borderRadius: BorderRadius.circular(14),
+                child: Ink(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(
+                    color: AppTheme.cardBackground,
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.08),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(
+                        Icons.person_add_alt_1_rounded,
+                        size: 20,
                         color: AppTheme.primary,
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 8),
+                      Text(
+                        'دعوة خادم جديد',
+                        style: GoogleFonts.cairo(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 14,
+                          color: AppTheme.primary,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
+          ],
         ],
       ),
     );

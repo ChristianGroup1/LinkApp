@@ -11,6 +11,7 @@ import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
 
 import 'core/analytics/app_analytics_service.dart';
+import 'core/auth/auth_flow_capabilities.dart';
 import 'core/auth/password_recovery_link.dart';
 import 'core/invitations/invitation_deep_link_listener.dart';
 import 'core/navigation/app_route_observer.dart';
@@ -223,8 +224,9 @@ class MyApp extends StatelessWidget {
           builder: _appBuilder,
           home: OfflineSyncListener(
             child: InvitationDeepLinkListener(
+              enabled: supabaseEnabled && supportsInvitations,
               child: AuthRecoveryListener(
-                enabled: supabaseEnabled,
+                enabled: supabaseEnabled && supportsPasswordResetEmail,
                 child: BlocListener<AuthBloc, AuthState>(
                   listenWhen: (previous, current) =>
                       current is AuthUnauthenticated,
@@ -320,12 +322,6 @@ class _AuthRecoveryListenerState extends State<AuthRecoveryListener> {
   }
 
   Future<void> _initializeRecoveryLinks() async {
-    // PWA/web: Supabase returns users to the HTTPS /app/ URL with error params
-    // in the query or hash. Check the current location in addition to app_links.
-    if (kIsWeb) {
-      _handleRecoveryLink(Uri.base);
-    }
-
     try {
       final initialUri = await _appLinks.getInitialLink();
       if (initialUri != null) _handleRecoveryLink(initialUri);

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../../core/auth/auth_flow_capabilities.dart';
 import '../../../core/diagnostics/diagnostics_visibility.dart';
 import '../../../core/errors/arabic_error_text.dart';
 import '../../../core/theme/app_theme.dart';
@@ -141,16 +142,18 @@ class _ProfileActionsCard extends StatelessWidget {
     ),
     child: Column(
       children: [
-        _ProfileActionRow(
-          icon: Icons.mark_email_unread_outlined,
-          title: 'الدعوات الواردة',
-          subtitle: 'مراجعة وقبول أو رفض دعوات الخدمة',
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const MyInvitationsScreen()),
+        if (supportsInvitations) ...[
+          _ProfileActionRow(
+            icon: Icons.mark_email_unread_outlined,
+            title: 'الدعوات الواردة',
+            subtitle: 'مراجعة وقبول أو رفض دعوات الخدمة',
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const MyInvitationsScreen()),
+            ),
           ),
-        ),
-        Divider(height: 1, color: AppTheme.border.withValues(alpha: 0.7)),
+          Divider(height: 1, color: AppTheme.border.withValues(alpha: 0.7)),
+        ],
         _ProfileActionRow(
           icon: Icons.edit_outlined,
           title: 'تعديل البيانات الشخصية',

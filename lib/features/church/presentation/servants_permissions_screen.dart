@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/auth/auth_flow_capabilities.dart';
 import '../../../core/errors/arabic_error_text.dart';
 import '../../../core/invitations/invitation_link.dart';
 import '../../../core/theme/app_theme.dart';
@@ -647,9 +648,11 @@ class _ServantsPermissionsScreenState extends State<ServantsPermissionsScreen> {
                 totalServants: data.servants
                     .where((servant) => servant.isActive)
                     .length,
-                pendingInvitations: data.pendingInvitations.length,
+                pendingInvitations: supportsInvitations
+                    ? data.pendingInvitations.length
+                    : 0,
                 totalAssignments: data.totalAssignments,
-                onInvite: _openInvite,
+                onInvite: supportsInvitations ? _openInvite : null,
               ),
             ),
           ),
@@ -724,7 +727,7 @@ class _ServantsPermissionsScreenState extends State<ServantsPermissionsScreen> {
               ),
             ),
           ),
-          if (data.pendingInvitations.isNotEmpty) ...[
+          if (supportsInvitations && data.pendingInvitations.isNotEmpty) ...[
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
