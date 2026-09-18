@@ -12,7 +12,7 @@ run:
 build-web:
 	flutter build web --release --base-href /app/ $(FLUTTER_DEFINES)
 	mkdir -p site/public/app
-	rsync -a --delete build/web/ site/public/app/
+	rsync -a --delete --delete-excluded --exclude 'assets/.env' --exclude '.last_build_id' build/web/ site/public/app/
 
 build-apk:
 	flutter build apk --release $(FLUTTER_DEFINES)

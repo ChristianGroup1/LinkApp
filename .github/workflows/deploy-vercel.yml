@@ -41,7 +41,7 @@ jobs:
             --dart-define=SUPABASE_URL="$SUPABASE_URL" \
             --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
           mkdir -p site/public/app
-          rsync -a --delete build/web/ site/public/app/
+          rsync -a --delete --delete-excluded --exclude 'assets/.env' --exclude '.last_build_id' build/web/ site/public/app/
 
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
