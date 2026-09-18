@@ -1,4 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/errors/arabic_error_text.dart';
 
 String accountDeletionErrorMessage(Object error) {
   if (error is FunctionException) {
@@ -11,7 +12,7 @@ String accountDeletionErrorMessage(Object error) {
     return 'تعذر حذف الحساب الآن (خطأ ${error.status}).';
   }
 
-  final message = error.toString().replaceAll('Exception: ', '').trim();
+  final message = arabicErrorText(error).trim();
   return message.isEmpty ? 'تعذر حذف الحساب الآن.' : message;
 }
 

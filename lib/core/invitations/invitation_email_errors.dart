@@ -1,4 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/errors/arabic_error_text.dart';
 
 String invitationEmailErrorMessage(Object error) {
   if (error is FunctionException) {
@@ -27,7 +28,7 @@ String invitationEmailErrorMessage(Object error) {
     return 'فشل إرسال البريد (خطأ ${error.status}).';
   }
 
-  return error.toString().replaceAll('Exception: ', '');
+  return arabicErrorText(error);
 }
 
 String _extractErrorText(Object? details) {

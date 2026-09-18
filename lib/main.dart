@@ -47,6 +47,7 @@ void main() async {
     options.attachScreenshot = false;
     options.tracesSampleRate = 0.2;
     // Profiling is relative to sampled traces (4% of all transactions).
+    // ignore: experimental_member_use
     options.profilesSampleRate = 0.2;
   }, appRunner: _startApp);
 }

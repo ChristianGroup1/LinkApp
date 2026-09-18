@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../../core/errors/arabic_error_text.dart';
 import '../../../data/models/models.dart';
 import '../../../data/offline/offline_messages.dart';
 import '../../../data/repositories/database_repository.dart';
@@ -190,7 +191,7 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
           ),
         );
       } catch (e) {
-        emit(AttendanceError('فشل تحميل الجلسات: ${e.toString()}'));
+        emit(AttendanceError('فشل تحميل الجلسات: ${arabicErrorText(e)}'));
       }
     });
 
@@ -211,7 +212,7 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
           ),
         );
       } catch (e) {
-        emit(AttendanceError('فشل إنشاء جلسة جديدة: ${e.toString()}'));
+        emit(AttendanceError('فشل إنشاء جلسة جديدة: ${arabicErrorText(e)}'));
       }
     });
 
@@ -238,7 +239,7 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
           );
           add(LoadAttendanceSessions(meetingId: meetingId, classId: classId));
         } catch (e) {
-          emit(AttendanceError('فشل حذف الجلسة: ${e.toString()}'));
+          emit(AttendanceError('فشل حذف الجلسة: ${arabicErrorText(e)}'));
         }
       }
     });
@@ -312,7 +313,7 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
           ),
         );
       } catch (e) {
-        emit(AttendanceError('فشل تحميل كشف الحضور: ${e.toString()}'));
+        emit(AttendanceError('فشل تحميل كشف الحضور: ${arabicErrorText(e)}'));
       }
     });
 
@@ -488,7 +489,7 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
               isSaving: false,
               isDirty: true,
               flashMessage:
-                  'تم تحديد الحضور، لكن تعذر الحفظ: ${error.toString()}',
+                  'تم تحديد الحضور، لكن تعذر الحفظ: ${arabicErrorText(error)}',
             ),
           ),
         );
@@ -520,7 +521,7 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
             currentState.copyWith(
               isSaving: false,
               justSaved: false,
-              flashMessage: 'فشل حفظ الحضور: ${e.toString()}',
+              flashMessage: 'فشل حفظ الحضور: ${arabicErrorText(e)}',
             ),
           );
         }

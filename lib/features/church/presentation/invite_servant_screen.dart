@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/errors/arabic_error_text.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/models.dart';
 import '../../../data/repositories/database_repository.dart';
@@ -198,7 +199,7 @@ class _InviteServantScreenState extends State<InviteServantScreen> {
     } catch (error) {
       if (!mounted) return;
       setState(() => _isGenerating = false);
-      _showSnack('فشل إنشاء الدعوة: $error', isError: true);
+      _showSnack('فشل إنشاء الدعوة: ${arabicErrorText(error)}', isError: true);
     }
   }
 

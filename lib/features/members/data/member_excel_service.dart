@@ -4,6 +4,7 @@ import 'package:csv/csv.dart';
 import 'package:excel/excel.dart';
 import 'package:flutter/foundation.dart';
 
+import '../../../core/errors/arabic_error_text.dart';
 import '../../../data/models/models.dart';
 import '../../../data/offline/member_create_draft.dart';
 import '../../../data/offline/offline_save_result.dart';
@@ -828,10 +829,7 @@ class MemberImportWriter {
     );
   }
 
-  static String _errorText(Object error) => error
-      .toString()
-      .replaceAll('Exception: ', '')
-      .replaceAll('Bad state: ', '');
+  static String _errorText(Object error) => arabicErrorText(error);
 }
 
 class _PendingMemberCreate {

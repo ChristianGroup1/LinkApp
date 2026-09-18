@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../../core/errors/arabic_error_text.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/models.dart';
 import '../../../data/offline/offline_save_result.dart';
@@ -313,8 +314,8 @@ class _AddEditMemberScreenState extends State<AddEditMemberScreen> {
         SnackBar(
           content: Text(
             widget.member == null
-                ? 'تعذّر إضافة العضو: $error'
-                : 'تعذّر حفظ تعديلات العضو: $error',
+                ? 'تعذّر إضافة العضو: ${arabicErrorText(error)}'
+                : 'تعذّر حفظ تعديلات العضو: ${arabicErrorText(error)}',
             style: GoogleFonts.cairo(),
           ),
           backgroundColor: AppTheme.accentRed,

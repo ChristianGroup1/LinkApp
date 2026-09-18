@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../../core/errors/arabic_error_text.dart';
 import '../../../data/models/models.dart';
 import '../../../data/offline/offline_messages.dart';
 import '../../../data/repositories/database_repository.dart';
@@ -72,8 +73,9 @@ class FollowUpDataLoaded extends FollowUpState {
       followUpHistory: followUpHistory ?? this.followUpHistory,
       servants: servants ?? this.servants,
       members: members ?? this.members,
-      flashMessage:
-          clearFlashMessage ? null : (flashMessage ?? this.flashMessage),
+      flashMessage: clearFlashMessage
+          ? null
+          : (flashMessage ?? this.flashMessage),
     );
   }
 }
@@ -252,7 +254,7 @@ class FollowUpBloc extends Bloc<FollowUpEvent, FollowUpState> {
         );
         _ensureRealtimeSubscription();
       } catch (e) {
-        emit(FollowUpError('فشل تحميل بيانات المتابعة: ${e.toString()}'));
+        emit(FollowUpError('فشل تحميل بيانات المتابعة: ${arabicErrorText(e)}'));
       }
     });
 
@@ -269,19 +271,19 @@ class FollowUpBloc extends Bloc<FollowUpEvent, FollowUpState> {
           followUpDate: event.followUpDate,
         );
         add(
-          LoadFollowUpData(
-            flashMessage: synced ? null : kOfflineSavedMessage,
-          ),
+          LoadFollowUpData(flashMessage: synced ? null : kOfflineSavedMessage),
         );
       } catch (e) {
         if (previous is FollowUpDataLoaded) {
           emit(
             previous.copyWith(
-              flashMessage: 'فشل إضافة تقرير المتابعة: ${e.toString()}',
+              flashMessage: 'فشل إضافة تقرير المتابعة: ${arabicErrorText(e)}',
             ),
           );
         } else {
-          emit(FollowUpError('فشل إضافة تقرير المتابعة: ${e.toString()}'));
+          emit(
+            FollowUpError('فشل إضافة تقرير المتابعة: ${arabicErrorText(e)}'),
+          );
         }
       }
     });

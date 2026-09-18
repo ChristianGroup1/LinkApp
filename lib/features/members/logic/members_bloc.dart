@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../../core/errors/arabic_error_text.dart';
 import '../../../data/models/models.dart';
 import '../../../data/offline/offline_messages.dart';
 import '../../../data/offline/offline_save_result.dart';
@@ -228,7 +229,7 @@ class MembersBloc extends Bloc<MembersEvent, MembersState> {
           );
           _ensureRealtimeSubscription();
         } catch (_) {
-          emit(MembersError('فشل تحميل الأعضاء: ${e.toString()}'));
+          emit(MembersError('فشل تحميل الأعضاء: ${arabicErrorText(e)}'));
         }
       }
     });
@@ -299,10 +300,12 @@ class MembersBloc extends Bloc<MembersEvent, MembersState> {
         event.completion?.completeError(e, stackTrace);
         if (previous is MembersLoaded) {
           emit(
-            previous.copyWith(flashMessage: 'فشل إضافة العضو: ${e.toString()}'),
+            previous.copyWith(
+              flashMessage: 'فشل إضافة العضو: ${arabicErrorText(e)}',
+            ),
           );
         } else {
-          emit(MembersError('فشل إضافة العضو: ${e.toString()}'));
+          emit(MembersError('فشل إضافة العضو: ${arabicErrorText(e)}'));
         }
       }
     });
@@ -337,11 +340,11 @@ class MembersBloc extends Bloc<MembersEvent, MembersState> {
         if (previous is MembersLoaded) {
           emit(
             previous.copyWith(
-              flashMessage: 'فشل تعديل بيانات العضو: ${e.toString()}',
+              flashMessage: 'فشل تعديل بيانات العضو: ${arabicErrorText(e)}',
             ),
           );
         } else {
-          emit(MembersError('فشل تعديل بيانات العضو: ${e.toString()}'));
+          emit(MembersError('فشل تعديل بيانات العضو: ${arabicErrorText(e)}'));
         }
       }
     });
@@ -354,10 +357,12 @@ class MembersBloc extends Bloc<MembersEvent, MembersState> {
       } catch (e) {
         if (previous is MembersLoaded) {
           emit(
-            previous.copyWith(flashMessage: 'فشل حذف العضو: ${e.toString()}'),
+            previous.copyWith(
+              flashMessage: 'فشل حذف العضو: ${arabicErrorText(e)}',
+            ),
           );
         } else {
-          emit(MembersError('فشل حذف العضو: ${e.toString()}'));
+          emit(MembersError('فشل حذف العضو: ${arabicErrorText(e)}'));
         }
       }
     });
@@ -398,9 +403,7 @@ class MembersBloc extends Bloc<MembersEvent, MembersState> {
     var filtered = members.where((m) => m.isActive).toList();
 
     if (scopeFilter != null && scopeFilter != 'all') {
-      filtered = filtered
-          .where((m) => m.scope.value == scopeFilter)
-          .toList();
+      filtered = filtered.where((m) => m.scope.value == scopeFilter).toList();
     }
     if (classIdFilter != null && classIdFilter.isNotEmpty) {
       filtered = filtered
@@ -408,9 +411,7 @@ class MembersBloc extends Bloc<MembersEvent, MembersState> {
           .toList();
     }
     if (meetingIdFilter != null && meetingIdFilter.isNotEmpty) {
-      filtered = filtered
-          .where((m) => m.meetingId == meetingIdFilter)
-          .toList();
+      filtered = filtered.where((m) => m.meetingId == meetingIdFilter).toList();
     }
     if (query.trim().isNotEmpty) {
       final queryLower = query.toLowerCase();
@@ -418,7 +419,8 @@ class MembersBloc extends Bloc<MembersEvent, MembersState> {
           .where(
             (m) =>
                 m.fullName.toLowerCase().contains(queryLower) ||
-                (m.code != null && m.code!.toLowerCase().contains(queryLower)) ||
+                (m.code != null &&
+                    m.code!.toLowerCase().contains(queryLower)) ||
                 (m.phone != null && m.phone!.contains(queryLower)),
           )
           .toList();
