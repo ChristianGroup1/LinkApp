@@ -228,8 +228,61 @@ export async function getTableRows(
   const { data, count, error } = await query;
   if (error) throw error;
 
+  const rows = (data ?? []) as Array<Record<string, unknown>>;
+  const idsFor = (column: string) => Array.from(new Set(
+    rows
+      .map((row) => row[column])
+      .filter((value): value is string => typeof value === 'string' && value.length > 0),
+  ));
+  const churchIds = idsFor('church_id');
+  const profileIds = Array.from(new Set([
+    ...idsFor('user_id'),
+    ...idsFor('responsible_user_id'),
+    ...idsFor('created_by'),
+    ...idsFor('assigned_by'),
+    ...idsFor('recorded_by'),
+    ...idsFor('admin_user_id'),
+  ]));
+  const meetingIds = idsFor('meeting_id');
+  const classIds = idsFor('class_id');
+  const memberIds = idsFor('member_id');
+  const sessionIds = idsFor('session_id');
+
+  const [churches, profiles, meetings, classes, members, sessions] = await Promise.all([
+    churchIds.length ? admin.from('churches').select('id, name_ar, name').in('id', churchIds) : Promise.resolve({ data: [] }),
+    profileIds.length ? admin.from('profiles').select('id, full_name, email').in('id', profileIds) : Promise.resolve({ data: [] }),
+    meetingIds.length ? admin.from('meetings').select('id, name_ar, name').in('id', meetingIds) : Promise.resolve({ data: [] }),
+    classIds.length ? admin.from('sunday_school_classes').select('id, name_ar, name').in('id', classIds) : Promise.resolve({ data: [] }),
+    memberIds.length ? admin.from('members').select('id, full_name, code').in('id', memberIds) : Promise.resolve({ data: [] }),
+    sessionIds.length ? admin.from('attendance_sessions').select('id, title, session_date').in('id', sessionIds) : Promise.resolve({ data: [] }),
+  ]);
+
+  const names = (result: { data: Array<Record<string, unknown>> | null }, label: (row: Record<string, unknown>) => string) =>
+    new Map((result.data ?? []).map((row) => [String(row.id), label(row)]));
+  const churchNames = names(churches, (row) => String(row.name_ar || row.name || 'كنيسة بلا اسم'));
+  const profileNames = names(profiles, (row) => String(row.full_name || row.email || 'مستخدم بلا اسم'));
+  const meetingNames = names(meetings, (row) => String(row.name_ar || row.name || 'اجتماع بلا اسم'));
+  const classNames = names(classes, (row) => String(row.name_ar || row.name || 'فصل بلا اسم'));
+  const memberNames = names(members, (row) => {
+    const name = String(row.full_name || 'مخدوم بلا اسم');
+    return row.code ? `${name} (${row.code})` : name;
+  });
+  const sessionNames = names(sessions, (row) => String(row.title || row.session_date || 'جلسة حضور'));
+  const displayRows: Array<Record<string, unknown>> = rows.map((row) => ({
+    ...row,
+    ...(churchNames.has(String(row.church_id)) ? { church_id: churchNames.get(String(row.church_id)) } : {}),
+    ...(profileNames.has(String(row.user_id)) ? { user_id: profileNames.get(String(row.user_id)) } : {}),
+    ...(profileNames.has(String(row.admin_user_id)) ? { admin_user_id: profileNames.get(String(row.admin_user_id)) } : {}),
+    ...(profileNames.has(String(row.responsible_user_id)) ? { responsible_user_id: profileNames.get(String(row.responsible_user_id)) } : {}),
+    ...(meetingNames.has(String(row.meeting_id)) ? { meeting_id: meetingNames.get(String(row.meeting_id)) } : {}),
+    ...(classNames.has(String(row.class_id)) ? { class_id: classNames.get(String(row.class_id)) } : {}),
+    ...(memberNames.has(String(row.member_id)) ? { member_id: memberNames.get(String(row.member_id)) } : {}),
+    ...(sessionNames.has(String(row.session_id)) ? { session_id: sessionNames.get(String(row.session_id)) } : {}),
+  }));
+
   return {
-    rows: (data ?? []) as Array<Record<string, unknown>>,
+    rows,
+    displayRows,
     count: count ?? 0,
     page,
     pageSize,

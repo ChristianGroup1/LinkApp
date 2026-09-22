@@ -6,6 +6,12 @@ import { requireSuperAdmin } from '@/lib/admin/auth';
 import { adminTables, isAdminTable, type AdminTableConfig } from '@/lib/admin/schema';
 import ConfirmDeleteButton from './confirm-delete-button';
 
+const columnLabels: Record<string, string> = {
+  church_id: 'الكنيسة', user_id: 'الخادم', responsible_user_id: 'مسؤول المتابعة',
+  meeting_id: 'الاجتماع', class_id: 'الفصل', member_id: 'المخدوم', session_id: 'جلسة الحضور',
+  created_by: 'أُنشئ بواسطة', assigned_by: 'كُلّف بواسطة', recorded_by: 'سجّل بواسطة', admin_user_id: 'المدير',
+};
+
 function displayValue(value: unknown) {
   if (value === null || value === undefined || value === '') return '—';
   if (typeof value === 'boolean') return value ? 'نعم' : 'لا';
@@ -79,13 +85,14 @@ export default async function AdminTablePage({
       <section className="databaseTableCard">
         <div className="databaseTableScroll">
           <table className="databaseTable">
-            <thead><tr>{config.visibleColumns.map((column) => <th key={column}>{column}</th>)}<th>الإدارة</th></tr></thead>
+            <thead><tr>{config.visibleColumns.map((column) => <th key={column}>{columnLabels[column] ?? column}</th>)}<th>الإدارة</th></tr></thead>
             <tbody>
               {result.rows.map((row, index) => {
                 const id = String(row.id ?? '');
+                const displayRow = result.displayRows[index] ?? row;
                 return (
                   <tr key={id || index}>
-                    {config.visibleColumns.map((column) => <td key={column} title={String(row[column] ?? '')}>{displayValue(row[column])}</td>)}
+                    {config.visibleColumns.map((column) => <td key={column} title={String(displayRow[column] ?? '')}>{displayValue(displayRow[column])}</td>)}
                     <td>
                       {config.editableColumns.length ? (
                         <details className="rowActions">
