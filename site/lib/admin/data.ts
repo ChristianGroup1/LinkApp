@@ -326,6 +326,32 @@ export async function getEnhancedDashboardData(filters: DashboardFilters) {
     pending: currentInvitations.filter((row) => !row.is_used && !row.declined_at).length,
     declined: currentInvitations.filter((row) => Boolean(row.declined_at)).length,
   };
+  const activeServants = profiles.filter((profile) => profile.is_active && (classAssignments.some((row) => String(row.user_id) === String(profile.id)) || meetingAssignments.some((row) => String(row.user_id) === String(profile.id))));
+  const previousPresent = previousRecords.filter((row) => row.status === 'present').length;
+  const monthlyGoals = [
+    { label: 'كنائس نشطة', current: activeChurches.length, target: selectedChurches.length },
+    { label: 'حضور', current: currentRecords.filter((row) => row.status === 'present').length, target: Math.max(1, previousPresent) },
+    { label: 'خدام نشطون', current: activeServants.length, target: Math.max(1, profiles.filter((row) => row.is_active).length) },
+    { label: 'دعوات مقبولة', current: invitationStats.accepted, target: Math.max(1, invitationStats.sent) },
+  ].map((goal) => ({ ...goal, progress: Math.min(100, Math.round(goal.current / goal.target * 100)) }));
+  const isChurchRecentlyActive = (churchId: string, windowDays: number) => {
+    const limit = new Date(now.getTime() - windowDays * DAY).toISOString();
+    return usage.some((row) => String(row.church_id) === churchId && String(row.occurred_at) >= limit)
+      || sessions.some((row) => String(row.church_id) === churchId && String(row.session_date) >= isoDate(new Date(now.getTime() - windowDays * DAY)));
+  };
+  const retention = [7, 30].map((windowDays) => ({ days: windowDays, active: selectedChurches.filter((church) => isChurchRecentlyActive(String(church.id), windowDays)).length, total: selectedChurches.length }));
+  const healthScores = selectedChurches.map((church) => {
+    const id = String(church.id); const hasAttendance = currentRecords.some((row) => String(row.church_id) === id); const hasServant = activeServants.some((profile) => String(profile.church_id) === id); const recentlyUsed = isChurchRecentlyActive(id, 14); const recentlyUpdated = currentMembers.some((member) => String(member.church_id) === id) || currentSessions.some((session) => String(session.church_id) === id);
+    const score = [hasAttendance, hasServant, recentlyUsed, recentlyUpdated].filter(Boolean).length * 25;
+    return { id, name: nameForChurch(id), score };
+  }).sort((a, b) => a.score - b.score);
+  const noAssignmentServants = profiles.filter((profile) => profile.is_active && !activeServants.some((servant) => String(servant.id) === String(profile.id))).map((profile) => String(profile.full_name || profile.email || 'خادم بلا اسم'));
+  const smartAlerts = [
+    ...selectedChurches.filter((church) => !isChurchRecentlyActive(String(church.id), 14)).map((church) => ({ kind: 'كنيسة بلا حضور 14 يومًا', name: nameForChurch(String(church.id)) })),
+    ...meetingPerformance.filter((meeting) => meeting.change <= -20).map((meeting) => ({ kind: 'هبوط ملحوظ في الحضور', name: meeting.name })),
+    ...noAssignmentServants.map((name) => ({ kind: 'خادم بلا تكليف', name })),
+  ].slice(0, 12);
+  const atRisk = [...healthScores.filter((church) => church.score < 50).map((church) => ({ type: 'كنيسة', name: church.name, reason: `Health score ${church.score}%` })), ...meetingPerformance.filter((meeting) => meeting.change <= -20).map((meeting) => ({ type: 'اجتماع', name: meeting.name, reason: `انخفاض ${Math.abs(meeting.change)}%` }))].slice(0, 8);
   const roleName = (role: unknown) => ({ super_admin: 'مدير النظام', church_admin: 'مدير الكنيسة', attendance_officer: 'خادم حضور', reports_viewer: 'مشاهد تقارير' } as Record<string, string>)[String(role)] ?? 'خادم';
   const servantPermissions = profiles.filter((profile) => profile.is_active).map((profile) => {
     const id = String(profile.id);
@@ -344,7 +370,7 @@ export async function getEnhancedDashboardData(filters: DashboardFilters) {
   return {
     generatedAt: now.toISOString(), churches, filters, supportReady: !supportResult.error, analyticsReady: !usageResult.error,
     summary: { activeChurchRate: selectedChurches.length ? Math.round((activeChurches.length / selectedChurches.length) * 100) : 0, activeChurches: activeChurches.length, currentMembers: currentMembers.length, present: currentRecords.filter((row) => row.status === 'present').length, absent: currentRecords.filter((row) => row.status === 'absent').length, unresolvedFollowUps, openSupport: openSupport.length, avgResolutionHours, topCategory, invitationStats },
-    churchActivity, meetingPerformance, repeatedAbsences, inactiveProfiles, pendingInvitations, servantPermissions, attendanceTrend, recentChanges,
+    churchActivity, meetingPerformance, repeatedAbsences, inactiveProfiles, pendingInvitations, servantPermissions, attendanceTrend, recentChanges, monthlyGoals, smartAlerts, healthScores, atRisk, retention,
   };
 }
 
