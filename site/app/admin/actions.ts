@@ -143,6 +143,9 @@ export async function permanentlyDeleteChurchOrUser(formData: FormData) {
   const identity = await requireSuperAdmin();
   const admin = createSupabaseAdminClient();
   if (targetType === 'church') {
+    if (formData.get('backupConfirmed') !== 'true') {
+      redirect(messageUrl(tableKey, 'error', 'نزّل النسخة الاحتياطية وأكّد ذلك قبل حذف الكنيسة.'));
+    }
     const { data: church, error: churchError } = await admin.from('churches').select('id, name_ar, name').eq('id', id).maybeSingle();
     const expectedName = String(church?.name_ar || church?.name || '');
     if (churchError || !church || confirmation !== expectedName) {

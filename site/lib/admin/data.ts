@@ -220,7 +220,7 @@ export async function getEnhancedDashboardData(filters: DashboardFilters) {
   const scoped = (rows: Array<Record<string, unknown>>) => filters.churchId
     ? rows.filter((row) => String(row.church_id) === filters.churchId)
     : rows;
-  const [churchesResult, profilesResult, meetingsResult, classesResult, membersResult, sessionsResult, recordsResult, invitationsResult, followUpsResult, supportResult, usageResult, classAssignmentsResult, meetingAssignmentsResult] = await Promise.all([
+  const [churchesResult, profilesResult, meetingsResult, classesResult, membersResult, sessionsResult, recordsResult, invitationsResult, followUpsResult, supportResult, usageResult, classAssignmentsResult, meetingAssignmentsResult, auditResult] = await Promise.all([
     admin.from('churches').select('id, name_ar, name').order('name_ar').limit(5000),
     admin.from('profiles').select('id, church_id, full_name, email, role, is_active, created_at').limit(20000),
     admin.from('meetings').select('id, church_id, name_ar, name, is_active').limit(20000),
@@ -234,6 +234,7 @@ export async function getEnhancedDashboardData(filters: DashboardFilters) {
     admin.from('app_usage_events').select('church_id, occurred_at').gte('occurred_at', previousStart.toISOString()).limit(100000),
     admin.from('class_assignments').select('church_id, class_id, user_id, can_take_attendance, can_view_reports').limit(50000),
     admin.from('meeting_assignments').select('church_id, meeting_id, user_id, can_take_attendance, can_view_reports').limit(50000),
+    admin.from('admin_audit_logs').select('admin_user_id, action, table_name, created_at').order('created_at', { ascending: false }).limit(20),
   ]);
   const churches = safeRows(churchesResult);
   const profiles = scoped(safeRows(profilesResult));
@@ -248,6 +249,7 @@ export async function getEnhancedDashboardData(filters: DashboardFilters) {
   const usage = scoped(safeRows(usageResult));
   const classAssignments = scoped(safeRows(classAssignmentsResult));
   const meetingAssignments = scoped(safeRows(meetingAssignmentsResult));
+  const auditLogs = safeRows(auditResult);
   const selectedChurches = filters.churchId
     ? churches.filter((church) => String(church.id) === filters.churchId)
     : churches;
@@ -333,10 +335,16 @@ export async function getEnhancedDashboardData(filters: DashboardFilters) {
     ];
     return { id, name: String(profile.full_name || profile.email || 'خادم بلا اسم'), church: nameForChurch(String(profile.church_id)), role: roleName(profile.role), assignments };
   }).sort((a, b) => a.church.localeCompare(b.church, 'ar') || a.name.localeCompare(b.name, 'ar'));
+  const attendanceTrend = Array.from({ length: Math.min(filters.days, 30) }, (_, index) => {
+    const date = isoDate(new Date(now.getTime() - (Math.min(filters.days, 30) - index - 1) * DAY));
+    const ids = new Set(currentSessions.filter((session) => String(session.session_date) === date).map((session) => String(session.id)));
+    return { date, count: currentRecords.filter((record) => ids.has(String(record.session_id)) && record.status === 'present').length };
+  });
+  const recentChanges = auditLogs.map((log) => ({ actor: String(profiles.find((profile) => String(profile.id) === String(log.admin_user_id))?.full_name || 'مدير النظام'), action: String(log.action), table: String(log.table_name), at: String(log.created_at) }));
   return {
     generatedAt: now.toISOString(), churches, filters, supportReady: !supportResult.error, analyticsReady: !usageResult.error,
     summary: { activeChurchRate: selectedChurches.length ? Math.round((activeChurches.length / selectedChurches.length) * 100) : 0, activeChurches: activeChurches.length, currentMembers: currentMembers.length, present: currentRecords.filter((row) => row.status === 'present').length, absent: currentRecords.filter((row) => row.status === 'absent').length, unresolvedFollowUps, openSupport: openSupport.length, avgResolutionHours, topCategory, invitationStats },
-    churchActivity, meetingPerformance, repeatedAbsences, inactiveProfiles, pendingInvitations, servantPermissions,
+    churchActivity, meetingPerformance, repeatedAbsences, inactiveProfiles, pendingInvitations, servantPermissions, attendanceTrend, recentChanges,
   };
 }
 

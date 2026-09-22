@@ -79,6 +79,7 @@ export default async function AdminTablePage({
           <input name="q" defaultValue={search.q ?? ''} placeholder={config.searchableColumns.length ? 'ابحث في البيانات…' : 'البحث غير متاح لهذا الجدول'} disabled={!config.searchableColumns.length} />
           <button type="submit">بحث</button>
         </form>
+        <div className="exportActions"><Link href={`/admin/export?table=${table}`}>تصدير Excel (CSV)</Link><Link href={`/admin/print/${table}`}>تصدير PDF</Link></div>
         {config.canInsert !== false && (
           <details className="createRecord">
             <summary>+ إضافة سجل</summary>
@@ -113,7 +114,7 @@ export default async function AdminTablePage({
                               <ConfirmDeleteButton />
                             </form>}
                           </div>
-                        </details>{permanentTarget && <details className="rowActions permanentRowAction"><summary>حذف نهائي</summary><div className="recordEditor permanentEditor"><Link className="cancelEdit" href={`?q=${encodeURIComponent(search.q ?? '')}&page=${result.page}`}>إلغاء</Link><form action={permanentlyDeleteChurchOrUser}><input type="hidden" name="targetType" value={table === 'churches' ? 'church' : 'user'} /><input type="hidden" name="id" value={id} /><PermanentDeleteButton expectedName={permanentTarget} label={table === 'churches' ? 'الكنيسة وكل بياناتها' : 'المستخدم'} /></form></div></details>}</div>
+                        </details>{permanentTarget && <details className="rowActions permanentRowAction"><summary>حذف نهائي</summary><div className="recordEditor permanentEditor"><Link className="cancelEdit" href={`?q=${encodeURIComponent(search.q ?? '')}&page=${result.page}`}>إلغاء</Link><form action={permanentlyDeleteChurchOrUser}><input type="hidden" name="targetType" value={table === 'churches' ? 'church' : 'user'} /><input type="hidden" name="id" value={id} /><PermanentDeleteButton expectedName={permanentTarget} label={table === 'churches' ? 'الكنيسة وكل بياناتها' : 'المستخدم'} backupHref={table === 'churches' ? `/admin/export?backup=church&churchId=${id}` : undefined} /></form></div></details>}</div>
                       ) : <span className="readOnlyBadge">قراءة فقط</span>}
                     </td>
                   </tr>
