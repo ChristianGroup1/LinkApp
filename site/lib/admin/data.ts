@@ -266,6 +266,7 @@ export async function getEnhancedDashboardData(filters: DashboardFilters) {
   const currentRecords = records.filter((row) => currentSessionIds.has(String(row.session_id)));
   const previousRecords = records.filter((row) => previousSessionIds.has(String(row.session_id)));
   const currentMembers = members.filter((row) => inCurrent(row.joined_on || row.created_at));
+  const activeMembersTotal = members.filter((row) => row.is_active).length;
   const currentInvitations = invitations.filter((row) => inCurrent(row.created_at));
   const activeChurches = selectedChurches.filter((church) => {
     const id = String(church.id);
@@ -369,7 +370,7 @@ export async function getEnhancedDashboardData(filters: DashboardFilters) {
   const recentChanges = auditLogs.map((log) => ({ actor: String(profiles.find((profile) => String(profile.id) === String(log.admin_user_id))?.full_name || 'مدير النظام'), action: String(log.action), table: String(log.table_name), at: String(log.created_at) }));
   return {
     generatedAt: now.toISOString(), churches, filters, supportReady: !supportResult.error, analyticsReady: !usageResult.error,
-    summary: { activeChurchRate: selectedChurches.length ? Math.round((activeChurches.length / selectedChurches.length) * 100) : 0, activeChurches: activeChurches.length, currentMembers: currentMembers.length, present: currentRecords.filter((row) => row.status === 'present').length, absent: currentRecords.filter((row) => row.status === 'absent').length, unresolvedFollowUps, openSupport: openSupport.length, avgResolutionHours, topCategory, invitationStats },
+    summary: { activeChurchRate: selectedChurches.length ? Math.round((activeChurches.length / selectedChurches.length) * 100) : 0, activeChurches: activeChurches.length, activeMembersTotal, currentMembers: currentMembers.length, present: currentRecords.filter((row) => row.status === 'present').length, absent: currentRecords.filter((row) => row.status === 'absent').length, unresolvedFollowUps, openSupport: openSupport.length, avgResolutionHours, topCategory, invitationStats },
     churchActivity, meetingPerformance, repeatedAbsences, inactiveProfiles, pendingInvitations, servantPermissions, attendanceTrend, recentChanges, monthlyGoals, smartAlerts, healthScores, atRisk, retention,
   };
 }
