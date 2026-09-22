@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -7,6 +9,7 @@ import '../../../core/attendance/qr_attendance_platform.dart';
 import '../../../core/attendance/qr_attendance_scan_result.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/models.dart';
+import '../../../data/offline/connectivity_service.dart';
 import '../../../data/offline/offline_save_result.dart';
 import '../../../data/repositories/database_repository.dart';
 import '../../../shared/ui/app_states.dart';
@@ -34,6 +37,8 @@ class _AttendanceRecordingScreenState extends State<AttendanceRecordingScreen> {
   bool _allowPop = false;
   bool _leaveDialogOpen = false;
   bool _sheetRequested = false;
+  bool _connectivityListening = false;
+  bool _wasOffline = false;
 
   QrAttendanceInputMode get _qrInputMode => resolveQrAttendanceInputMode();
 
@@ -47,10 +52,41 @@ class _AttendanceRecordingScreenState extends State<AttendanceRecordingScreen> {
       _sheetRequested = true;
       context.read<AttendanceBloc>().add(LoadAttendanceSheet(widget.session));
     }
+    if (!_connectivityListening) {
+      _connectivityListening = true;
+      unawaited(_watchConnectivity());
+    }
+  }
+
+  Future<void> _watchConnectivity() async {
+    await ConnectivityService.instance.ensureInitialized();
+    if (!mounted) return;
+    _wasOffline = !ConnectivityService.instance.isOnline.value;
+    ConnectivityService.instance.isOnline.addListener(_onConnectivityChanged);
+  }
+
+  void _onConnectivityChanged() {
+    if (!mounted) return;
+    final online = ConnectivityService.instance.isOnline.value;
+    if (online && _wasOffline) {
+      final state = context.read<AttendanceBloc>().state;
+      // Never overwrite attendance the servant is currently editing.
+      if (state is AttendanceSheetLoaded && !state.isDirty && !state.isSaving) {
+        unawaited(Future<void>.delayed(const Duration(milliseconds: 600), () {
+          if (mounted && ConnectivityService.instance.isOnline.value) {
+            context.read<AttendanceBloc>().add(LoadAttendanceSheet(widget.session));
+          }
+        }));
+      }
+    }
+    _wasOffline = !online;
   }
 
   @override
   void dispose() {
+    if (_connectivityListening) {
+      ConnectivityService.instance.isOnline.removeListener(_onConnectivityChanged);
+    }
     _searchController.dispose();
     super.dispose();
   }

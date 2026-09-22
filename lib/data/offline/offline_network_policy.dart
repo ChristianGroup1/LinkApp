@@ -15,17 +15,18 @@ class OfflineNetworkPolicy {
   static Future<T> run<T>({
     required Future<T> Function() online,
     required Future<T> Function() offline,
+    Duration timeout = requestTimeout,
+    bool fallbackOnTimeout = true,
   }) async {
     await ensureReady();
     if (isConnectivityOffline) {
       return offline();
     }
     try {
-      return await online().timeout(requestTimeout);
+      return await online().timeout(timeout);
     } on TimeoutException {
-      return offline();
-    } catch (_) {
-      return offline();
+      if (fallbackOnTimeout) return offline();
+      rethrow;
     }
   }
 }

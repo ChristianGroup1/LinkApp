@@ -28,6 +28,8 @@ mixin _SupabaseMembersRepository on _SupabaseRepositoryBase {
           pendingDeletes,
         )..sort((a, b) => a.fullName.compareTo(b.fullName));
       },
+      timeout: const Duration(seconds: 12),
+      fallbackOnTimeout: false,
     );
   }
 
@@ -55,6 +57,8 @@ mixin _SupabaseMembersRepository on _SupabaseRepositoryBase {
           pendingDeletes,
         )..sort((a, b) => a.fullName.compareTo(b.fullName));
       },
+      timeout: const Duration(seconds: 12),
+      fallbackOnTimeout: false,
     );
   }
 
