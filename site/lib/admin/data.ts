@@ -340,15 +340,17 @@ export async function getEnhancedDashboardData(filters: DashboardFilters) {
   };
 }
 
-export async function getAdminFormOptions(): Promise<Record<string, AdminFormOption[]>> {
+export async function getAdminFormOptions(fields: string[]): Promise<Record<string, AdminFormOption[]>> {
   const admin = createSupabaseAdminClient();
+  const needed = new Set(fields);
+  const needsProfiles = ['user_id', 'responsible_user_id', 'created_by', 'assigned_by', 'recorded_by'].some((field) => needed.has(field));
   const [churches, profiles, meetings, classes, members, sessions] = await Promise.all([
-    admin.from('churches').select('id, name_ar, name').order('name_ar').limit(5000),
-    admin.from('profiles').select('id, full_name, email').order('full_name').limit(10000),
-    admin.from('meetings').select('id, name_ar, name').order('name_ar').limit(10000),
-    admin.from('sunday_school_classes').select('id, name_ar, name').order('name_ar').limit(10000),
-    admin.from('members').select('id, full_name, code').order('full_name').limit(20000),
-    admin.from('attendance_sessions').select('id, title, session_date').order('session_date', { ascending: false }).limit(10000),
+    needed.has('church_id') ? admin.from('churches').select('id, name_ar, name').order('name_ar').limit(2000) : Promise.resolve({ data: [] }),
+    needsProfiles ? admin.from('profiles').select('id, full_name, email').order('full_name').limit(2000) : Promise.resolve({ data: [] }),
+    needed.has('meeting_id') ? admin.from('meetings').select('id, name_ar, name').order('name_ar').limit(2000) : Promise.resolve({ data: [] }),
+    needed.has('class_id') || needed.has('sunday_school_class_id') ? admin.from('sunday_school_classes').select('id, name_ar, name').order('name_ar').limit(2000) : Promise.resolve({ data: [] }),
+    needed.has('member_id') ? admin.from('members').select('id, full_name, code').order('full_name').limit(5000) : Promise.resolve({ data: [] }),
+    needed.has('session_id') ? admin.from('attendance_sessions').select('id, title, session_date').order('session_date', { ascending: false }).limit(2000) : Promise.resolve({ data: [] }),
   ]);
   const options = (rows: Array<Record<string, unknown>>, label: (row: Record<string, unknown>) => string) => rows.map((row) => ({ value: String(row.id), label: label(row) }));
   const churchOptions = options(safeRows(churches), (row) => String(row.name_ar || row.name || 'كنيسة بلا اسم'));

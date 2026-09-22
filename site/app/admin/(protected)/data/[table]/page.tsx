@@ -61,7 +61,7 @@ export default async function AdminTablePage({
   const currentPage = Math.max(1, Number.parseInt(search.page ?? '1', 10) || 1);
   const [result, formOptions] = await Promise.all([
     getTableRows(table, search.q ?? '', currentPage),
-    getAdminFormOptions(),
+    getAdminFormOptions(config.editableColumns),
   ]);
 
   return (
@@ -103,21 +103,17 @@ export default async function AdminTablePage({
                     {config.visibleColumns.map((column) => <td key={column} title={String(displayRow[column] ?? '')}>{displayValue(displayRow[column])}</td>)}
                     <td>
                       {config.editableColumns.length ? (
-                        <details className="rowActions">
+                        <div className="tableRowActions"><details className="rowActions">
                           <summary>تعديل</summary>
                           <div className="recordEditor">
                             <Link className="cancelEdit" href={`?q=${encodeURIComponent(search.q ?? '')}&page=${result.page}`}>إلغاء</Link>
                             <RecordFieldsForm table={table} mode="update" id={id} fields={editableFields(row, config.editableColumns, formOptions)} submitLabel="حفظ التعديل" action={saveDatabaseRow} />
-                            {permanentTarget && <form action={permanentlyDeleteChurchOrUser}>
-                              <input type="hidden" name="targetType" value={table === 'churches' ? 'church' : 'user'} /><input type="hidden" name="id" value={id} />
-                              <PermanentDeleteButton expectedName={permanentTarget} label={table === 'churches' ? 'الكنيسة وكل بياناتها' : 'المستخدم'} />
-                            </form>}
                             {config.canDelete !== false && <form action={deleteDatabaseRow}>
                               <input type="hidden" name="table" value={table} /><input type="hidden" name="id" value={id} />
                               <ConfirmDeleteButton />
                             </form>}
                           </div>
-                        </details>
+                        </details>{permanentTarget && <details className="rowActions permanentRowAction"><summary>حذف نهائي</summary><div className="recordEditor permanentEditor"><Link className="cancelEdit" href={`?q=${encodeURIComponent(search.q ?? '')}&page=${result.page}`}>إلغاء</Link><form action={permanentlyDeleteChurchOrUser}><input type="hidden" name="targetType" value={table === 'churches' ? 'church' : 'user'} /><input type="hidden" name="id" value={id} /><PermanentDeleteButton expectedName={permanentTarget} label={table === 'churches' ? 'الكنيسة وكل بياناتها' : 'المستخدم'} /></form></div></details>}</div>
                       ) : <span className="readOnlyBadge">قراءة فقط</span>}
                     </td>
                   </tr>
