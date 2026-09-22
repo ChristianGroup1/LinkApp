@@ -10,6 +10,7 @@ const columnLabels: Record<string, string> = {
   church_id: 'الكنيسة', user_id: 'الخادم', responsible_user_id: 'مسؤول المتابعة',
   meeting_id: 'الاجتماع', class_id: 'الفصل', member_id: 'المخدوم', session_id: 'جلسة الحضور',
   created_by: 'أُنشئ بواسطة', assigned_by: 'كُلّف بواسطة', recorded_by: 'سجّل بواسطة', admin_user_id: 'المدير',
+  row_id: 'السجل المتأثر',
 };
 
 function displayValue(value: unknown) {
@@ -98,6 +99,7 @@ export default async function AdminTablePage({
                         <details className="rowActions">
                           <summary>تعديل</summary>
                           <div className="recordEditor">
+                            <Link className="cancelEdit" href={`?q=${encodeURIComponent(search.q ?? '')}&page=${result.page}`}>إلغاء</Link>
                             <form action={saveDatabaseRow}>
                               <input type="hidden" name="table" value={table} />
                               <input type="hidden" name="mode" value="update" />

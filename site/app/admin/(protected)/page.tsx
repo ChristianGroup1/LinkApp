@@ -1,105 +1,29 @@
 import Link from 'next/link';
-import type { CSSProperties } from 'react';
-import { getDashboardData } from '@/lib/admin/data';
+import { getEnhancedDashboardData } from '@/lib/admin/data';
 import { requireSuperAdmin } from '@/lib/admin/auth';
 
-function formatNumber(value: number) {
-  return new Intl.NumberFormat('ar-EG').format(value);
-}
+const n = (value: number) => new Intl.NumberFormat('ar-EG').format(value);
+const category = (value: string | null) => ({ login: 'تسجيل الدخول', attendance: 'الحضور', members: 'الأعضاء', invitations: 'الدعوات', notifications: 'الإشعارات', other: 'أخرى' } as Record<string, string>)[value ?? ''] ?? '—';
+const activityDate = (value: string | null) => value ? new Date(value).toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' }) : 'لا يوجد نشاط';
 
-function changeText(value: number) {
-  return `${value >= 0 ? '+' : ''}${value}%`;
-}
-
-function TrendBars({ points }: { points: Array<{ date: string; count: number }> }) {
-  const max = Math.max(1, ...points.map((point) => point.count));
-  return (
-    <div className="trendBars" aria-label="نشاط آخر 30 يومًا">
-      {points.map((point) => (
-        <i key={point.date} style={{ height: `${Math.max(4, (point.count / max) * 100)}%` }} title={`${point.date}: ${point.count}`} />
-      ))}
-    </div>
-  );
-}
-
-export default async function AdminDashboardPage() {
+export default async function AdminDashboardPage({ searchParams }: { searchParams: Promise<{ days?: string; church?: string }> }) {
   await requireSuperAdmin();
-  const data = await getDashboardData();
-  const { metrics } = data;
-  const scoreLabel = metrics.successScore >= 75 ? 'أداء قوي' : metrics.successScore >= 50 ? 'نمو جيد' : 'يحتاج متابعة';
+  const search = await searchParams;
+  const days = search.days === '7' || search.days === '90' ? Number(search.days) as 7 | 90 : 30;
+  const data = await getEnhancedDashboardData({ days, churchId: search.church || undefined });
+  const { summary } = data;
+  const link = (period: number) => `/admin?days=${period}${search.church ? `&church=${encodeURIComponent(search.church)}` : ''}`;
 
-  return (
-    <main className="adminContent">
-      <div className="pageTitle">
-        <div><span>لوحة القرار</span><h1>هل التطبيق ينجح؟</h1><p>قراءة مبنية على نشاط الاستخدام الفعلي خلال آخر 30 يومًا.</p></div>
-        <div className="updatedAt">آخر تحديث {new Date(data.generatedAt).toLocaleString('ar-EG')}</div>
-      </div>
+  return <main className="adminContent enhancedDashboard">
+    <div className="pageTitle"><div><span>لوحة القرار</span><h1>صحة المنظومة والخدمة</h1><p>مؤشرات فعلية حسب الكنيسة والفترة المختارة.</p></div><div className="updatedAt">آخر تحديث {new Date(data.generatedAt).toLocaleString('ar-EG')}</div></div>
+    <form className="dashboardFilters" method="get"><div><span>الفترة</span>{([7, 30, 90] as const).map((value) => <Link key={value} className={days === value ? 'selected' : ''} href={link(value)}>{value === 7 ? 'أسبوع' : value === 30 ? 'شهر' : '3 شهور'}</Link>)}</div><label>الكنيسة<select name="church" defaultValue={search.church ?? ''}><option value="">كل الكنائس</option>{data.churches.map((church) => <option key={String(church.id)} value={String(church.id)}>{String(church.name_ar || church.name)}</option>)}</select></label><input type="hidden" name="days" value={days} /><button type="submit">تطبيق</button></form>
 
-      <section className="todayPanel">
-        <header>
-          <div><span>مباشر</span><h2>ملخص اليوم</h2></div>
-          <p>الأرقام محسوبة بتوقيت القاهرة، والمستخدم النشط هو حساب فتح التطبيق أو سجل الدخول اليوم.</p>
-        </header>
-        <div className="todayGrid">
-          <article><span className="todayIcon purple">●</span><small>نشطون اليوم</small><strong>{data.analyticsReady ? formatNumber(metrics.activeUsersToday) : '—'}</strong><em>مستخدم فريد</em></article>
-          <article><span className="todayIcon green">＋</span><small>حسابات جديدة</small><strong>{formatNumber(metrics.newProfilesToday)}</strong><em>تم تسجيلها اليوم</em></article>
-          <article><span className="todayIcon blue">↗</span><small>مرات فتح التطبيق</small><strong>{data.analyticsReady ? formatNumber(metrics.appOpensToday) : '—'}</strong><em>من كل المنصات</em></article>
-          <article><span className="todayIcon amber">✓</span><small>تسجيلات الدخول</small><strong>{data.analyticsReady ? formatNumber(metrics.signInsToday) : '—'}</strong><em>محاولات ناجحة مسجلة</em></article>
-          <article><span className="todayIcon rose">◆</span><small>كنائس جديدة</small><strong>{formatNumber(metrics.newChurchesToday)}</strong><em>أضيفت اليوم</em></article>
-          <article><span className="todayIcon teal">▣</span><small>جلسات حضور</small><strong>{formatNumber(metrics.sessionsToday)}</strong><em>جلسات اليوم</em></article>
-        </div>
-      </section>
+    <section className="metricGrid decisionMetrics"><article><span className="metricIcon teal">✓</span><small>تفعيل الكنائس</small><strong>{summary.activeChurchRate}%</strong><em>{n(summary.activeChurches)} كنيسة لديها خدام واجتماعات وحضور</em></article><article><span className="metricIcon purple">♙</span><small>مخدومون جدد</small><strong>{n(summary.currentMembers)}</strong><em>خلال الفترة المختارة</em></article><article><span className="metricIcon blue">✓</span><small>الحضور</small><strong>{n(summary.present)}</strong><em>{n(summary.absent)} غياب مسجل</em></article><article><span className="metricIcon amber">!</span><small>الدعم المفتوح</small><strong>{data.supportReady ? n(summary.openSupport) : '—'}</strong><em>{summary.avgResolutionHours === null ? 'لا توجد حالات محلولة' : `متوسط الحل ${summary.avgResolutionHours} ساعة`}</em></article></section>
 
-      <section className="scorePanel">
-        <div className="scoreRing" style={{ '--score': `${metrics.successScore * 3.6}deg` } as CSSProperties}>
-          <span><strong>{metrics.successScore}</strong><small>/ 100</small></span>
-        </div>
-        <div><span className="scoreTag">{scoreLabel}</span><h2>مؤشر نجاح Link</h2><p>مزيج من تفعيل الكنائس، استمرار الاستخدام، ونمو جلسات الحضور.</p></div>
-        <div className="scoreFactors">
-          <span><b>{metrics.activationRate}%</b> تفعيل الكنائس</span>
-          <span><b>{metrics.retentionRate}%</b> استمرار الاستخدام</span>
-          <span><b>{changeText(metrics.engagementChange)}</b> تغير النشاط</span>
-        </div>
-      </section>
+    <section className="dashboardGrid"><article className="tableCard wide"><header><div><h2>الكنائس الأكثر والأقل نشاطًا</h2><p>الحضور والجلسات وآخر استخدام أو جلسة مسجلة.</p></div><Link href="/admin/data/churches">إدارة الكنائس</Link></header><div className="simpleTable activityTable"><div className="tableHead"><span>الكنيسة</span><span>الحضور</span><span>الجلسات</span><span>آخر نشاط</span></div>{data.churchActivity.slice(0, 5).map((church) => <div key={church.id}><strong>{church.name}</strong><span>{n(church.attendance)}</span><span>{n(church.sessions)}</span><span>{activityDate(church.lastActivity)}</span></div>)}</div>{!!data.churchActivity.length && <p className="quietChurches">الأقل نشاطًا: {data.churchActivity.slice(-3).reverse().map((church) => church.name).join('، ')}</p>}</article><article className="attentionCard"><header><h2>تحتاج انتباهك</h2><span>{data.repeatedAbsences.length + data.pendingInvitations.length + data.inactiveProfiles.length + summary.unresolvedFollowUps}</span></header><div><b>{data.repeatedAbsences.length}</b><span>مخدومون بغياب متكرر</span><Link href="/admin/data/follow_ups">متابعة ←</Link></div><div><b>{data.pendingInvitations.length}</b><span>دعوات لم تُقبل</span><Link href="/admin/data/invitations">مراجعة ←</Link></div><div><b>{data.inactiveProfiles.length}</b><span>حسابات غير نشطة</span><Link href="/admin/data/profiles">مراجعة ←</Link></div></article></section>
 
-      <section className="metricGrid">
-        <article><span className="metricIcon purple">♜</span><small>الكنائس</small><strong>{formatNumber(metrics.churchesTotal)}</strong><em>{metrics.activationRate}% نشطة هذا الشهر</em></article>
-        <article><span className="metricIcon teal">♙</span><small>المستخدمون النشطون</small><strong>{formatNumber(metrics.profilesActive)}</strong><em>{changeText(metrics.userGrowth)} مستخدم جديد</em></article>
-        <article><span className="metricIcon amber">✓</span><small>جلسات الحضور / 30 يوم</small><strong>{formatNumber(metrics.sessionsCurrent)}</strong><em>{changeText(metrics.engagementChange)} عن الفترة السابقة</em></article>
-        <article><span className="metricIcon blue">%</span><small>نسبة الحضور</small><strong>{metrics.attendanceRate}%</strong><em>من السجلات غير المعذورة</em></article>
-        <article><span className="metricIcon purple">◉</span><small>المخدومون النشطون</small><strong>{formatNumber(metrics.membersActive)}</strong><em>{metrics.meetingsActive} اجتماع نشط</em></article>
-        <article><span className="metricIcon teal">↗</span><small>نشطون آخر 7 أيام</small><strong>{data.analyticsReady ? formatNumber(metrics.activeUsers7) : '—'}</strong><em>{data.analyticsReady ? `${metrics.activeUsers30} خلال 30 يومًا` : 'فعّل Migration التتبع'}</em></article>
-      </section>
+    <section className="dashboardGrid"><article className="tableCard wide"><header><div><h2>أداء الاجتماعات</h2><p>المنضمون الجدد والحضور والغياب والنمو خلال الفترة.</p></div><Link href="/admin/data/meetings">كل الاجتماعات</Link></header><div className="simpleTable performanceTable"><div className="tableHead"><span>الاجتماع</span><span>جدد</span><span>حضور / غياب</span><span>النمو</span></div>{data.meetingPerformance.slice(0, 8).map((meeting) => <div key={meeting.id}><strong>{meeting.name}<small>{meeting.church}</small></strong><span>{n(meeting.newMembers)}</span><span>{n(meeting.present)} / {n(meeting.absent)}</span><span className={meeting.change >= 0 ? 'statusActive' : 'statusQuiet'}>{meeting.change >= 0 ? '+' : ''}{meeting.change}%</span></div>)}</div></article><article className="distributionCard"><h2>الدعوات</h2><p>خلال الفترة المختارة</p><div><span>مرسلة</span><b>{n(summary.invitationStats.sent)}</b></div><div><span>مقبولة</span><b>{n(summary.invitationStats.accepted)}</b></div><div><span>معلّقة</span><b>{n(summary.invitationStats.pending)}</b></div><div><span>مرفوضة</span><b>{n(summary.invitationStats.declined)}</b></div><h3>أكثر مشكلة متكررة</h3><div><span>{data.supportReady ? category(summary.topCategory) : 'غير متاح'}</span><b>{data.supportReady ? 'الدعم' : '—'}</b></div></article></section>
 
-      <section className="dashboardGrid">
-        <article className="chartCard wide">
-          <header><div><h2>نشاط جلسات الحضور</h2><p>عدد الجلسات يوميًا خلال آخر 30 يومًا</p></div><b>{metrics.sessionsCurrent}</b></header>
-          <TrendBars points={data.sessionTrend} />
-        </article>
-        <article className="attentionCard">
-          <header><h2>تحتاج انتباهك</h2><span>{metrics.pendingInvitations + metrics.pendingFollowUps}</span></header>
-          <div><b>{metrics.pendingInvitations}</b><span>دعوة لم تُستخدم بعد</span><Link href="/admin/data/invitations">مراجعة ←</Link></div>
-          <div><b>{metrics.pendingFollowUps}</b><span>حالة افتقاد غير مكتملة</span><Link href="/admin/data/follow_ups">مراجعة ←</Link></div>
-        </article>
-      </section>
-
-      <section className="dashboardGrid">
-        <article className="tableCard wide">
-          <header><div><h2>أحدث الكنائس</h2><p>ملخص النشاط والاستخدام</p></div><Link href="/admin/data/churches">إدارة الكل</Link></header>
-          <div className="simpleTable">
-            <div className="tableHead"><span>الكنيسة</span><span>المستخدمون</span><span>جلسات 30 يوم</span><span>الحالة</span></div>
-            {data.churchRows.map((church) => <div key={church.id}><strong>{church.name}</strong><span>{church.users}</span><span>{church.sessions30}</span><span className={church.active ? 'statusActive' : 'statusQuiet'}>{church.active ? 'نشطة' : 'هادئة'}</span></div>)}
-          </div>
-        </article>
-        <article className="distributionCard">
-          <h2>توزيع المنصات</h2><p>حسب أحداث الاستخدام المسجلة</p>
-          {Object.keys(data.platformCounts).length ? Object.entries(data.platformCounts).map(([platform, count]) => (
-            <div key={platform}><span>{platform}</span><b>{count}</b></div>
-          )) : <div className="emptyMetric">سيظهر بعد تطبيق Migration التتبع ونشر تحديث التطبيق.</div>}
-          <h3>الإصدارات المستخدمة</h3>
-          {Object.entries(data.versionCounts).slice(0, 4).map(([version, count]) => <div key={version}><span>{version}</span><b>{count}</b></div>)}
-        </article>
-      </section>
-    </main>
-  );
+    <section className="dashboardGrid"><article className="tableCard wide"><header><div><h2>غياب متكرر</h2><p>مخدومون لديهم غياب مرتين أو أكثر خلال الفترة.</p></div><Link href="/admin/data/attendance_records">السجلات</Link></header><div className="nameChips">{data.repeatedAbsences.length ? data.repeatedAbsences.map((entry) => <span key={entry.name}><b>{entry.name}</b> {entry.count} مرات</span>) : <em>لا توجد حالات غياب متكرر في الفترة المختارة.</em>}</div></article><article className="distributionCard"><h2>الحسابات غير النشطة</h2>{data.inactiveProfiles.length ? data.inactiveProfiles.map((profile) => <div key={`${profile.name}-${profile.church}`}><span>{profile.name}</span><b>{profile.church}</b></div>) : <div className="emptyMetric">لا توجد حسابات غير نشطة.</div>}</article></section>
+  </main>;
 }

@@ -202,6 +202,124 @@ export async function getDashboardData() {
   };
 }
 
+export type DashboardFilters = { days: 7 | 30 | 90; churchId?: string };
+
+function safeRows(result: { data: unknown; error?: unknown }) {
+  return Array.isArray(result.data) ? result.data as Array<Record<string, unknown>> : [];
+}
+
+/** Detailed owner metrics. All filtering is server-side and only uses the service-role client. */
+export async function getEnhancedDashboardData(filters: DashboardFilters) {
+  const admin = createSupabaseAdminClient();
+  const now = new Date();
+  const start = new Date(now.getTime() - filters.days * DAY);
+  const previousStart = new Date(now.getTime() - filters.days * 2 * DAY);
+  const startDate = isoDate(start);
+  const previousDate = isoDate(previousStart);
+  const scoped = (rows: Array<Record<string, unknown>>) => filters.churchId
+    ? rows.filter((row) => String(row.church_id) === filters.churchId)
+    : rows;
+  const [churchesResult, profilesResult, meetingsResult, membersResult, sessionsResult, recordsResult, invitationsResult, followUpsResult, supportResult, usageResult] = await Promise.all([
+    admin.from('churches').select('id, name_ar, name').order('name_ar').limit(5000),
+    admin.from('profiles').select('id, church_id, full_name, email, is_active, created_at').limit(20000),
+    admin.from('meetings').select('id, church_id, name_ar, name, is_active').limit(20000),
+    admin.from('members').select('id, church_id, meeting_id, full_name, code, is_active, created_at, joined_on').limit(50000),
+    admin.from('attendance_sessions').select('id, church_id, meeting_id, session_date, title').gte('session_date', previousDate).limit(50000),
+    admin.from('attendance_records').select('session_id, member_id, church_id, status, recorded_at').gte('recorded_at', previousStart.toISOString()).limit(100000),
+    admin.from('invitations').select('id, church_id, full_name, email, is_used, declined_at, created_at').gte('created_at', previousStart.toISOString()).limit(50000),
+    admin.from('follow_ups').select('id, church_id, member_id, contact_status, follow_up_date').limit(50000),
+    admin.from('support_tickets').select('id, church_id, category, status, created_at, updated_at').limit(50000),
+    admin.from('app_usage_events').select('church_id, occurred_at').gte('occurred_at', previousStart.toISOString()).limit(100000),
+  ]);
+  const churches = safeRows(churchesResult);
+  const profiles = scoped(safeRows(profilesResult));
+  const meetings = scoped(safeRows(meetingsResult));
+  const members = scoped(safeRows(membersResult));
+  const sessions = scoped(safeRows(sessionsResult));
+  const records = scoped(safeRows(recordsResult));
+  const invitations = scoped(safeRows(invitationsResult));
+  const followUps = scoped(safeRows(followUpsResult));
+  const support = scoped(safeRows(supportResult));
+  const usage = scoped(safeRows(usageResult));
+  const selectedChurches = filters.churchId
+    ? churches.filter((church) => String(church.id) === filters.churchId)
+    : churches;
+  const inCurrent = (value: unknown) => String(value).slice(0, 10) >= startDate;
+  const inPrevious = (value: unknown) => {
+    const date = String(value).slice(0, 10);
+    return date >= previousDate && date < startDate;
+  };
+  const sessionById = new Map(sessions.map((row) => [String(row.id), row]));
+  const currentSessions = sessions.filter((row) => inCurrent(row.session_date));
+  const previousSessions = sessions.filter((row) => inPrevious(row.session_date));
+  const currentSessionIds = new Set(currentSessions.map((row) => String(row.id)));
+  const previousSessionIds = new Set(previousSessions.map((row) => String(row.id)));
+  const currentRecords = records.filter((row) => currentSessionIds.has(String(row.session_id)));
+  const previousRecords = records.filter((row) => previousSessionIds.has(String(row.session_id)));
+  const currentMembers = members.filter((row) => inCurrent(row.joined_on || row.created_at));
+  const currentInvitations = invitations.filter((row) => inCurrent(row.created_at));
+  const activeChurches = selectedChurches.filter((church) => {
+    const id = String(church.id);
+    return members.some((row) => String(row.church_id) === id && row.is_active)
+      && meetings.some((row) => String(row.church_id) === id && row.is_active)
+      && currentRecords.some((row) => String(row.church_id) === id);
+  });
+  const nameForChurch = (id: string) => {
+    const church = churches.find((row) => String(row.id) === id);
+    return String(church?.name_ar || church?.name || 'كنيسة بلا اسم');
+  };
+  const nameForMember = (id: string) => {
+    const member = members.find((row) => String(row.id) === id);
+    return String(member?.full_name || 'مخدوم غير معروف');
+  };
+  const nameForMeeting = (id: string) => {
+    const meeting = meetings.find((row) => String(row.id) === id);
+    return String(meeting?.name_ar || meeting?.name || 'اجتماع غير معروف');
+  };
+  const churchActivity = churches
+    .filter((church) => !filters.churchId || String(church.id) === filters.churchId)
+    .map((church) => {
+      const id = String(church.id);
+      const usageDates = usage.filter((row) => String(row.church_id) === id).map((row) => String(row.occurred_at));
+      const sessionDates = sessions.filter((row) => String(row.church_id) === id).map((row) => String(row.session_date));
+      const lastActivity = [...usageDates, ...sessionDates].sort().at(-1) ?? null;
+      const attendance = currentRecords.filter((row) => String(row.church_id) === id).length;
+      return { id, name: nameForChurch(id), attendance, sessions: currentSessions.filter((row) => String(row.church_id) === id).length, lastActivity };
+    })
+    .sort((a, b) => b.attendance - a.attendance || b.sessions - a.sessions);
+  const meetingPerformance = meetings.map((meeting) => {
+    const id = String(meeting.id);
+    const current = currentRecords.filter((row) => String(sessionById.get(String(row.session_id))?.meeting_id) === id);
+    const previous = previousRecords.filter((row) => String(sessionById.get(String(row.session_id))?.meeting_id) === id);
+    const present = current.filter((row) => row.status === 'present').length;
+    const absent = current.filter((row) => row.status === 'absent').length;
+    return { id, name: nameForMeeting(id), church: nameForChurch(String(meeting.church_id)), newMembers: currentMembers.filter((row) => String(row.meeting_id) === id).length, present, absent, change: percentChange(present, previous.filter((row) => row.status === 'present').length) };
+  }).sort((a, b) => b.present - a.present);
+  const absenceCounts = currentRecords.filter((row) => row.status === 'absent').reduce<Map<string, number>>((map, row) => {
+    const id = String(row.member_id); map.set(id, (map.get(id) ?? 0) + 1); return map;
+  }, new Map());
+  const repeatedAbsences = Array.from(absenceCounts.entries()).filter(([, count]) => count >= 2).map(([id, count]) => ({ name: nameForMember(id), count })).sort((a, b) => b.count - a.count).slice(0, 5);
+  const inactiveProfiles = profiles.filter((row) => !row.is_active).slice(0, 5).map((row) => ({ name: String(row.full_name || row.email || 'مستخدم بلا اسم'), church: nameForChurch(String(row.church_id)) }));
+  const pendingInvitations = invitations.filter((row) => !row.is_used && !row.declined_at).slice(0, 5).map((row) => ({ name: String(row.full_name || row.email || 'دعوة بلا اسم'), church: nameForChurch(String(row.church_id)) }));
+  const unresolvedFollowUps = followUps.filter((row) => ['pending', 'contacted', 'no_response'].includes(String(row.contact_status))).length;
+  const openSupport = support.filter((row) => ['open', 'in_progress'].includes(String(row.status)));
+  const resolvedSupport = support.filter((row) => ['resolved', 'closed'].includes(String(row.status)) && inCurrent(row.updated_at));
+  const avgResolutionHours = resolvedSupport.length ? Math.round(resolvedSupport.reduce((sum, row) => sum + (new Date(String(row.updated_at)).getTime() - new Date(String(row.created_at)).getTime()) / 3_600_000, 0) / resolvedSupport.length) : null;
+  const categoryCounts = support.reduce<Record<string, number>>((result, row) => { const key = String(row.category || 'other'); result[key] = (result[key] ?? 0) + 1; return result; }, {});
+  const topCategory = Object.entries(categoryCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+  const invitationStats = {
+    sent: currentInvitations.length,
+    accepted: currentInvitations.filter((row) => row.is_used).length,
+    pending: currentInvitations.filter((row) => !row.is_used && !row.declined_at).length,
+    declined: currentInvitations.filter((row) => Boolean(row.declined_at)).length,
+  };
+  return {
+    generatedAt: now.toISOString(), churches, filters, supportReady: !supportResult.error, analyticsReady: !usageResult.error,
+    summary: { activeChurchRate: selectedChurches.length ? Math.round((activeChurches.length / selectedChurches.length) * 100) : 0, activeChurches: activeChurches.length, currentMembers: currentMembers.length, present: currentRecords.filter((row) => row.status === 'present').length, absent: currentRecords.filter((row) => row.status === 'absent').length, unresolvedFollowUps, openSupport: openSupport.length, avgResolutionHours, topCategory, invitationStats },
+    churchActivity, meetingPerformance, repeatedAbsences, inactiveProfiles, pendingInvitations,
+  };
+}
+
 export async function getTableRows(
   tableKey: AdminTableKey,
   queryText: string,
@@ -247,6 +365,24 @@ export async function getTableRows(
   const classIds = idsFor('class_id');
   const memberIds = idsFor('member_id');
   const sessionIds = idsFor('session_id');
+  const auditReferenceDefinitions: Record<string, { label: string; fields: string }> = {
+    churches: { label: 'كنيسة', fields: 'id, name_ar, name' },
+    profiles: { label: 'مستخدم', fields: 'id, full_name, email' },
+    meetings: { label: 'اجتماع', fields: 'id, name_ar, name' },
+    sunday_school_classes: { label: 'فصل', fields: 'id, name_ar, name' },
+    members: { label: 'مخدوم', fields: 'id, full_name, code' },
+    attendance_sessions: { label: 'جلسة حضور', fields: 'id, title, session_date' },
+    invitations: { label: 'دعوة', fields: 'id, full_name, email' },
+    follow_ups: { label: 'متابعة', fields: 'id, reason, follow_up_date' },
+  };
+  const auditIdsByTable = rows.reduce<Record<string, string[]>>((result, row) => {
+    const tableName = String(row.table_name ?? '');
+    const rowId = row.row_id;
+    if (auditReferenceDefinitions[tableName] && typeof rowId === 'string' && rowId) {
+      result[tableName] = Array.from(new Set([...(result[tableName] ?? []), rowId]));
+    }
+    return result;
+  }, {});
 
   const [churches, profiles, meetings, classes, members, sessions] = await Promise.all([
     churchIds.length ? admin.from('churches').select('id, name_ar, name').in('id', churchIds) : Promise.resolve({ data: [] }),
@@ -256,6 +392,12 @@ export async function getTableRows(
     memberIds.length ? admin.from('members').select('id, full_name, code').in('id', memberIds) : Promise.resolve({ data: [] }),
     sessionIds.length ? admin.from('attendance_sessions').select('id, title, session_date').in('id', sessionIds) : Promise.resolve({ data: [] }),
   ]);
+  const auditReferences = await Promise.all(Object.entries(auditIdsByTable).map(async ([tableName, ids]) => {
+    const definition = auditReferenceDefinitions[tableName];
+    const { data, error: auditError } = await admin.from(tableName).select(definition.fields).in('id', ids);
+    if (auditError) throw auditError;
+    return { tableName, label: definition.label, rows: (data ?? []) as unknown as Array<Record<string, unknown>> };
+  }));
 
   const names = (result: { data: Array<Record<string, unknown>> | null }, label: (row: Record<string, unknown>) => string) =>
     new Map((result.data ?? []).map((row) => [String(row.id), label(row)]));
@@ -268,6 +410,12 @@ export async function getTableRows(
     return row.code ? `${name} (${row.code})` : name;
   });
   const sessionNames = names(sessions, (row) => String(row.title || row.session_date || 'جلسة حضور'));
+  const auditRowNames = new Map(auditReferences.flatMap(({ tableName, label, rows: auditRows }) =>
+    auditRows.map((row) => {
+      const name = String(row.name_ar || row.name || row.full_name || row.title || row.reason || row.email || row.session_date || 'سجل');
+      return [`${tableName}:${row.id}`, `${label}: ${name}`] as const;
+    }),
+  ));
   const displayRows: Array<Record<string, unknown>> = rows.map((row) => ({
     ...row,
     ...(churchNames.has(String(row.church_id)) ? { church_id: churchNames.get(String(row.church_id)) } : {}),
@@ -278,6 +426,7 @@ export async function getTableRows(
     ...(classNames.has(String(row.class_id)) ? { class_id: classNames.get(String(row.class_id)) } : {}),
     ...(memberNames.has(String(row.member_id)) ? { member_id: memberNames.get(String(row.member_id)) } : {}),
     ...(sessionNames.has(String(row.session_id)) ? { session_id: sessionNames.get(String(row.session_id)) } : {}),
+    ...(auditRowNames.has(`${row.table_name}:${row.row_id}`) ? { row_id: auditRowNames.get(`${row.table_name}:${row.row_id}`) } : {}),
   }));
 
   return {
