@@ -18,7 +18,7 @@ export const adminTables = {
     searchableColumns: ['name_ar', 'name', 'slug', 'phone'],
     editableColumns: ['name', 'name_ar', 'slug', 'phone', 'address'],
     insertTemplate: { name: '', name_ar: '', slug: '', phone: null, address: null },
-    orderBy: 'created_at',
+    orderBy: 'created_at', canDelete: false,
   },
   profiles: {
     table: 'profiles', label: 'المستخدمون', description: 'ملفات المستخدمين والأدوار وحالة الحساب.',

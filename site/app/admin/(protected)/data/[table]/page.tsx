@@ -1,16 +1,23 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { deleteDatabaseRow, saveDatabaseRow } from '@/app/admin/actions';
-import { getTableRows } from '@/lib/admin/data';
+import { deleteDatabaseRow, permanentlyDeleteChurchOrUser, saveDatabaseRow } from '@/app/admin/actions';
+import { getAdminFormOptions, getTableRows, type AdminFormOption } from '@/lib/admin/data';
 import { requireSuperAdmin } from '@/lib/admin/auth';
 import { adminTables, isAdminTable, type AdminTableConfig } from '@/lib/admin/schema';
 import ConfirmDeleteButton from './confirm-delete-button';
+import RecordFieldsForm from './record-fields-form';
+import PermanentDeleteButton from './permanent-delete-button';
 
 const columnLabels: Record<string, string> = {
   church_id: 'الكنيسة', user_id: 'الخادم', responsible_user_id: 'مسؤول المتابعة',
   meeting_id: 'الاجتماع', class_id: 'الفصل', member_id: 'المخدوم', session_id: 'جلسة الحضور',
   created_by: 'أُنشئ بواسطة', assigned_by: 'كُلّف بواسطة', recorded_by: 'سجّل بواسطة', admin_user_id: 'المدير',
   row_id: 'السجل المتأثر',
+  name: 'الاسم', name_ar: 'الاسم بالعربية', full_name: 'الاسم الكامل', slug: 'الرابط المختصر', phone: 'الهاتف', email: 'البريد الإلكتروني',
+  address: 'العنوان', role: 'الدور', kind: 'نوع الاجتماع', weekday: 'يوم الأسبوع', attendance_reminder_minutes: 'دقائق التذكير', description: 'الوصف', is_active: 'الحساب نشط',
+  display_order: 'ترتيب العرض', code: 'الكود', scope: 'نطاق المخدوم', sunday_school_class_id: 'فصل مدارس الأحد', birth_date: 'تاريخ الميلاد', whatsapp: 'واتساب', parent_name: 'اسم ولي الأمر', parent_phone: 'هاتف ولي الأمر', notes: 'ملاحظات', avatar_url: 'رابط الصورة', joined_on: 'تاريخ الانضمام',
+  session_date: 'تاريخ الجلسة', week_number: 'رقم الأسبوع', title: 'عنوان الجلسة', status: 'الحالة', reason: 'سبب المتابعة', result: 'نتيجة المتابعة', contact_status: 'حالة التواصل', follow_up_date: 'تاريخ المتابعة',
+  target_id: 'التكليف المستهدف', assignment_scope: 'نطاق التكليف', can_take_attendance: 'يسجل الحضور', can_view_reports: 'يشاهد التقارير', invite_token: 'رمز رابط الدعوة', declined_at: 'وقت الرفض', admin_note: 'ملاحظة المدير',
 };
 
 function displayValue(value: unknown) {
@@ -35,8 +42,8 @@ function displayValue(value: unknown) {
   return text.length > 42 ? `${text.slice(0, 39)}…` : text;
 }
 
-function editablePayload(row: Record<string, unknown>, columns: string[]) {
-  return Object.fromEntries(columns.map((column) => [column, row[column] ?? null]));
+function editableFields(row: Record<string, unknown>, columns: string[], options: Record<string, AdminFormOption[]>) {
+  return columns.map((key) => ({ key, label: columnLabels[key] ?? key, value: row[key] ?? null, options: options[key] }));
 }
 
 export default async function AdminTablePage({
@@ -52,7 +59,10 @@ export default async function AdminTablePage({
   const search = await searchParams;
   const config: AdminTableConfig = adminTables[table];
   const currentPage = Math.max(1, Number.parseInt(search.page ?? '1', 10) || 1);
-  const result = await getTableRows(table, search.q ?? '', currentPage);
+  const [result, formOptions] = await Promise.all([
+    getTableRows(table, search.q ?? '', currentPage),
+    getAdminFormOptions(),
+  ]);
 
   return (
     <main className="adminContent dataPage">
@@ -72,13 +82,7 @@ export default async function AdminTablePage({
         {config.canInsert !== false && (
           <details className="createRecord">
             <summary>+ إضافة سجل</summary>
-            <form action={saveDatabaseRow}>
-              <input type="hidden" name="table" value={table} />
-              <input type="hidden" name="mode" value="insert" />
-              <label>بيانات السجل بصيغة JSON</label>
-              <textarea name="payload" defaultValue={JSON.stringify(config.insertTemplate, null, 2)} required />
-              <button type="submit" className="saveButton">إنشاء السجل</button>
-            </form>
+            <RecordFieldsForm table={table} mode="insert" fields={editableFields(config.insertTemplate, config.editableColumns, formOptions)} submitLabel="إنشاء السجل" action={saveDatabaseRow} />
           </details>
         )}
       </section>
@@ -91,6 +95,9 @@ export default async function AdminTablePage({
               {result.rows.map((row, index) => {
                 const id = String(row.id ?? '');
                 const displayRow = result.displayRows[index] ?? row;
+                const permanentTarget = table === 'churches'
+                  ? String(row.name_ar || row.name || '')
+                  : table === 'profiles' ? String(row.full_name || row.email || '') : '';
                 return (
                   <tr key={id || index}>
                     {config.visibleColumns.map((column) => <td key={column} title={String(displayRow[column] ?? '')}>{displayValue(displayRow[column])}</td>)}
@@ -100,14 +107,11 @@ export default async function AdminTablePage({
                           <summary>تعديل</summary>
                           <div className="recordEditor">
                             <Link className="cancelEdit" href={`?q=${encodeURIComponent(search.q ?? '')}&page=${result.page}`}>إلغاء</Link>
-                            <form action={saveDatabaseRow}>
-                              <input type="hidden" name="table" value={table} />
-                              <input type="hidden" name="mode" value="update" />
-                              <input type="hidden" name="id" value={id} />
-                              <label>الحقول القابلة للتعديل</label>
-                              <textarea name="payload" defaultValue={JSON.stringify(editablePayload(row, config.editableColumns), null, 2)} required />
-                              <button type="submit" className="saveButton">حفظ التعديل</button>
-                            </form>
+                            <RecordFieldsForm table={table} mode="update" id={id} fields={editableFields(row, config.editableColumns, formOptions)} submitLabel="حفظ التعديل" action={saveDatabaseRow} />
+                            {permanentTarget && <form action={permanentlyDeleteChurchOrUser}>
+                              <input type="hidden" name="targetType" value={table === 'churches' ? 'church' : 'user'} /><input type="hidden" name="id" value={id} />
+                              <PermanentDeleteButton expectedName={permanentTarget} label={table === 'churches' ? 'الكنيسة وكل بياناتها' : 'المستخدم'} />
+                            </form>}
                             {config.canDelete !== false && <form action={deleteDatabaseRow}>
                               <input type="hidden" name="table" value={table} /><input type="hidden" name="id" value={id} />
                               <ConfirmDeleteButton />

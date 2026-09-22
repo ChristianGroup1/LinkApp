@@ -132,3 +132,53 @@ export async function deleteDatabaseRow(formData: FormData) {
   revalidatePath(`/admin/data/${tableKey}`);
   redirect(messageUrl(tableKey, 'success', 'تم حذف السجل.'));
 }
+
+export async function permanentlyDeleteChurchOrUser(formData: FormData) {
+  const targetType = String(formData.get('targetType') ?? '');
+  const id = String(formData.get('id') ?? '');
+  const confirmation = String(formData.get('confirmation') ?? '').trim();
+  const tableKey = targetType === 'church' ? 'churches' : targetType === 'user' ? 'profiles' : '';
+  if (!tableKey || !id) redirect('/admin?error=invalid-request');
+
+  const identity = await requireSuperAdmin();
+  const admin = createSupabaseAdminClient();
+  if (targetType === 'church') {
+    const { data: church, error: churchError } = await admin.from('churches').select('id, name_ar, name').eq('id', id).maybeSingle();
+    const expectedName = String(church?.name_ar || church?.name || '');
+    if (churchError || !church || confirmation !== expectedName) {
+      redirect(messageUrl(tableKey, 'error', 'اكتب اسم الكنيسة كاملًا لتأكيد الحذف النهائي.'));
+    }
+    const { data: userIds, error } = await admin.rpc('admin_delete_church_tenant', { p_church_id: id });
+    if (error) {
+      const message = error.message.includes('function') ? 'يلزم تطبيق Migration الحذف النهائي أولًا.' : 'تعذر حذف الكنيسة بالكامل. لم يتم إتمام العملية.';
+      redirect(messageUrl(tableKey, 'error', message));
+    }
+    const failed = [] as string[];
+    for (const userId of Array.isArray(userIds) ? userIds : []) {
+      const { error: authError } = await admin.auth.admin.deleteUser(String(userId), false);
+      if (authError) failed.push(String(userId));
+    }
+    await admin.from('admin_audit_logs').insert({ admin_user_id: identity.id, action: 'delete', table_name: 'churches', row_id: id, changes: { permanent: true, church_name: expectedName, deleted_auth_users: userIds?.length ?? 0 } });
+    revalidatePath('/admin');
+    revalidatePath('/admin/data/churches');
+    redirect(messageUrl(tableKey, failed.length ? 'error' : 'success', failed.length ? 'تم حذف بيانات الكنيسة، لكن تعذر حذف بعض حسابات الدخول. تواصل مع الدعم.' : 'تم حذف الكنيسة وكل بياناتها وحساباتها نهائيًا.'));
+  }
+
+  if (id === identity.id) redirect(messageUrl(tableKey, 'error', 'لا يمكنك حذف حساب المدير الذي تستخدمه الآن من لوحة الإدارة.'));
+  const { data: profile, error: profileError } = await admin.from('profiles').select('id, full_name, email').eq('id', id).maybeSingle();
+  const expectedName = String(profile?.full_name || profile?.email || '');
+  if (profileError || !profile || confirmation !== expectedName) {
+    redirect(messageUrl(tableKey, 'error', 'اكتب اسم المستخدم كاملًا لتأكيد الحذف النهائي.'));
+  }
+  const { error: serviceDataError } = await admin.rpc('admin_delete_user_service_data', { p_user_id: id });
+  if (serviceDataError) {
+    const message = serviceDataError.message.includes('function') ? 'يلزم تطبيق Migration الحذف النهائي أولًا.' : 'تعذر حذف سجلات خدمة المستخدم. لم يتم حذف الحساب.';
+    redirect(messageUrl(tableKey, 'error', message));
+  }
+  const { error } = await admin.auth.admin.deleteUser(id, false);
+  if (error) redirect(messageUrl(tableKey, 'error', 'تعذر حذف حساب المستخدم. حاول مرة أخرى.'));
+  await admin.from('admin_audit_logs').insert({ admin_user_id: identity.id, action: 'delete', table_name: 'profiles', row_id: id, changes: { permanent: true, user_name: expectedName } });
+  revalidatePath('/admin');
+  revalidatePath('/admin/data/profiles');
+  redirect(messageUrl(tableKey, 'success', 'تم حذف حساب المستخدم وصلاحياته وسجلات الحضور والمتابعات الخاصة به نهائيًا.'));
+}
