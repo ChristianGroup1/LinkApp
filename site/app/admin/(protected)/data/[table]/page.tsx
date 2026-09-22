@@ -7,6 +7,7 @@ import { adminTables, isAdminTable, type AdminTableConfig } from '@/lib/admin/sc
 import ConfirmDeleteButton from './confirm-delete-button';
 import RecordFieldsForm from './record-fields-form';
 import PermanentDeleteButton from './permanent-delete-button';
+import CancelEditorButton from './cancel-editor-button';
 
 const columnLabels: Record<string, string> = {
   church_id: 'الكنيسة', user_id: 'الخادم', responsible_user_id: 'مسؤول المتابعة',
@@ -107,14 +108,14 @@ export default async function AdminTablePage({
                         <div className="tableRowActions"><details className="rowActions">
                           <summary>تعديل</summary>
                           <div className="recordEditor">
-                            <Link className="cancelEdit" href={`?q=${encodeURIComponent(search.q ?? '')}&page=${result.page}`}>إلغاء</Link>
+                            <CancelEditorButton />
                             <RecordFieldsForm table={table} mode="update" id={id} fields={editableFields(row, config.editableColumns, formOptions)} submitLabel="حفظ التعديل" action={saveDatabaseRow} />
                             {config.canDelete !== false && <form action={deleteDatabaseRow}>
                               <input type="hidden" name="table" value={table} /><input type="hidden" name="id" value={id} />
                               <ConfirmDeleteButton />
                             </form>}
                           </div>
-                        </details>{permanentTarget && <details className="rowActions permanentRowAction"><summary>حذف نهائي</summary><div className="recordEditor permanentEditor"><Link className="cancelEdit" href={`?q=${encodeURIComponent(search.q ?? '')}&page=${result.page}`}>إلغاء</Link><form action={permanentlyDeleteChurchOrUser}><input type="hidden" name="targetType" value={table === 'churches' ? 'church' : 'user'} /><input type="hidden" name="id" value={id} /><PermanentDeleteButton expectedName={permanentTarget} label={table === 'churches' ? 'الكنيسة وكل بياناتها' : 'المستخدم'} backupHref={table === 'churches' ? `/admin/export?backup=church&churchId=${id}` : undefined} /></form></div></details>}</div>
+                        </details>{permanentTarget && <details className="rowActions permanentRowAction"><summary>حذف نهائي</summary><div className="recordEditor permanentEditor"><CancelEditorButton /><form action={permanentlyDeleteChurchOrUser}><input type="hidden" name="targetType" value={table === 'churches' ? 'church' : 'user'} /><input type="hidden" name="id" value={id} /><PermanentDeleteButton expectedName={permanentTarget} label={table === 'churches' ? 'الكنيسة وكل بياناتها' : 'المستخدم'} backupHref={table === 'churches' ? `/admin/export?backup=church&churchId=${id}` : undefined} /></form></div></details>}</div>
                       ) : <span className="readOnlyBadge">قراءة فقط</span>}
                     </td>
                   </tr>
