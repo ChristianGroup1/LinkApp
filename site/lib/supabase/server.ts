@@ -1,8 +1,10 @@
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 
-function requireEnvironment(name: string, fallback?: string) {
-  const value = process.env[name] ?? (fallback ? process.env[fallback] : undefined);
+function requireEnvironment(name: string, ...fallbacks: string[]) {
+  const value = [name, ...fallbacks]
+    .map((candidate) => process.env[candidate])
+    .find((candidate) => candidate);
   if (!value) {
     throw new Error(`Missing required environment variable: ${name}`);
   }
@@ -14,7 +16,12 @@ export async function createSupabaseServerClient() {
 
   return createServerClient(
     requireEnvironment('NEXT_PUBLIC_SUPABASE_URL', 'SUPABASE_URL'),
-    requireEnvironment('NEXT_PUBLIC_SUPABASE_ANON_KEY', 'SUPABASE_ANON_KEY'),
+    requireEnvironment(
+      'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY',
+      'NEXT_PUBLIC_SUPABASE_ANON_KEY',
+      'SUPABASE_PUBLISHABLE_KEY',
+      'SUPABASE_ANON_KEY',
+    ),
     {
       cookies: {
         getAll: () => cookieStore.getAll(),
@@ -32,4 +39,3 @@ export async function createSupabaseServerClient() {
     },
   );
 }
-
