@@ -41,28 +41,45 @@ Future<AttendanceSummary> loadAttendanceSessionSummary(
   DatabaseRepository repository,
   AttendanceSessionEntity session,
 ) async {
-  final records = await repository.getAttendanceRecords(session.id);
   final members = session.classId == null
       ? await repository.getMeetingMembers(session.meetingId)
       : await repository.getClassMembers(session.classId!);
+  var records = await repository.getAttendanceRecords(session.id);
 
-  final namesById = {for (final member in members) member.id: member.fullName};
+  // Match the recording screen for a sheet without saved records: carry the
+  // previous sheet's values forward, or show everyone as absent.
+  if (records.isEmpty) {
+    final sessions = await repository.getSessions(
+      session.meetingId,
+      classId: session.classId,
+    );
+    final sortedSessions = List<AttendanceSessionEntity>.from(sessions)
+      ..sort((a, b) => b.sessionDate.compareTo(a.sessionDate));
+    final previousSession = sortedSessions
+        .where((item) => item.id != session.id)
+        .firstOrNull;
+    if (previousSession != null) {
+      records = await repository.getAttendanceRecords(previousSession.id);
+    }
+  }
+
+  final statusesByMemberId = {
+    for (final record in records) record.memberId: record.status,
+  };
   final present = <String>[];
   final absent = <String>[];
   final excused = <String>[];
 
-  for (final record in records) {
-    final name = namesById[record.memberId];
-    if (name == null) continue;
-    switch (record.status) {
+  for (final member in members) {
+    switch (statusesByMemberId[member.id] ?? AttendanceStatus.absent) {
       case AttendanceStatus.present:
-        present.add(name);
+        present.add(member.fullName);
         break;
       case AttendanceStatus.absent:
-        absent.add(name);
+        absent.add(member.fullName);
         break;
       case AttendanceStatus.excused:
-        excused.add(name);
+        excused.add(member.fullName);
         break;
     }
   }
@@ -143,7 +160,7 @@ Widget _sessionAttendanceStatChip({
                 Icon(icon, size: 11, color: color),
                 const SizedBox(width: 3),
                 Text(
-                  '${value ?? 0}',
+                  value?.toString() ?? '…',
                   style: GoogleFonts.cairo(
                     fontSize: 13,
                     fontWeight: FontWeight.w800,

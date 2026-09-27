@@ -37,6 +37,7 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
   Set<String> _attendanceClassIds = {};
   Set<String> _attendanceMeetingIds = {};
   String? _selectedSessionId;
+  int _summaryRefreshToken = 0;
 
   @override
   void initState() {
@@ -499,8 +500,10 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
           : null,
     );
     if (!mounted) return;
+    invalidateSessionSummaryCache();
     setState(() {
       _sessions = sessions;
+      _summaryRefreshToken++;
       _selectedSessionId = sessions
           .where((s) => s.id == _selectedSessionId)
           .firstOrNull
@@ -580,6 +583,9 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
                               final session = filteredSessions[index];
                               final canDelete = _canDeleteSession(session);
                               return AttendanceSessionCard(
+                                key: ValueKey(
+                                  '$_summaryRefreshToken-${session.id}',
+                                ),
                                 session: session,
                                 repository: repo,
                                 canDelete: canDelete,
