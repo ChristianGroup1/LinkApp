@@ -125,6 +125,40 @@ class AppProfile {
   }
 }
 
+class SupportTicketEntity {
+  final String id;
+  final String category;
+  final String subject;
+  final String description;
+  final String status;
+  final String? adminNote;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  const SupportTicketEntity({
+    required this.id,
+    required this.category,
+    required this.subject,
+    required this.description,
+    required this.status,
+    required this.createdAt,
+    required this.updatedAt,
+    this.adminNote,
+  });
+
+  factory SupportTicketEntity.fromJson(Map<String, dynamic> json) =>
+      SupportTicketEntity(
+        id: json['id'] as String,
+        category: json['category'] as String,
+        subject: json['subject'] as String,
+        description: json['description'] as String,
+        status: json['status'] as String,
+        adminNote: json['admin_note'] as String?,
+        createdAt: DateTime.parse(json['created_at'] as String),
+        updatedAt: DateTime.parse(json['updated_at'] as String),
+      );
+}
+
 class MeetingEntity {
   final String id;
   final String churchId;

@@ -17,6 +17,7 @@ import '../../../presentation/screens/my_invitations_screen.dart';
 import '../../../presentation/widgets/in_app_spotlight_overlay.dart';
 import '../../../shared/ui/app_widgets.dart';
 import '../logic/church_bloc.dart';
+import 'my_support_tickets_screen.dart';
 import 'servants_permissions_screen.dart';
 import 'widgets/compact_settings_dialog.dart';
 import 'widgets/settings_cards.dart';
@@ -212,6 +213,16 @@ class _ProfileActionsCard extends StatelessWidget {
           title: 'الإبلاغ عن مشكلة',
           subtitle: 'أرسل تفاصيل المشكلة لفريق دعم Link',
           onTap: () => _showSupportTicketDialog(context),
+        ),
+        Divider(height: 1, color: AppTheme.border.withValues(alpha: 0.7)),
+        _ProfileActionRow(
+          icon: Icons.history_rounded,
+          title: 'بلاغاتي',
+          subtitle: 'تابع حالة البلاغات التي أرسلتها',
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const MySupportTicketsScreen()),
+          ),
         ),
         if (shouldShowDeveloperDiagnostics()) ...[
           Divider(height: 1, color: AppTheme.border.withValues(alpha: 0.7)),

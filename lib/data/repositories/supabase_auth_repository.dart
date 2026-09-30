@@ -569,6 +569,29 @@ mixin _SupabaseAuthRepository on _SupabaseRepositoryBase {
     }
   }
 
+  @override
+  Future<List<SupportTicketEntity>> getMySupportTickets() async {
+    final user = _client.auth.currentUser;
+    if (user == null) throw Exception('سجّل الدخول لعرض بلاغاتك.');
+
+    await OfflineNetworkPolicy.ensureReady();
+    if (OfflineNetworkPolicy.isConnectivityOffline) {
+      throw Exception('عرض البلاغات يحتاج اتصالًا بالإنترنت.');
+    }
+
+    final rows = await _client
+        .from('support_tickets')
+        .select(
+          'id, category, subject, description, status, admin_note, created_at, updated_at',
+        )
+        .eq('user_id', user.id)
+        .order('created_at', ascending: false)
+        .timeout(OfflineNetworkPolicy.requestTimeout);
+    return List<Map<String, dynamic>>.from(
+      rows as List,
+    ).map(SupportTicketEntity.fromJson).toList(growable: false);
+  }
+
   String get _supportPlatformName {
     if (kIsWeb) return 'web';
     return switch (defaultTargetPlatform) {

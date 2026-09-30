@@ -49,6 +49,7 @@ for each row execute function public.set_updated_at();
 alter table public.support_tickets enable row level security;
 revoke all on public.support_tickets from anon, authenticated;
 grant insert on public.support_tickets to authenticated;
+grant select on public.support_tickets to authenticated;
 
 drop policy if exists "support_tickets_insert_own" on public.support_tickets;
 create policy "support_tickets_insert_own" on public.support_tickets
@@ -64,7 +65,12 @@ with check (
   )
 );
 
--- No authenticated SELECT policy is intentional. Tickets are read only by
--- the protected Link Control dashboard through its service-role client.
+drop policy if exists "support_tickets_select_own" on public.support_tickets;
+create policy "support_tickets_select_own" on public.support_tickets
+for select to authenticated
+using (user_id = auth.uid());
+
+-- Authenticated users can read only their own tickets; the protected Link
+-- Control dashboard uses its service-role client to manage all tickets.
 comment on table public.support_tickets is
   'Private support tickets submitted from LinkApp and reviewed in Link Control.';

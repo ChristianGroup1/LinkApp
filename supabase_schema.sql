@@ -958,9 +958,10 @@ for all to authenticated using (
   )
 );
 
--- 8.13 Support tickets: users may submit, but only Link Control can read.
+-- 8.13 Support tickets: users may submit and read their own tickets;
+-- Link Control uses its protected service-role dashboard for all tickets.
 revoke all on public.support_tickets from anon, authenticated;
-grant insert on public.support_tickets to authenticated;
+grant insert, select on public.support_tickets to authenticated;
 create policy "support_tickets_insert_own" on public.support_tickets
 for insert to authenticated
 with check (
@@ -971,6 +972,9 @@ with check (
     where p.id = auth.uid() and p.is_active
   )
 );
+create policy "support_tickets_select_own" on public.support_tickets
+for select to authenticated
+using (user_id = auth.uid());
 
 create or replace function public.validate_invitation_code(invite_code text)
 returns jsonb

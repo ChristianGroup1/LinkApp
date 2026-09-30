@@ -78,6 +78,7 @@ abstract class DatabaseRepository {
     required String subject,
     required String description,
   });
+  Future<List<SupportTicketEntity>> getMySupportTickets();
   Future<void> deleteCurrentAccount();
   Future<void> signOut();
   bool hasActiveSession();
