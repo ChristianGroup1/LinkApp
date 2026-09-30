@@ -1374,11 +1374,21 @@ class _CopyMembersBetweenMeetingsDialogState
         meetingId: _targetMeetingId!,
       );
       if (mounted) Navigator.pop(context, result);
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
+      debugPrint('[MemberMeetingCopy] Copy failed: $error');
+      final errorText = error.toString().toLowerCase();
+      final message = errorText.contains('42501') ||
+              errorText.contains('row-level security')
+          ? 'ليس لديك صلاحية تسجيل الحضور في الاجتماع الهدف. اطلب من مسؤول الكنيسة مراجعة صلاحيات الاجتماع.'
+          : errorText.contains('pgrst204') ||
+                errorText.contains('pgrst205') ||
+                errorText.contains('42p01')
+          ? 'قاعدة البيانات لا تدعم ربط المخدوم بأكثر من اجتماع بعد. حدّث قاعدة بيانات Supabase ثم أعد المحاولة.'
+          : 'تعذر إتمام النسخ. تحقق من صلاحيات الاجتماع واتصال التطبيق بالخادم، ثم أعد المحاولة.';
       setState(() {
         _saving = false;
-        _error = 'تعذر ربط المخدومين بالاجتماع. راجع صلاحياتك وحاول مرة أخرى.';
+        _error = message;
       });
     }
   }

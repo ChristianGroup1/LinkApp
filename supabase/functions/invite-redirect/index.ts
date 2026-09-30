@@ -33,10 +33,19 @@ function buildPage(params: {
   inviteeName: string
   scope: string
   appLink: string
+  webAppLink: string
   valid: boolean
   status?: string
 }) {
-  const { churchName, inviteeName, scope, appLink, valid, status } = params
+  const {
+    churchName,
+    inviteeName,
+    scope,
+    appLink,
+    webAppLink,
+    valid,
+    status,
+  } = params
 
   const headingText = valid
     ? `مرحباً <strong>${escapeHtml(inviteeName || 'خادم')}</strong>، تمت دعوتك للخدمة في <strong>${escapeHtml(churchName || 'الكنيسة')}</strong>.`
@@ -44,7 +53,7 @@ function buildPage(params: {
       ? 'تم رفض هذه الدعوة مسبقاً.'
       : status === 'used'
         ? 'تم استخدام هذه الدعوة بالفعل.'
-        : 'جاري فتح تطبيق Link ومتابعة الدعوة...'
+        : 'هذه الدعوة غير متاحة حاليًا.'
 
   return `<!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -54,11 +63,25 @@ function buildPage(params: {
   <title>دعوة للانضمام — Link</title>
   <script>
     function openApp() {
-      window.location.href = ${JSON.stringify(appLink)};
+      const appUrl = new URL(${JSON.stringify(appLink)});
+      const callbackParams = new URLSearchParams(window.location.search);
+      for (const [key, value] of appUrl.searchParams.entries()) {
+        if (!callbackParams.has(key)) callbackParams.set(key, value);
+      }
+      appUrl.search = callbackParams.toString();
+      appUrl.hash = window.location.hash;
+      window.location.href = appUrl.toString();
     }
-    window.addEventListener('load', function () {
-      setTimeout(openApp, 100);
-    });
+    function openWebApp() {
+      const appUrl = new URL(${JSON.stringify(webAppLink)});
+      const callbackParams = new URLSearchParams(window.location.search);
+      for (const [key, value] of appUrl.searchParams.entries()) {
+        if (!callbackParams.has(key)) callbackParams.set(key, value);
+      }
+      appUrl.search = callbackParams.toString();
+      appUrl.hash = window.location.hash;
+      window.location.href = appUrl.toString();
+    }
   </script>
 </head>
 <body style="margin:0;padding:24px;background:#f4f7fb;font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;direction:rtl;text-align:center;">
@@ -68,12 +91,16 @@ function buildPage(params: {
       ${headingText}
     </p>
     ${scope ? `<p style="margin:0 0 20px;font-size:14px;color:#5d6b7a;">نطاق الخدمة: ${escapeHtml(scope)}</p>` : ''}
-    <a href="${escapeHtml(appLink)}" onclick="openApp(); return false;"
+    <a href="${escapeHtml(webAppLink)}" onclick="openWebApp(); return false;"
        style="display:inline-block;background:#4338ca;color:#fff;text-decoration:none;padding:16px 28px;border-radius:14px;font-weight:800;font-size:16px;box-shadow:0 4px 14px rgba(67,56,202,0.3);">
-      فتح التطبيق والرد على الدعوة 🚀
+      متابعة الدعوة على الويب
+    </a>
+    <a href="${escapeHtml(appLink)}" onclick="openApp(); return false;"
+       style="display:inline-block;margin-top:12px;background:#eef2ff;color:#4338ca;text-decoration:none;padding:14px 24px;border-radius:14px;font-weight:800;font-size:15px;">
+      فتح الدعوة في التطبيق
     </a>
     <p style="margin:20px 0 0;font-size:12px;color:#8a97a8;line-height:1.5;">
-      إذا لم يفتح التطبيق تلقائياً، اضغط الزر أعلاه بعد فتح التثبيت.
+      لو التطبيق مش موجود على جهازك، كمّل الدعوة من المتصفح.
     </p>
   </div>
 </body>
@@ -105,6 +132,7 @@ Deno.serve(async (req) => {
           inviteeName: '',
           scope: '',
           appLink: '',
+          webAppLink: 'https://linkchurch.space/app/',
         }),
         {
           status: 400,
@@ -130,6 +158,7 @@ Deno.serve(async (req) => {
     // The trailing slash also opens Android builds whose intent filter expects
     // an invite path, while remaining compatible with newer builds.
     const appLink = `io.supabase.link://invite/?t=${encodeURIComponent(token)}`
+    const webAppLink = `https://linkchurch.space/app/?t=${encodeURIComponent(token)}`
 
     const html = buildPage({
       valid,
@@ -144,6 +173,7 @@ Deno.serve(async (req) => {
           : null,
       ),
       appLink,
+      webAppLink,
     })
 
     return new Response(html, {

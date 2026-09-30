@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart' as intl;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/models.dart';
 import '../../../data/repositories/database_repository.dart';
+import '../../../shared/data/follow_up_contact_status.dart';
 import '../logic/members_bloc.dart';
 import 'add_edit_member_screen.dart';
 import 'member_attendance_history_screen.dart';
@@ -431,7 +433,7 @@ class _MemberAttendanceSection extends StatefulWidget {
 }
 
 class _MemberAttendanceSectionState extends State<_MemberAttendanceSection> {
-  late Future<List<MemberAttendanceHistoryEntry>> _historyFuture;
+  late Future<_MemberHistoryData> _historyFuture;
 
   @override
   void initState() {
@@ -448,9 +450,23 @@ class _MemberAttendanceSectionState extends State<_MemberAttendanceSection> {
   }
 
   void _loadHistory() {
-    _historyFuture = context
-        .read<DatabaseRepository>()
-        .getMemberAttendanceHistory(widget.memberId);
+    final repository = context.read<DatabaseRepository>();
+    _historyFuture = _loadMemberHistory(repository);
+  }
+
+  Future<_MemberHistoryData> _loadMemberHistory(
+    DatabaseRepository repository,
+  ) async {
+    final values = await Future.wait<dynamic>([
+      repository.getMemberAttendanceHistory(widget.memberId),
+      repository.getMemberFollowUps(widget.memberId),
+      repository.getProfiles().catchError((_) => <AppProfile>[]),
+    ]);
+    return _MemberHistoryData(
+      attendance: values[0] as List<MemberAttendanceHistoryEntry>,
+      reports: values[1] as List<FollowUpEntity>,
+      servants: values[2] as List<AppProfile>,
+    );
   }
 
   void _retry() {
@@ -467,7 +483,7 @@ class _MemberAttendanceSectionState extends State<_MemberAttendanceSection> {
         border: Border.all(color: AppTheme.border.withValues(alpha: 0.8)),
         boxShadow: AppTheme.softShadow,
       ),
-      child: FutureBuilder<List<MemberAttendanceHistoryEntry>>(
+      child: FutureBuilder<_MemberHistoryData>(
         future: _historyFuture,
         builder: (context, snapshot) {
           return Column(
@@ -513,7 +529,14 @@ class _MemberAttendanceSectionState extends State<_MemberAttendanceSection> {
               else if (snapshot.hasError)
                 _AttendanceLoadError(onRetry: _retry)
               else
-                _buildHistory(snapshot.data ?? const []),
+                _buildHistory(
+                  snapshot.data ??
+                      const _MemberHistoryData(
+                        attendance: [],
+                        reports: [],
+                        servants: [],
+                      ),
+                ),
             ],
           );
         },
@@ -521,10 +544,11 @@ class _MemberAttendanceSectionState extends State<_MemberAttendanceSection> {
     );
   }
 
-  Widget _buildHistory(List<MemberAttendanceHistoryEntry> history) {
+  Widget _buildHistory(_MemberHistoryData data) {
+    final history = data.attendance;
     if (history.isEmpty) {
       return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 20),
+        padding: const EdgeInsets.only(top: 20),
         child: Column(
           children: [
             Icon(
@@ -542,6 +566,8 @@ class _MemberAttendanceSectionState extends State<_MemberAttendanceSection> {
                 fontWeight: FontWeight.w600,
               ),
             ),
+            const SizedBox(height: 18),
+            _buildFollowUpReports(data),
           ],
         ),
       );
@@ -689,6 +715,8 @@ class _MemberAttendanceSectionState extends State<_MemberAttendanceSection> {
         ),
         const SizedBox(height: 6),
         ...previewHistory.map(_buildHistoryRow),
+        const SizedBox(height: 18),
+        _buildFollowUpReports(data),
         if (history.length > 4) ...[
           const SizedBox(height: 8),
           OutlinedButton.icon(
@@ -723,6 +751,211 @@ class _MemberAttendanceSectionState extends State<_MemberAttendanceSection> {
           ),
         ],
       ],
+    );
+  }
+
+  Widget _buildFollowUpReports(_MemberHistoryData data) {
+    final sessionsById = {
+      for (final entry in data.attendance) entry.sessionId: entry,
+    };
+    final reportsByMeeting = <String, List<FollowUpEntity>>{};
+    for (final report in data.reports) {
+      final meetingId = report.sessionId == null
+          ? null
+          : sessionsById[report.sessionId]?.meetingId;
+      reportsByMeeting.putIfAbsent(meetingId ?? '', () => []).add(report);
+    }
+
+    if (data.reports.isEmpty) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'تقارير المتابعة',
+            style: GoogleFonts.cairo(
+              color: AppTheme.textDark,
+              fontSize: 13,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'لا توجد تقارير متابعة مسجلة لهذا المخدوم.',
+            style: GoogleFonts.cairo(color: AppTheme.textLight, fontSize: 12),
+          ),
+        ],
+      );
+    }
+
+    final groups = reportsByMeeting.entries.toList()
+      ..sort((a, b) {
+        final nameA =
+            widget.meetings
+                .where((meeting) => meeting.id == a.key)
+                .firstOrNull
+                ?.nameAr ??
+            'اجتماع غير محدد';
+        final nameB =
+            widget.meetings
+                .where((meeting) => meeting.id == b.key)
+                .firstOrNull
+                ?.nameAr ??
+            'اجتماع غير محدد';
+        return nameA.compareTo(nameB);
+      });
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            const Icon(
+              Icons.assignment_outlined,
+              size: 18,
+              color: AppTheme.accentOrange,
+            ),
+            const SizedBox(width: 7),
+            Text(
+              'تقارير المتابعة (${data.reports.length})',
+              style: GoogleFonts.cairo(
+                color: AppTheme.textDark,
+                fontSize: 13,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        for (final group in groups) ...[
+          Container(
+            margin: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppTheme.primary.withValues(alpha: 0.045),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: AppTheme.primary.withValues(alpha: 0.12),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  group.key.isEmpty
+                      ? 'اجتماع غير محدد'
+                      : 'اجتماع: ${widget.meetings.where((meeting) => meeting.id == group.key).firstOrNull?.nameAr ?? 'اجتماع غير معروف'}',
+                  style: GoogleFonts.cairo(
+                    color: AppTheme.primary,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                for (final report in group.value)
+                  _buildFollowUpReport(report, data, sessionsById),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildFollowUpReport(
+    FollowUpEntity report,
+    _MemberHistoryData data,
+    Map<String, MemberAttendanceHistoryEntry> sessionsById,
+  ) {
+    final date = intl.DateFormat('yyyy/MM/dd').format(report.followUpDate);
+    final session = report.sessionId == null
+        ? null
+        : sessionsById[report.sessionId];
+    final className = session?.classId == null
+        ? null
+        : widget.classes
+              .where((item) => item.id == session!.classId)
+              .firstOrNull
+              ?.nameAr;
+    final responsibleName = data.servants
+        .where((servant) => servant.id == report.responsibleUserId)
+        .firstOrNull
+        ?.fullName;
+    final statusColor = switch (report.contactStatus) {
+      FollowUpContactStatus.contacted => AppTheme.secondary,
+      FollowUpContactStatus.noResponse => AppTheme.accentOrange,
+      FollowUpContactStatus.resolved => AppTheme.primary,
+      _ => AppTheme.accentRed,
+    };
+
+    return Container(
+      margin: const EdgeInsets.only(top: 6),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: AppTheme.cardBackground,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'تاريخ التقرير: $date',
+                  style: GoogleFonts.cairo(
+                    color: AppTheme.textDark,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  FollowUpContactStatus.labelAr(report.contactStatus),
+                  style: GoogleFonts.cairo(
+                    color: statusColor,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (className != null) ...[
+            const SizedBox(height: 3),
+            Text(
+              'الفصل: $className',
+              style: GoogleFonts.cairo(color: AppTheme.textLight, fontSize: 11),
+            ),
+          ],
+          if (report.reason?.isNotEmpty == true) ...[
+            const SizedBox(height: 5),
+            Text(
+              'سبب الغياب: ${report.reason}',
+              style: GoogleFonts.cairo(color: AppTheme.textDark, fontSize: 11),
+            ),
+          ],
+          if (report.result?.isNotEmpty == true) ...[
+            const SizedBox(height: 3),
+            Text(
+              'نتيجة التواصل: ${report.result}',
+              style: GoogleFonts.cairo(color: AppTheme.textDark, fontSize: 11),
+            ),
+          ],
+          if (responsibleName != null) ...[
+            const SizedBox(height: 3),
+            Text(
+              'المسؤول: $responsibleName',
+              style: GoogleFonts.cairo(color: AppTheme.textLight, fontSize: 11),
+            ),
+          ],
+        ],
+      ),
     );
   }
 
@@ -877,6 +1110,18 @@ class _AttendanceStatCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class _MemberHistoryData {
+  final List<MemberAttendanceHistoryEntry> attendance;
+  final List<FollowUpEntity> reports;
+  final List<AppProfile> servants;
+
+  const _MemberHistoryData({
+    required this.attendance,
+    required this.reports,
+    required this.servants,
+  });
 }
 
 class _AttendanceLoadError extends StatelessWidget {

@@ -50,6 +50,9 @@ class FollowUpDataLoaded extends FollowUpState {
   final List<FollowUpEntity> followUpHistory;
   final List<AppProfile> servants;
   final List<MemberEntity> members;
+  final Map<String, AttendanceSessionEntity> sessionsById;
+  final Map<String, MeetingEntity> meetingsById;
+  final Map<String, SundaySchoolClassEntity> classesById;
   final String? flashMessage;
 
   FollowUpDataLoaded({
@@ -57,6 +60,9 @@ class FollowUpDataLoaded extends FollowUpState {
     required this.followUpHistory,
     required this.servants,
     required this.members,
+    required this.sessionsById,
+    required this.meetingsById,
+    required this.classesById,
     this.flashMessage,
   });
 
@@ -65,6 +71,9 @@ class FollowUpDataLoaded extends FollowUpState {
     List<FollowUpEntity>? followUpHistory,
     List<AppProfile>? servants,
     List<MemberEntity>? members,
+    Map<String, AttendanceSessionEntity>? sessionsById,
+    Map<String, MeetingEntity>? meetingsById,
+    Map<String, SundaySchoolClassEntity>? classesById,
     String? flashMessage,
     bool clearFlashMessage = false,
   }) {
@@ -73,6 +82,9 @@ class FollowUpDataLoaded extends FollowUpState {
       followUpHistory: followUpHistory ?? this.followUpHistory,
       servants: servants ?? this.servants,
       members: members ?? this.members,
+      sessionsById: sessionsById ?? this.sessionsById,
+      meetingsById: meetingsById ?? this.meetingsById,
+      classesById: classesById ?? this.classesById,
       flashMessage: clearFlashMessage
           ? null
           : (flashMessage ?? this.flashMessage),
@@ -156,14 +168,22 @@ class FollowUpBloc extends Bloc<FollowUpEvent, FollowUpState> {
               scope.meeting.id,
               classId: scope.classEntity?.id,
             );
-            return MapEntry(scope.key, sessions.take(3).toList());
+            return MapEntry(scope.key, sessions);
           }),
         );
         final sessionsByScope = {
           for (final entry in sessionsResults) entry.key: entry.value,
         };
 
-        final sessionIds = sessionsByScope.values
+        final recentSessionsByScope = {
+          for (final entry in sessionsByScope.entries)
+            entry.key: entry.value.take(3).toList(growable: false),
+        };
+        final sessionsById = {
+          for (final session in sessionsByScope.values.expand((items) => items))
+            session.id: session,
+        };
+        final sessionIds = recentSessionsByScope.values
             .expand((sessions) => sessions)
             .map((session) => session.id)
             .toSet()
@@ -179,7 +199,7 @@ class FollowUpBloc extends Bloc<FollowUpEvent, FollowUpState> {
         };
 
         for (final scope in scopes) {
-          final sessions = sessionsByScope[scope.key] ?? [];
+          final sessions = recentSessionsByScope[scope.key] ?? [];
           if (sessions.isEmpty) continue;
 
           // A newly created but not yet recorded sheet is not an attendance
@@ -231,13 +251,35 @@ class FollowUpBloc extends Bloc<FollowUpEvent, FollowUpState> {
               }
               urgentAbsences.add({
                 'member': member,
+                'meetingId': scope.meeting.id,
+                'meetingName': scope.meeting.nameAr,
+                'classId': scope.classEntity?.id,
                 'className': scope.classEntity?.nameAr ?? scope.meeting.nameAr,
                 'consecutiveCount': consecutiveCount,
                 'latestSessionId': recordedSessions[0].id,
+                'latestSessionDate': recordedSessions[0].sessionDate,
               });
             }
           }
         }
+
+        urgentAbsences.sort((a, b) {
+          final meetingCompare = (a['meetingName'] as String).compareTo(
+            b['meetingName'] as String,
+          );
+          if (meetingCompare != 0) return meetingCompare;
+          final meetingIdCompare = (a['meetingId'] as String).compareTo(
+            b['meetingId'] as String,
+          );
+          if (meetingIdCompare != 0) return meetingIdCompare;
+          final classCompare = (a['className'] as String).compareTo(
+            b['className'] as String,
+          );
+          if (classCompare != 0) return classCompare;
+          return (a['member'] as MemberEntity).fullName.compareTo(
+            (b['member'] as MemberEntity).fullName,
+          );
+        });
 
         final visibleMembers = isAdmin
             ? members
@@ -261,6 +303,9 @@ class FollowUpBloc extends Bloc<FollowUpEvent, FollowUpState> {
                       .toList(),
             servants: servants,
             members: visibleMembers,
+            sessionsById: sessionsById,
+            meetingsById: {for (final meeting in meetings) meeting.id: meeting},
+            classesById: {for (final cls in classes) cls.id: cls},
             flashMessage: event.flashMessage,
           ),
         );

@@ -18,11 +18,15 @@ String? extractInvitationToken(Uri uri) {
         .map((segment) => segment.trim().toLowerCase())
         .where((segment) => segment.isNotEmpty)
         .toList();
-    final isInvitationPath =
-        segments.isNotEmpty &&
-        (segments.last == 'invite' || segments.contains('invite-redirect'));
+    final isInvitationPath = segments.isNotEmpty &&
+        (segments.last == 'invite' ||
+            segments.contains('invite-redirect') ||
+            segments.last == 'app');
     if (isInvitationPath) {
-      return uri.queryParameters['t']?.trim();
+      return (uri.queryParameters['t'] ??
+              uri.queryParameters['invite'] ??
+              uri.queryParameters['invitation_token'])
+          ?.trim();
     }
   }
 

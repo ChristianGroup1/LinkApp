@@ -170,114 +170,173 @@ class _FollowUpScreenState extends State<FollowUpScreen>
         final row = urgent[index];
         final member = row['member'] as MemberEntity;
         final count = row['consecutiveCount'] as int;
+        final latestSessionDate = intl.DateFormat(
+          'yyyy/MM/dd',
+        ).format(row['latestSessionDate'] as DateTime);
+        final latestMeetingFollowUp = state.followUpHistory.where((followUp) {
+          if (followUp.memberId != member.id || followUp.sessionId == null) {
+            return false;
+          }
+          return state.sessionsById[followUp.sessionId]?.meetingId ==
+              row['meetingId'];
+        }).firstOrNull;
+        final responsibleName = latestMeetingFollowUp == null
+            ? 'لم تسجل متابعة بعد'
+            : state.servants
+                      .where(
+                        (servant) =>
+                            servant.id ==
+                            latestMeetingFollowUp.responsibleUserId,
+                      )
+                      .firstOrNull
+                      ?.fullName ??
+                  'غير محدد';
+        final startsMeetingGroup =
+            index == 0 || urgent[index - 1]['meetingId'] != row['meetingId'];
 
-        return Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            color: AppTheme.cardBackground,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: AppTheme.softShadow,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (startsMeetingGroup)
+              Padding(
+                padding: EdgeInsets.only(top: index == 0 ? 0 : 10, bottom: 10),
+                child: Text(
+                  'اجتماع: ${row['meetingName']}',
+                  style: GoogleFonts.cairo(
+                    color: AppTheme.textDark,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 16,
+                  ),
+                ),
+              ),
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: AppTheme.cardBackground,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: AppTheme.softShadow,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: AppTheme.accentRed.withValues(alpha: 0.08),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.warning_amber_rounded,
-                          color: AppTheme.accentRed,
-                          size: 22,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      Row(
                         children: [
-                          Text(
-                            member.fullName,
-                            style: GoogleFonts.cairo(
-                              fontWeight: FontWeight.w900,
-                              color: AppTheme.textDark,
-                              fontSize: 15,
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: AppTheme.accentRed.withValues(alpha: 0.08),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.warning_amber_rounded,
+                              color: AppTheme.accentRed,
+                              size: 22,
                             ),
                           ),
-                          Text(
-                            row['className'] as String,
-                            style: GoogleFonts.cairo(
-                              color: AppTheme.textLight,
-                              fontSize: 11,
-                            ),
+                          const SizedBox(width: 12),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                member.fullName,
+                                style: GoogleFonts.cairo(
+                                  fontWeight: FontWeight.w900,
+                                  color: AppTheme.textDark,
+                                  fontSize: 15,
+                                ),
+                              ),
+                              if (row['classId'] != null)
+                                Text(
+                                  'الفصل: ${row['className']}',
+                                  style: GoogleFonts.cairo(
+                                    color: AppTheme.textLight,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                            ],
                           ),
                         ],
                       ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppTheme.accentRed.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          count == 1
+                              ? 'غائب آخر كشف'
+                              : 'غائب منذ $count أسابيع',
+                          style: GoogleFonts.cairo(
+                            color: AppTheme.accentRed,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
                     ],
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppTheme.accentRed.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      count == 1 ? 'غائب آخر كشف' : 'غائب منذ $count أسابيع',
+                  if (member.phone != null || member.parentPhone != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'هاتف التواصل: ${member.phone ?? member.parentPhone} (${member.parentName ?? "العضو"})',
                       style: GoogleFonts.cairo(
-                        color: AppTheme.accentRed,
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                        color: AppTheme.textLight,
+                      ),
+                    ),
+                  ],
+                  Text(
+                    'آخر غياب: $latestSessionDate',
+                    style: GoogleFonts.cairo(
+                      fontSize: 12,
+                      color: AppTheme.textLight,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    'المسؤول عن المتابعة: $responsibleName',
+                    style: GoogleFonts.cairo(
+                      fontSize: 12,
+                      color: AppTheme.textLight,
+                    ),
+                  ),
+                  const Divider(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () => _showAddFollowUpDialog(
+                        context,
+                        member,
+                        row['meetingName'] as String,
+                        row['latestSessionId'] as String?,
+                        state.servants,
+                      ),
+                      icon: const Icon(Icons.add_comment_outlined, size: 16),
+                      label: Text(
+                        'تسجيل تقرير المتابعة والتواصل',
+                        style: GoogleFonts.cairo(fontWeight: FontWeight.bold),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.primary,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
                       ),
                     ),
                   ),
                 ],
               ),
-              if (member.phone != null || member.parentPhone != null) ...[
-                const SizedBox(height: 8),
-                Text(
-                  'هاتف التواصل: ${member.phone ?? member.parentPhone} (${member.parentName ?? "العضو"})',
-                  style: GoogleFonts.cairo(
-                    fontSize: 12,
-                    color: AppTheme.textLight,
-                  ),
-                ),
-              ],
-              const Divider(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () => _showAddFollowUpDialog(
-                    context,
-                    member,
-                    row['latestSessionId'] as String?,
-                    state.servants,
-                  ),
-                  icon: const Icon(Icons.add_comment_outlined, size: 16),
-                  label: Text(
-                    'تسجيل تقرير المتابعة والتواصل',
-                    style: GoogleFonts.cairo(fontWeight: FontWeight.bold),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.primary,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         );
       },
     );
@@ -313,6 +372,16 @@ class _FollowUpScreenState extends State<FollowUpScreen>
                 .firstOrNull
                 ?.fullName ??
             'الخادم المسؤول';
+        final session = f.sessionId == null
+            ? null
+            : state.sessionsById[f.sessionId];
+        final meetingName = session == null
+            ? 'الاجتماع المرتبط غير متاح'
+            : state.meetingsById[session.meetingId]?.nameAr ??
+                  'اجتماع غير معروف';
+        final className = session?.classId == null
+            ? null
+            : state.classesById[session!.classId]?.nameAr;
 
         return Container(
           margin: const EdgeInsets.only(bottom: 12),
@@ -337,6 +406,15 @@ class _FollowUpScreenState extends State<FollowUpScreen>
                   ),
                   _buildStatusBadge(f.contactStatus),
                 ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'الاجتماع: $meetingName${className == null ? '' : ' — الفصل: $className'}',
+                style: GoogleFonts.cairo(
+                  fontSize: 12,
+                  color: AppTheme.primary,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
               const SizedBox(height: 6),
               if (f.reason != null && f.reason!.isNotEmpty) ...[
@@ -426,6 +504,7 @@ class _FollowUpScreenState extends State<FollowUpScreen>
   void _showAddFollowUpDialog(
     BuildContext context,
     MemberEntity member,
+    String meetingName,
     String? sessionId,
     List<AppProfile> servants,
   ) {
@@ -452,10 +531,24 @@ class _FollowUpScreenState extends State<FollowUpScreen>
                     fontSize: 16,
                   ),
                 ),
+                contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
                 content: SingleChildScrollView(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: Text(
+                            'الاجتماع: $meetingName',
+                            style: GoogleFonts.cairo(
+                              color: AppTheme.primary,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
                       DropdownButtonFormField<String>(
                         initialValue: selectedStatus,
                         decoration: const InputDecoration(

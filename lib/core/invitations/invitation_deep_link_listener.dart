@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:app_links/app_links.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -41,16 +42,18 @@ class _InvitationDeepLinkListenerState
 
   Future<void> _initializeLinks() async {
     try {
-      final initialUri = await _appLinks.getInitialLink();
+      final initialUri = kIsWeb ? Uri.base : await _appLinks.getInitialLink();
       if (initialUri != null) {
         _queueInvitation(initialUri);
       }
     } catch (_) {}
 
-    _linkSubscription = _appLinks.uriLinkStream.listen(
-      _queueInvitation,
-      onError: (_) {},
-    );
+    if (!kIsWeb) {
+      _linkSubscription = _appLinks.uriLinkStream.listen(
+        _queueInvitation,
+        onError: (_) {},
+      );
+    }
   }
 
   void _queueInvitation(Uri uri) {
