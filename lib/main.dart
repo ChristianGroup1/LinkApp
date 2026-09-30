@@ -288,6 +288,7 @@ class _AuthRecoveryListenerState extends State<AuthRecoveryListener> {
   StreamSubscription? _authSubscription;
   StreamSubscription<Uri>? _linkSubscription;
   String? _lastHandledRecoveryError;
+  bool _recoveryScreenOpened = false;
 
   @override
   void initState() {
@@ -299,11 +300,7 @@ class _AuthRecoveryListenerState extends State<AuthRecoveryListener> {
       data,
     ) {
       if (data.event == AuthChangeEvent.passwordRecovery) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          MyApp.navigatorKey.currentState?.push(
-            MaterialPageRoute(builder: (_) => const ResetPasswordScreen()),
-          );
-        });
+        _openResetPasswordScreen();
         return;
       }
 
@@ -325,6 +322,18 @@ class _AuthRecoveryListenerState extends State<AuthRecoveryListener> {
   }
 
   Future<void> _initializeRecoveryLinks() async {
+    if (kIsWeb) {
+      final initialUri = Uri.base;
+      _handleRecoveryLink(initialUri);
+      if (initialUri.queryParameters['password_recovery'] == '1' &&
+          _hasRecoveryCallback(initialUri) &&
+          extractPasswordRecoveryLinkError(initialUri) == null &&
+          Supabase.instance.client.auth.currentSession != null) {
+        _openResetPasswordScreen();
+      }
+      return;
+    }
+
     try {
       final initialUri = await _appLinks.getInitialLink();
       if (initialUri != null) _handleRecoveryLink(initialUri);
@@ -334,6 +343,31 @@ class _AuthRecoveryListenerState extends State<AuthRecoveryListener> {
       _handleRecoveryLink,
       onError: (_) {},
     );
+  }
+
+  bool _hasRecoveryCallback(Uri uri) {
+    final fragmentParameters = uri.fragment.isEmpty
+        ? const <String, String>{}
+        : Uri.splitQueryString(uri.fragment);
+    return (uri.queryParameters['code']?.isNotEmpty ?? false) ||
+        (uri.queryParameters['access_token']?.isNotEmpty ?? false) ||
+        (fragmentParameters['access_token']?.isNotEmpty ?? false);
+  }
+
+  void _openResetPasswordScreen() {
+    if (_recoveryScreenOpened) return;
+    _recoveryScreenOpened = true;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final navigator = MyApp.navigatorKey.currentState;
+      if (navigator == null || !navigator.mounted) {
+        _recoveryScreenOpened = false;
+        return;
+      }
+      navigator.push(
+        MaterialPageRoute(builder: (_) => const ResetPasswordScreen()),
+      );
+    });
   }
 
   void _handleRecoveryLink(Uri uri) {

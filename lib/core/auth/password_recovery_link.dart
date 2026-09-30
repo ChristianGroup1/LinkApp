@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 
-const passwordResetRedirectUrl = 'io.supabase.link://reset-password';
+String get passwordResetRedirectUrl => kIsWeb
+    ? 'https://linkchurch.space/reset-password'
+    : 'io.supabase.link://reset-password';
 
 class PasswordRecoveryLinkError {
   final String code;
@@ -21,11 +23,16 @@ class PasswordRecoveryLinkError {
 }
 
 PasswordRecoveryLinkError? extractPasswordRecoveryLinkError(Uri uri) {
-  // PWA does not handle password-reset email links.
-  if (kIsWeb) return null;
-
-  final isRecoveryLink =
+  final isNativeRecoveryLink =
       uri.scheme == 'io.supabase.link' && uri.host == 'reset-password';
+  final pathSegments = uri.pathSegments
+      .map((segment) => segment.trim().toLowerCase())
+      .where((segment) => segment.isNotEmpty);
+  final isWebRecoveryLink =
+      (uri.scheme == 'http' || uri.scheme == 'https') &&
+      (pathSegments.contains('reset-password') ||
+          uri.queryParameters['password_recovery'] == '1');
+  final isRecoveryLink = isNativeRecoveryLink || isWebRecoveryLink;
   if (!isRecoveryLink) return null;
 
   final parameters = <String, String>{...uri.queryParameters};
