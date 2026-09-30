@@ -208,16 +208,6 @@ class _ProfileActionsCard extends StatelessWidget {
         ),
         Divider(height: 1, color: AppTheme.border.withValues(alpha: 0.7)),
         _ProfileActionRow(
-          icon: Icons.new_releases_outlined,
-          title: 'تحديثات التطبيق',
-          subtitle: 'اعرف الجديد في كل إصدار',
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const ReleaseNotesScreen()),
-          ),
-        ),
-        Divider(height: 1, color: AppTheme.border.withValues(alpha: 0.7)),
-        _ProfileActionRow(
           icon: Icons.bug_report_outlined,
           title: 'الإبلاغ عن مشكلة',
           subtitle: 'أرسل تفاصيل المشكلة لفريق دعم Link',
