@@ -16,6 +16,7 @@ import '../../../presentation/screens/app_tour_screen.dart';
 import '../../../presentation/screens/my_invitations_screen.dart';
 import '../../../presentation/widgets/in_app_spotlight_overlay.dart';
 import '../../../shared/ui/app_widgets.dart';
+import '../../updates/presentation/release_notes_screen.dart';
 import '../logic/church_bloc.dart';
 import 'servants_permissions_screen.dart';
 import 'widgets/compact_settings_dialog.dart';
@@ -184,8 +185,8 @@ class _ProfileActionsCard extends StatelessWidget {
         Divider(height: 1, color: AppTheme.border.withValues(alpha: 0.7)),
         _ProfileActionRow(
           icon: Icons.auto_awesome_rounded,
-          title: 'جولة في التطبيق 🚀',
-          subtitle: 'عرض الجولة التعريفية المباشرة لميزات التطبيق',
+          title: 'كيف أستخدم التطبيق؟',
+          subtitle: 'شرح خطوات إعداد الخدمة وتسجيل الحضور',
           onTap: () async {
             await AppTourScreen.resetTourCompleted();
             if (context.mounted) {
@@ -205,6 +206,16 @@ class _ProfileActionsCard extends StatelessWidget {
               }
             }
           },
+        ),
+        Divider(height: 1, color: AppTheme.border.withValues(alpha: 0.7)),
+        _ProfileActionRow(
+          icon: Icons.new_releases_outlined,
+          title: 'تحديثات التطبيق',
+          subtitle: 'اعرف الجديد في كل إصدار',
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const ReleaseNotesScreen()),
+          ),
         ),
         Divider(height: 1, color: AppTheme.border.withValues(alpha: 0.7)),
         _ProfileActionRow(

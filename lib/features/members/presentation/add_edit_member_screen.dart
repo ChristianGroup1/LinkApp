@@ -388,7 +388,7 @@ class _AddEditMemberScreenState extends State<AddEditMemberScreen> {
             surfaceTintColor: Colors.transparent,
             elevation: 0,
             title: Text(
-              isEdit ? 'تعديل بيانات العضو' : 'إضافة عضو جديد',
+              isEdit ? 'تعديل بيانات المخدوم' : 'إضافة مخدوم جديد',
               style: GoogleFonts.cairo(
                 color: AppTheme.textDark,
                 fontWeight: FontWeight.w900,

@@ -50,6 +50,7 @@ Map<String, dynamic> memberToJson(MemberEntity member) => {
   'scope': member.scope.value,
   'sunday_school_class_id': member.sundaySchoolClassId,
   'meeting_id': member.meetingId,
+  'meeting_ids': member.meetingIds,
   'phone': member.phone,
   'parent_name': member.parentName,
   'parent_phone': member.parentPhone,
@@ -68,6 +69,9 @@ Map<String, dynamic> sessionToJson(AttendanceSessionEntity session) => {
   'session_date': session.sessionDate.toIso8601String().split('T').first,
   'week_number': session.weekNumber,
   'title': session.title,
+  'is_locked': session.isLocked,
+  'locked_at': session.lockedAt?.toIso8601String(),
+  'locked_by': session.lockedBy,
 };
 
 Map<String, dynamic> followUpToJson(FollowUpEntity followUp) => {

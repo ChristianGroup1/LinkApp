@@ -142,6 +142,8 @@ String? _databaseMessage(String? code, String lower) {
   switch (code) {
     case '42501':
       return _notAllowed;
+    case '55000':
+      return 'سجل الحضور مقفول ولا يمكن تعديله. اطلب من مسؤول الكنيسة إعادة فتحه.';
     case '23505':
       return 'توجد بيانات مسجلة بنفس القيمة بالفعل (كود أو اسم مكرر). '
           'غيّر القيمة ثم أعد المحاولة.';

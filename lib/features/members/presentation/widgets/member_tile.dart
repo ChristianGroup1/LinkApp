@@ -49,6 +49,15 @@ class MemberTile extends StatelessWidget {
       destinationLabel = mtg?.nameAr ?? 'اجتماع';
       destinationIcon = Icons.groups_3_rounded;
     }
+    final additionalMeetingsCount = member.meetingIds
+        .where((id) => id != member.meetingId)
+        .length;
+    if (additionalMeetingsCount > 0) {
+      final suffix = additionalMeetingsCount == 1
+          ? 'اجتماع إضافي'
+          : '$additionalMeetingsCount اجتماعات إضافية';
+      destinationLabel = '$destinationLabel + $suffix';
+    }
 
     final accent = member.scope == MemberScope.sundaySchoolClass
         ? AppTheme.primary

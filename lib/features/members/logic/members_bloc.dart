@@ -178,6 +178,23 @@ class MembersBloc extends Bloc<MembersEvent, MembersState> {
   bool _isAdmin = false;
   Set<String> _viewClassIds = {};
   Set<String> _viewMeetingIds = {};
+  Set<String> _manageClassIds = {};
+  Set<String> _manageMeetingIds = {};
+
+  bool canManageMember(MemberEntity member) {
+    if (_isAdmin) return true;
+    if (member.scope == MemberScope.sundaySchoolClass) {
+      return member.sundaySchoolClassId != null &&
+          _manageClassIds.contains(member.sundaySchoolClassId);
+    }
+    return _manageMeetingIds.contains(member.meetingId);
+  }
+
+  bool canViewMeeting(String meetingId) =>
+      _isAdmin || _viewMeetingIds.contains(meetingId);
+
+  bool canManageMeeting(String meetingId) =>
+      _isAdmin || _manageMeetingIds.contains(meetingId);
 
   MembersBloc({required this.repository}) : super(MembersInitial()) {
     on<LoadMembers>((event, emit) async {
@@ -203,6 +220,10 @@ class MembersBloc extends Bloc<MembersEvent, MembersState> {
               )
               .map((a) => a['class_id'] as String)
               .toSet();
+          _manageClassIds = assignments[0]
+              .where((a) => a['can_take_attendance'] as bool? ?? true)
+              .map((a) => a['class_id'] as String)
+              .toSet();
           _viewMeetingIds = assignments[1]
               .where(
                 (a) =>
@@ -211,9 +232,15 @@ class MembersBloc extends Bloc<MembersEvent, MembersState> {
               )
               .map((a) => a['meeting_id'] as String)
               .toSet();
+          _manageMeetingIds = assignments[1]
+              .where((a) => a['can_take_attendance'] as bool? ?? true)
+              .map((a) => a['meeting_id'] as String)
+              .toSet();
         } else {
           _viewClassIds = {};
           _viewMeetingIds = {};
+          _manageClassIds = {};
+          _manageMeetingIds = {};
         }
 
         final scoped = _scopeMembers(members);
@@ -274,7 +301,17 @@ class MembersBloc extends Bloc<MembersEvent, MembersState> {
     on<MembersRealtimeUpdated>((event, emit) {
       final currentState = state;
       if (currentState is! MembersLoaded) return;
-      final scoped = _scopeMembers(event.members);
+      final previousMembers = {
+        for (final member in currentState.allMembers) member.id: member,
+      };
+      final refreshedMembers = event.members.map((member) {
+        final previous = previousMembers[member.id];
+        if (previous == null) return member;
+        return member.copyWith(
+          meetingIds: {...previous.meetingIds, ...member.meetingIds}.toList(),
+        );
+      });
+      final scoped = _scopeMembers(refreshedMembers.toList());
       emit(
         currentState.copyWith(
           allMembers: scoped,
@@ -404,6 +441,7 @@ class MembersBloc extends Bloc<MembersEvent, MembersState> {
       for (final member in members)
         if ((member.sundaySchoolClassId != null &&
                 _viewClassIds.contains(member.sundaySchoolClassId)) ||
+            member.meetingIds.any(_viewMeetingIds.contains) ||
             (member.meetingId != null &&
                 _viewMeetingIds.contains(member.meetingId)))
           member,
@@ -428,7 +466,9 @@ class MembersBloc extends Bloc<MembersEvent, MembersState> {
           .toList();
     }
     if (meetingIdFilter != null && meetingIdFilter.isNotEmpty) {
-      filtered = filtered.where((m) => m.meetingId == meetingIdFilter).toList();
+      filtered = filtered
+          .where((m) => m.meetingIds.contains(meetingIdFilter))
+          .toList();
     }
     if (query.trim().isNotEmpty) {
       final queryLower = query.toLowerCase();

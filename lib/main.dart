@@ -11,6 +11,7 @@ import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
 
 import 'core/analytics/app_analytics_service.dart';
+import 'core/app_update/app_update_gate.dart';
 import 'core/auth/auth_flow_capabilities.dart';
 import 'core/auth/password_recovery_link.dart';
 import 'core/invitations/invitation_deep_link_listener.dart';
@@ -223,19 +224,21 @@ class MyApp extends StatelessWidget {
           locale: const Locale('ar', 'EG'),
           builder: _appBuilder,
           home: OfflineSyncListener(
-            child: InvitationDeepLinkListener(
-              enabled: supabaseEnabled && supportsInvitations,
-              child: AuthRecoveryListener(
-                enabled: supabaseEnabled && supportsPasswordResetEmail,
-                child: BlocListener<AuthBloc, AuthState>(
-                  listenWhen: (previous, current) =>
-                      current is AuthUnauthenticated,
-                  listener: (context, state) {
-                    navigatorKey.currentState?.popUntil(
-                      (route) => route.isFirst,
-                    );
-                  },
-                  child: const AuthenticationGate(),
+            child: AppUpdateGate(
+              child: InvitationDeepLinkListener(
+                enabled: supabaseEnabled && supportsInvitations,
+                child: AuthRecoveryListener(
+                  enabled: supabaseEnabled && supportsPasswordResetEmail,
+                  child: BlocListener<AuthBloc, AuthState>(
+                    listenWhen: (previous, current) =>
+                        current is AuthUnauthenticated,
+                    listener: (context, state) {
+                      navigatorKey.currentState?.popUntil(
+                        (route) => route.isFirst,
+                      );
+                    },
+                    child: const AuthenticationGate(),
+                  ),
                 ),
               ),
             ),

@@ -67,8 +67,10 @@ abstract class OfflineOpType {
   static const memberCreate = 'member.create';
   static const memberUpdate = 'member.update';
   static const memberDelete = 'member.delete';
+  static const memberMeetingCopy = 'member.meeting_copy';
   static const sessionCreate = 'session.create';
   static const sessionDelete = 'session.delete';
+  static const sessionLockState = 'session.lock_state';
   static const followUpCreate = 'follow_up.create';
   static const followUpDelete = 'follow_up.delete';
   static const invitationCreate = 'invitation.create';
@@ -92,6 +94,7 @@ abstract class OfflineOpType {
     classDelete,
     memberCreate,
     memberUpdate,
+    memberMeetingCopy,
     memberDelete,
     sessionCreate,
     sessionDelete,
@@ -107,6 +110,7 @@ abstract class OfflineOpType {
     classAssignmentDelete,
     meetingAssignmentUpsert,
     meetingAssignmentDelete,
+    sessionLockState,
   ];
 }
 
@@ -177,6 +181,43 @@ class OfflineWriteQueue {
     });
   }
 
+  Future<void> setAttendanceSessionLock(QueuedOperation operation) async {
+    await _serialize(() async {
+      final operations = await all();
+      final sessionId = operation.payload['id'] as String;
+      final existingIndex = operations.indexWhere(
+        (item) =>
+            item.type == OfflineOpType.sessionLockState &&
+            item.payload['id'] == sessionId,
+      );
+      final desiredLock = operation.payload['is_locked'] as bool;
+
+      if (existingIndex < 0) {
+        if (desiredLock != operation.payload['previous_is_locked']) {
+          operations.add(operation);
+        }
+      } else {
+        final existing = operations[existingIndex];
+        final originalLock = existing.payload['previous_is_locked'] as bool;
+        if (desiredLock == originalLock) {
+          operations.removeAt(existingIndex);
+        } else {
+          operations[existingIndex] = QueuedOperation(
+            id: existing.id,
+            type: operation.type,
+            payload: {
+              ...operation.payload,
+              'previous_is_locked': originalLock,
+              'previous_session': existing.payload['previous_session'],
+            },
+            queuedAt: existing.queuedAt,
+          );
+        }
+      }
+      await _save(operations);
+    });
+  }
+
   Future<void> remove(String operationId) async {
     await _serialize(() async {
       final operations = await all();
@@ -193,6 +234,27 @@ class OfflineWriteQueue {
         final localId = op.payload['local_id'] as String?;
         return payloadId == entityId || localId == entityId;
       });
+      for (var index = operations.length - 1; index >= 0; index--) {
+        final operation = operations[index];
+        if (operation.type != OfflineOpType.memberMeetingCopy) continue;
+        final memberIds = List<String>.from(
+          operation.payload['member_ids'] as List? ?? const [],
+        )..remove(entityId);
+        if (memberIds.length ==
+            (operation.payload['member_ids'] as List? ?? const []).length) {
+          continue;
+        }
+        if (memberIds.isEmpty) {
+          operations.removeAt(index);
+        } else {
+          operations[index] = QueuedOperation(
+            id: operation.id,
+            type: operation.type,
+            payload: {...operation.payload, 'member_ids': memberIds},
+            queuedAt: operation.queuedAt,
+          );
+        }
+      }
       await _save(operations);
     });
   }

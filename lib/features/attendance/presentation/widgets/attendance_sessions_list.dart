@@ -11,29 +11,61 @@ import '../attendance_recording_screen.dart';
 import 'attendance_date_picker.dart';
 
 final Map<String, AttendanceSummary> _sessionSummaryCache = {};
+final Map<String, Future<AttendanceSummary>> _sessionSummaryLoads = {};
+final Map<String, int> _sessionSummaryVersions = {};
 
 void invalidateSessionSummaryCache([String? sessionId]) {
   if (sessionId == null) {
+    for (final id in {
+      ..._sessionSummaryCache.keys,
+      ..._sessionSummaryLoads.keys,
+    }) {
+      _sessionSummaryVersions[id] = (_sessionSummaryVersions[id] ?? 0) + 1;
+    }
     _sessionSummaryCache.clear();
+    _sessionSummaryLoads.clear();
     return;
   }
+  _sessionSummaryVersions[sessionId] =
+      (_sessionSummaryVersions[sessionId] ?? 0) + 1;
   _sessionSummaryCache.remove(sessionId);
+  _sessionSummaryLoads.remove(sessionId);
+}
+
+Future<AttendanceSummary> _loadOrJoinSessionSummary(
+  DatabaseRepository repository,
+  AttendanceSessionEntity session,
+) {
+  final cached = _sessionSummaryCache[session.id];
+  if (cached != null) return Future.value(cached);
+
+  final activeLoad = _sessionSummaryLoads[session.id];
+  if (activeLoad != null) return activeLoad;
+
+  final version = _sessionSummaryVersions[session.id] ?? 0;
+  late final Future<AttendanceSummary> load;
+  load = loadAttendanceSessionSummary(repository, session)
+      .then((summary) {
+        if ((_sessionSummaryVersions[session.id] ?? 0) == version) {
+          _sessionSummaryCache[session.id] = summary;
+        }
+        return summary;
+      })
+      .whenComplete(() {
+        if (identical(_sessionSummaryLoads[session.id], load)) {
+          _sessionSummaryLoads.remove(session.id);
+        }
+      });
+  _sessionSummaryLoads[session.id] = load;
+  return load;
 }
 
 Future<void> prefetchAttendanceSessionSummaries(
   DatabaseRepository repository,
   List<AttendanceSessionEntity> sessions,
 ) async {
-  final uncached = sessions
-      .where((session) => !_sessionSummaryCache.containsKey(session.id))
-      .toList(growable: false);
-  if (uncached.isEmpty) return;
-
   await Future.wait(
-    uncached.map((session) async {
-      final summary = await loadAttendanceSessionSummary(repository, session);
-      _sessionSummaryCache[session.id] = summary;
-    }),
+    sessions.map((session) => _loadOrJoinSessionSummary(repository, session)),
   );
 }
 
@@ -240,11 +272,10 @@ class _AttendanceSessionCardState extends State<AttendanceSessionCard> {
   }
 
   Future<void> _loadSummary() async {
-    final summary = await loadAttendanceSessionSummary(
+    final summary = await _loadOrJoinSessionSummary(
       widget.repository,
       widget.session,
     );
-    _sessionSummaryCache[widget.session.id] = summary;
     if (!mounted) return;
     setState(() => _summary = summary);
   }
@@ -682,8 +713,7 @@ class _SessionTileState extends State<_SessionTile> {
 
   Future<void> _loadSummary() async {
     final repo = context.read<DatabaseRepository>();
-    final summary = await loadAttendanceSessionSummary(repo, widget.session);
-    _sessionSummaryCache[widget.session.id] = summary;
+    final summary = await _loadOrJoinSessionSummary(repo, widget.session);
     if (!mounted) return;
     setState(() => _summary = summary);
   }
@@ -794,7 +824,16 @@ class _SessionTileState extends State<_SessionTile> {
                     ],
                   ),
                 ),
-                if (widget.canDelete)
+                if (session.isLocked)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 4),
+                    child: Icon(
+                      Icons.lock_rounded,
+                      color: AppTheme.accentOrange,
+                      size: 18,
+                    ),
+                  ),
+                if (widget.canDelete && !session.isLocked)
                   IconButton(
                     visualDensity: VisualDensity.compact,
                     icon: const Icon(

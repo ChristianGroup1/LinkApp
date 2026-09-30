@@ -58,7 +58,12 @@ mixin _SupabaseInvitationsRepository on _SupabaseRepositoryBase {
   }
 
   @override
-  Future<List<HelperInvitation>> getInvitations() async {
+  Future<List<HelperInvitation>> getInvitations() => _joinReadRequest(
+    'invitations:${_client.auth.currentUser?.id ?? "signed-out"}',
+    _loadInvitations,
+  );
+
+  Future<List<HelperInvitation>> _loadInvitations() async {
     final profile = await getCurrentProfile();
     if (profile?.churchId == null) return [];
 

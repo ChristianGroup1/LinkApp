@@ -13,6 +13,7 @@ import '../../../shared/ui/app_widgets.dart';
 import '../../attendance/presentation/attendance_records_screen.dart';
 import '../../follow_up/presentation/follow_up_screen.dart';
 import '../../meetings/presentation/meetings_list_screen.dart';
+import '../../members/presentation/members_list_screen.dart';
 import '../../reports/presentation/reports_screen.dart';
 import '../logic/church_bloc.dart';
 import 'servants_permissions_screen.dart';
@@ -152,6 +153,11 @@ class DashboardScreen extends StatelessWidget {
                             key: meetingsKey,
                             child: _buildMeetingsEntryCard(context),
                           ),
+                          const SizedBox(height: 18),
+                        ],
+
+                        if (homeState.canManageMembers) ...[
+                          _buildServedPeopleEntryCard(context),
                           const SizedBox(height: 18),
                         ],
 
@@ -556,8 +562,8 @@ class DashboardScreen extends StatelessWidget {
     return AppActionTile(
       icon: Icons.auto_awesome_rounded,
       iconColor: const Color(0xFF2563EB),
-      title: 'جولة في التطبيق 🚀',
-      subtitle: 'الشرح التفاعلي والمباشر لكافة أقسام وأزرار الخدمة.',
+      title: 'كيف أستخدم التطبيق؟',
+      subtitle: 'شرح سريع: أنشئ اجتماعاً، أضف مخدومين، ثم سجّل الحضور.',
       onTap: () async {
         await AppTourScreen.resetTourCompleted();
         if (context.mounted) {
@@ -627,6 +633,19 @@ class DashboardScreen extends StatelessWidget {
       title: 'الاجتماعات',
       subtitle: 'أدر الاجتماعات والفصول التابعة لها.',
       onTap: () => _openMeetingsAndRefreshHome(context),
+    );
+  }
+
+  Widget _buildServedPeopleEntryCard(BuildContext context) {
+    return AppActionTile(
+      icon: Icons.person_add_alt_1_rounded,
+      iconColor: AppTheme.secondary,
+      title: 'المخدومين',
+      subtitle: 'عرض المخدومين وإضافة مخدوم جديد.',
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const MembersListScreen()),
+      ),
     );
   }
 

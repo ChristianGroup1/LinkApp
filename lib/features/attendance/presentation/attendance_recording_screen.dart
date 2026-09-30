@@ -72,11 +72,17 @@ class _AttendanceRecordingScreenState extends State<AttendanceRecordingScreen> {
       final state = context.read<AttendanceBloc>().state;
       // Never overwrite attendance the servant is currently editing.
       if (state is AttendanceSheetLoaded && !state.isDirty && !state.isSaving) {
-        unawaited(Future<void>.delayed(const Duration(milliseconds: 600), () {
-          if (mounted && ConnectivityService.instance.isOnline.value) {
-            context.read<AttendanceBloc>().add(LoadAttendanceSheet(widget.session));
-          }
-        }));
+        unawaited(
+          Future<void>.delayed(const Duration(milliseconds: 600), () {
+            if (mounted && ConnectivityService.instance.isOnline.value) {
+              final latestState = context.read<AttendanceBloc>().state;
+              final session = latestState is AttendanceSheetLoaded
+                  ? latestState.session
+                  : widget.session;
+              context.read<AttendanceBloc>().add(LoadAttendanceSheet(session));
+            }
+          }),
+        );
       }
     }
     _wasOffline = !online;
@@ -85,7 +91,9 @@ class _AttendanceRecordingScreenState extends State<AttendanceRecordingScreen> {
   @override
   void dispose() {
     if (_connectivityListening) {
-      ConnectivityService.instance.isOnline.removeListener(_onConnectivityChanged);
+      ConnectivityService.instance.isOnline.removeListener(
+        _onConnectivityChanged,
+      );
     }
     _searchController.dispose();
     super.dispose();
@@ -153,7 +161,7 @@ class _AttendanceRecordingScreenState extends State<AttendanceRecordingScreen> {
                       color: AppTheme.primary,
                     ),
                     title: Text(
-                      'إضافة عضو جديد',
+                      'إضافة مخدوم جديد',
                       style: GoogleFonts.cairo(fontWeight: FontWeight.bold),
                     ),
                     onTap: () {
@@ -168,6 +176,43 @@ class _AttendanceRecordingScreenState extends State<AttendanceRecordingScreen> {
         );
       },
     );
+  }
+
+  Future<void> _confirmAttendanceLock({
+    required BuildContext context,
+    required bool locked,
+  }) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(
+          locked ? 'قفل سجل الحضور' : 'إعادة فتح سجل الحضور',
+          style: GoogleFonts.cairo(fontWeight: FontWeight.w800),
+        ),
+        content: Text(
+          locked
+              ? 'بعد القفل لن يستطيع أحد تعديل بيانات الحضور والغياب. إعادة فتح السجل متاحة لمسؤول الكنيسة فقط. هل تريد المتابعة؟'
+              : 'بعد إعادة الفتح سيصبح تعديل بيانات الحضور والغياب متاحًا للمخدّمين المصرح لهم. هل تريد المتابعة؟',
+          style: GoogleFonts.cairo(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text('إلغاء', style: GoogleFonts.cairo()),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(
+              locked ? 'قفل السجل' : 'إعادة الفتح',
+              style: GoogleFonts.cairo(),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && context.mounted) {
+      context.read<AttendanceBloc>().add(SetAttendanceSessionLock(locked));
+    }
   }
 
   Future<void> _openAddMemberScreen(BuildContext context) async {
@@ -248,6 +293,8 @@ class _AttendanceRecordingScreenState extends State<AttendanceRecordingScreen> {
               content: Text(state.flashMessage!, style: GoogleFonts.cairo()),
               backgroundColor: state.savedOffline
                   ? AppTheme.accentOrange
+                  : state.flashMessage!.startsWith('تعذر')
+                  ? AppTheme.accentRed
                   : Colors.green,
               behavior: SnackBarBehavior.floating,
             ),
@@ -310,9 +357,41 @@ class _AttendanceRecordingScreenState extends State<AttendanceRecordingScreen> {
                   IconButton(
                     icon: const Icon(Icons.tune_rounded),
                     tooltip: 'إجراءات سريعة',
-                    onPressed: sheet == null
+                    onPressed: sheet == null || sheet.session.isLocked
                         ? null
                         : () => _showBulkActionsSheet(context),
+                  ),
+                  BlocBuilder<ChurchBloc, ChurchState>(
+                    builder: (context, churchState) {
+                      if (churchState is! ChurchContextLoaded ||
+                          sheet == null) {
+                        return const SizedBox.shrink();
+                      }
+                      final isChurchAdmin =
+                          churchState.profile.role == AppRole.churchAdmin;
+                      if (sheet.session.isLocked && !isChurchAdmin) {
+                        return const SizedBox.shrink();
+                      }
+                      return IconButton(
+                        icon: Icon(
+                          sheet.session.isLocked
+                              ? Icons.lock_open_rounded
+                              : Icons.lock_outline_rounded,
+                          color: sheet.session.isLocked
+                              ? AppTheme.accentOrange
+                              : AppTheme.textLight,
+                        ),
+                        tooltip: sheet.session.isLocked
+                            ? 'إعادة فتح السجل (مسؤول الكنيسة)'
+                            : 'قفل سجل الحضور',
+                        onPressed: sheet.isDirty || sheet.isSaving
+                            ? null
+                            : () => _confirmAttendanceLock(
+                                context: context,
+                                locked: !sheet.session.isLocked,
+                              ),
+                      );
+                    },
                   ),
                   BlocBuilder<ChurchBloc, ChurchState>(
                     builder: (context, churchState) {
@@ -327,44 +406,49 @@ class _AttendanceRecordingScreenState extends State<AttendanceRecordingScreen> {
                           color: AppTheme.accentRed,
                         ),
                         tooltip: 'حذف السجل',
-                        onPressed: () {
-                          showDialog(
-                            context: context,
-                            builder: (dialogContext) => AlertDialog(
-                              title: Text(
-                                'تأكيد الحذف',
-                                style: GoogleFonts.cairo(),
-                              ),
-                              content: Text(
-                                'هل أنت متأكد من حذف هذا السجل نهائياً؟',
-                                style: GoogleFonts.cairo(),
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(dialogContext),
-                                  child: Text(
-                                    'إلغاء',
-                                    style: GoogleFonts.cairo(),
+                        onPressed: sheet?.session.isLocked == true
+                            ? null
+                            : () {
+                                showDialog(
+                                  context: context,
+                                  builder: (dialogContext) => AlertDialog(
+                                    title: Text(
+                                      'تأكيد الحذف',
+                                      style: GoogleFonts.cairo(),
+                                    ),
+                                    content: Text(
+                                      'هل أنت متأكد من حذف هذا السجل نهائياً؟',
+                                      style: GoogleFonts.cairo(),
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () =>
+                                            Navigator.pop(dialogContext),
+                                        child: Text(
+                                          'إلغاء',
+                                          style: GoogleFonts.cairo(),
+                                        ),
+                                      ),
+                                      TextButton(
+                                        onPressed: () {
+                                          setState(() => _allowPop = true);
+                                          context.read<AttendanceBloc>().add(
+                                            DeleteSession(widget.session.id),
+                                          );
+                                          Navigator.pop(dialogContext);
+                                          Navigator.pop(context);
+                                        },
+                                        child: Text(
+                                          'حذف',
+                                          style: GoogleFonts.cairo(
+                                            color: Colors.red,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                ),
-                                TextButton(
-                                  onPressed: () {
-                                    setState(() => _allowPop = true);
-                                    context.read<AttendanceBloc>().add(
-                                      DeleteSession(widget.session.id),
-                                    );
-                                    Navigator.pop(dialogContext);
-                                    Navigator.pop(context);
-                                  },
-                                  child: Text(
-                                    'حذف',
-                                    style: GoogleFonts.cairo(color: Colors.red),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
+                                );
+                              },
                       );
                     },
                   ),
@@ -410,9 +494,9 @@ class _AttendanceRecordingScreenState extends State<AttendanceRecordingScreen> {
     final present = _countStatus(state.statusMap, AttendanceStatus.present);
     final absent = _countStatus(state.statusMap, AttendanceStatus.absent);
     final excused = _countStatus(state.statusMap, AttendanceStatus.excused);
-    final date = widget.session.sessionDate;
+    final date = state.session.sessionDate;
     final sessionLabel =
-        widget.session.title ?? sessionTitle(widget.session.sessionDate);
+        state.session.title ?? sessionTitle(state.session.sessionDate);
 
     return Column(
       children: [
@@ -427,11 +511,47 @@ class _AttendanceRecordingScreenState extends State<AttendanceRecordingScreen> {
             excused: excused,
           ),
         ),
+        if (state.session.isLocked)
+          Container(
+            width: double.infinity,
+            margin: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppTheme.accentOrange.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: AppTheme.accentOrange.withValues(alpha: 0.35),
+              ),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.lock_rounded,
+                  color: AppTheme.accentOrange,
+                  size: 18,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'هذا السجل مقفول ولا يمكن تعديله. مسؤول الكنيسة فقط يمكنه إعادة فتحه.',
+                    style: GoogleFonts.cairo(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.textDark,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         if (_qrInputMode != QrAttendanceInputMode.unsupported)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
             child: FilledButton.icon(
-              onPressed: state.isSaving || state.allMembers.isEmpty
+              onPressed:
+                  state.session.isLocked ||
+                      state.isSaving ||
+                      state.allMembers.isEmpty
                   ? null
                   : () => _scanAttendanceQr(context, state),
               style: FilledButton.styleFrom(
@@ -513,6 +633,7 @@ class _AttendanceRecordingScreenState extends State<AttendanceRecordingScreen> {
                       context: context,
                       member: member,
                       currentStatus: currentStatus,
+                      enabled: !state.session.isLocked,
                     );
                   },
                 ),
@@ -649,6 +770,7 @@ class _AttendanceRecordingScreenState extends State<AttendanceRecordingScreen> {
     required BuildContext context,
     required MemberEntity member,
     required AttendanceStatus currentStatus,
+    required bool enabled,
   }) {
     final accent = _statusColor(currentStatus);
     final initial = member.fullName.trim().isEmpty
@@ -726,6 +848,7 @@ class _AttendanceRecordingScreenState extends State<AttendanceRecordingScreen> {
                         color: AppTheme.secondary,
                         icon: Icons.check_rounded,
                         label: 'حاضر',
+                        enabled: enabled,
                       ),
                       const SizedBox(width: 6),
                       _buildStatusIconButton(
@@ -736,6 +859,7 @@ class _AttendanceRecordingScreenState extends State<AttendanceRecordingScreen> {
                         color: AppTheme.accentRed,
                         icon: Icons.close_rounded,
                         label: 'غائب',
+                        enabled: enabled,
                       ),
                       const SizedBox(width: 6),
                       _buildStatusIconButton(
@@ -746,6 +870,7 @@ class _AttendanceRecordingScreenState extends State<AttendanceRecordingScreen> {
                         color: AppTheme.accentOrange,
                         icon: Icons.info_outline_rounded,
                         label: 'مستأذن',
+                        enabled: enabled,
                       ),
                     ],
                   ),
@@ -830,7 +955,7 @@ class _AttendanceRecordingScreenState extends State<AttendanceRecordingScreen> {
                   width: double.infinity,
                   height: 50,
                   child: FilledButton.icon(
-                    onPressed: state.isSaving
+                    onPressed: state.session.isLocked || state.isSaving
                         ? null
                         : () => context.read<AttendanceBloc>().add(
                             SaveAttendanceSheet(),
@@ -911,6 +1036,7 @@ class _AttendanceRecordingScreenState extends State<AttendanceRecordingScreen> {
     required Color color,
     required IconData icon,
     required String label,
+    required bool enabled,
   }) {
     final isSelected = current == status;
 
@@ -922,11 +1048,13 @@ class _AttendanceRecordingScreenState extends State<AttendanceRecordingScreen> {
         message: label,
         child: InkWell(
           customBorder: const CircleBorder(),
-          onTap: () {
-            context.read<AttendanceBloc>().add(
-              UpdateMemberStatus(memberId: memberId, status: status),
-            );
-          },
+          onTap: enabled
+              ? () {
+                  context.read<AttendanceBloc>().add(
+                    UpdateMemberStatus(memberId: memberId, status: status),
+                  );
+                }
+              : null,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 180),
             width: 36,

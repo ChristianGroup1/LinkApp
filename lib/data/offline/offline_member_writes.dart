@@ -41,7 +41,9 @@ mixin _OfflineMemberWrites on _OfflineWriteHandlerBase {
             'is_active': true,
             'joined_on': DateTime.now().toIso8601String().split('T').first,
           })
-          .select()
+          .select(
+            '*,member_meeting_assignments(meeting_id,sunday_school_class_id)',
+          )
           .single();
       final member = MemberEntity.fromJson(row);
       await cache.upsertMember(churchId, member);
@@ -57,6 +59,9 @@ mixin _OfflineMemberWrites on _OfflineWriteHandlerBase {
         scope: scope,
         sundaySchoolClassId: sundaySchoolClassId,
         meetingId: meetingId,
+        meetingIds: scope == MemberScope.meeting && meetingId != null
+            ? [meetingId]
+            : const [],
         phone: emptyToNull(phone),
         parentName: emptyToNull(parentName),
         parentPhone: emptyToNull(parentPhone),
@@ -131,7 +136,12 @@ mixin _OfflineMemberWrites on _OfflineWriteHandlerBase {
           'joined_on': joinedOn,
         });
       }
-      final rows = await client.from('members').insert(payload).select();
+      final rows = await client
+          .from('members')
+          .insert(payload)
+          .select(
+            '*,member_meeting_assignments(meeting_id,sunday_school_class_id)',
+          );
       final members = [for (final row in rows) MemberEntity.fromJson(row)];
       for (final member in members) {
         await cache.upsertMember(churchId, member);
@@ -163,6 +173,93 @@ mixin _OfflineMemberWrites on _OfflineWriteHandlerBase {
     }
   }
 
+  Future<OfflineSaveResult<int>> copyMembersToMeeting({
+    required List<String> memberIds,
+    required String meetingId,
+  }) async {
+    final uniqueMemberIds = memberIds.toSet().toList(growable: false);
+    if (uniqueMemberIds.isEmpty) {
+      return const OfflineSaveResult(data: 0, syncedToServer: true);
+    }
+    final profile = await _requireProfile();
+    final churchId = profile.churchId!;
+
+    Future<void> updateCachedMemberships(String targetMeetingId) async {
+      final cachedMembers = await cache.readMembers(churchId) ?? const [];
+      final selectedIds = uniqueMemberIds.toSet();
+      final updatedMembers = cachedMembers.map((member) {
+        if (!selectedIds.contains(member.id) ||
+            member.meetingIds.contains(targetMeetingId)) {
+          return member;
+        }
+        return member.copyWith(
+          meetingIds: [...member.meetingIds, targetMeetingId],
+        );
+      }).toList();
+      await cache.saveMembers(
+        churchId,
+        updatedMembers.map(memberToJson).toList(),
+      );
+    }
+
+    Future<OfflineSaveResult<int>> queueCopy() async {
+      await updateCachedMemberships(meetingId);
+      await queue.enqueue(
+        QueuedOperation(
+          id: await queue.generateId('op'),
+          type: OfflineOpType.memberMeetingCopy,
+          payload: {
+            'church_id': churchId,
+            'meeting_id': meetingId,
+            'member_ids': uniqueMemberIds,
+          },
+          queuedAt: DateTime.now(),
+        ),
+      );
+      return OfflineSaveResult(
+        data: uniqueMemberIds.length,
+        syncedToServer: false,
+      );
+    }
+
+    try {
+      await _throwIfKnownOffline();
+      final resolvedMeetingId = await queue.resolveId(meetingId);
+      final resolvedMemberIds = <String>[];
+      for (final memberId in uniqueMemberIds) {
+        final resolvedMemberId = await queue.resolveId(memberId);
+        if (isOfflineId(resolvedMemberId)) return queueCopy();
+        resolvedMemberIds.add(resolvedMemberId);
+      }
+      if (isOfflineId(resolvedMeetingId)) return queueCopy();
+
+      await client
+          .from('member_meeting_assignments')
+          .upsert(
+            [
+              for (final memberId in resolvedMemberIds)
+                {
+                  'church_id': churchId,
+                  'member_id': memberId,
+                  'meeting_id': resolvedMeetingId,
+                  'sunday_school_class_id': null,
+                  'is_primary': false,
+                },
+            ],
+            onConflict: 'member_id,meeting_id',
+            ignoreDuplicates: true,
+          );
+      await updateCachedMemberships(resolvedMeetingId);
+      return OfflineSaveResult(
+        data: uniqueMemberIds.length,
+        syncedToServer: true,
+      );
+    } catch (error) {
+      if (!isRecoverableOfflineError(error)) rethrow;
+      return queueCopy();
+    }
+  }
+
   Future<OfflineSaveResult<MemberEntity>> updateMember({
     required String id,
     required String fullName,
@@ -186,6 +283,18 @@ mixin _OfflineMemberWrites on _OfflineWriteHandlerBase {
     final resolvedMeetingId = meetingId == null
         ? null
         : await queue.resolveId(meetingId);
+    final cachedMembers = await cache.readMembers(churchId) ?? const [];
+    final existingMember = cachedMembers
+        .where((member) => member.id == resolvedId || member.id == id)
+        .firstOrNull;
+    final existingMeetingIds = {...?existingMember?.meetingIds};
+    if (existingMember?.scope == MemberScope.meeting &&
+        existingMember?.meetingId != meetingId) {
+      existingMeetingIds.remove(existingMember!.meetingId);
+    }
+    if (scope == MemberScope.meeting && meetingId != null) {
+      existingMeetingIds.add(meetingId);
+    }
 
     if (isOfflineId(id) && resolvedId == id) {
       final member = MemberEntity(
@@ -195,6 +304,7 @@ mixin _OfflineMemberWrites on _OfflineWriteHandlerBase {
         scope: scope,
         sundaySchoolClassId: sundaySchoolClassId,
         meetingId: meetingId,
+        meetingIds: existingMeetingIds.toList(growable: false),
         phone: emptyToNull(phone),
         parentName: emptyToNull(parentName),
         parentPhone: emptyToNull(parentPhone),
@@ -252,7 +362,9 @@ mixin _OfflineMemberWrites on _OfflineWriteHandlerBase {
             'is_active': isActive,
           })
           .eq('id', resolvedId)
-          .select()
+          .select(
+            '*,member_meeting_assignments(meeting_id,sunday_school_class_id)',
+          )
           .single();
       final member = MemberEntity.fromJson(row);
       if (resolvedId != id) await cache.removeMember(churchId, id);
@@ -268,6 +380,7 @@ mixin _OfflineMemberWrites on _OfflineWriteHandlerBase {
         scope: scope,
         sundaySchoolClassId: sundaySchoolClassId,
         meetingId: meetingId,
+        meetingIds: existingMeetingIds.toList(growable: false),
         phone: emptyToNull(phone),
         parentName: emptyToNull(parentName),
         parentPhone: emptyToNull(parentPhone),

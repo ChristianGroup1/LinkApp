@@ -72,6 +72,11 @@ class ApplyQrAttendanceScan extends AttendanceEvent {
 
 class SaveAttendanceSheet extends AttendanceEvent {}
 
+class SetAttendanceSessionLock extends AttendanceEvent {
+  final bool locked;
+  SetAttendanceSessionLock(this.locked);
+}
+
 class OnRealtimeRecordsUpdated extends AttendanceEvent {
   final List<AttendanceRecordEntity> records;
   OnRealtimeRecordsUpdated(this.records);
@@ -317,6 +322,41 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
       }
     });
 
+    on<SetAttendanceSessionLock>((event, emit) async {
+      final currentState = state;
+      if (currentState is! AttendanceSheetLoaded ||
+          currentState.isDirty ||
+          currentState.isSaving ||
+          currentState.session.isLocked == event.locked) {
+        return;
+      }
+      try {
+        final result = event.locked
+            ? await repository.lockAttendanceSession(currentState.session)
+            : await repository.unlockAttendanceSession(currentState.session);
+        emit(
+          currentState.copyWith(
+            session: result.data,
+            savedOffline: !result.syncedToServer,
+            flashMessage: event.locked
+                ? result.syncedToServer
+                      ? 'تم قفل سجل الحضور. لا يمكن تعديله إلا بعد إعادة فتحه بواسطة مسؤول الكنيسة.'
+                      : 'تم قفل السجل على هذا الجهاز، وسيتم مزامنته عند عودة الإنترنت.'
+                : result.syncedToServer
+                ? 'تمت إعادة فتح سجل الحضور.'
+                : 'تمت إعادة فتح السجل على هذا الجهاز، وستتم مزامنته عند عودة الإنترنت.',
+          ),
+        );
+      } catch (error) {
+        emit(
+          currentState.copyWith(
+            flashMessage:
+                'تعذر ${event.locked ? 'قفل' : 'إعادة فتح'} السجل: ${arabicErrorText(error)}',
+          ),
+        );
+      }
+    });
+
     on<OnRealtimeRecordsUpdated>((event, emit) {
       final currentState = state;
       if (currentState is AttendanceSheetLoaded) {
@@ -336,7 +376,10 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
 
     on<AddCreatedMemberToSheet>((event, emit) {
       final currentState = state;
-      if (currentState is! AttendanceSheetLoaded) return;
+      if (currentState is! AttendanceSheetLoaded ||
+          currentState.session.isLocked) {
+        return;
+      }
 
       final updatedMembers =
           currentState.allMembers
@@ -380,7 +423,8 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
 
     on<UpdateMemberStatus>((event, emit) {
       final currentState = state;
-      if (currentState is AttendanceSheetLoaded) {
+      if (currentState is AttendanceSheetLoaded &&
+          !currentState.session.isLocked) {
         final newMap = Map<String, AttendanceStatus>.from(
           currentState.statusMap,
         );
@@ -414,7 +458,8 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
 
     on<MarkAllStatus>((event, emit) {
       final currentState = state;
-      if (currentState is AttendanceSheetLoaded) {
+      if (currentState is AttendanceSheetLoaded &&
+          !currentState.session.isLocked) {
         final newMap = Map<String, AttendanceStatus>.from(
           currentState.statusMap,
         );
@@ -435,6 +480,7 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
     on<ApplyQrAttendanceScan>((event, emit) async {
       final currentState = state;
       if (currentState is! AttendanceSheetLoaded ||
+          currentState.session.isLocked ||
           (event.memberIds.isEmpty && !event.markUnscannedAbsent)) {
         return;
       }
@@ -498,7 +544,8 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
 
     on<SaveAttendanceSheet>((event, emit) async {
       final currentState = state;
-      if (currentState is AttendanceSheetLoaded) {
+      if (currentState is AttendanceSheetLoaded &&
+          !currentState.session.isLocked) {
         emit(currentState.copyWith(isSaving: true, justSaved: false));
         try {
           final savedToServer = await repository.saveAttendanceRecords(

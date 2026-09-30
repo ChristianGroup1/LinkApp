@@ -10,6 +10,7 @@ import '../../../core/diagnostics/storage_write_error.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/models.dart';
 import '../../../data/offline/member_import_history.dart';
+import '../../../data/offline/offline_save_result.dart';
 import '../../../data/repositories/database_repository.dart';
 import '../../../logic/home/home_bloc.dart';
 import '../../../shared/ui/app_states.dart';
@@ -136,7 +137,7 @@ class _MembersListScreenState extends State<MembersListScreen> {
                     surfaceTintColor: Colors.transparent,
                     elevation: 0,
                     title: Text(
-                      'الأعضاء',
+                      'المخدومين',
                       style: GoogleFonts.cairo(
                         color: AppTheme.textDark,
                         fontWeight: FontWeight.w900,
@@ -145,6 +146,14 @@ class _MembersListScreenState extends State<MembersListScreen> {
                     ),
                     centerTitle: true,
                     actions: [
+                      if (canManage)
+                        IconButton(
+                          tooltip: 'نسخ مخدومين من اجتماع لاجتماع',
+                          onPressed: _excelBusy
+                              ? null
+                              : () => _showCopyMembersDialog(context),
+                          icon: const Icon(Icons.copy_all_outlined),
+                        ),
                       if (_excelBusy)
                         const Padding(
                           padding: EdgeInsets.all(14),
@@ -242,7 +251,7 @@ class _MembersListScreenState extends State<MembersListScreen> {
                               color: Colors.white,
                             ),
                             label: Text(
-                              'إضافة عضو',
+                              'إضافة مخدوم',
                               style: GoogleFonts.cairo(
                                 fontWeight: FontWeight.w800,
                                 color: Colors.white,
@@ -603,7 +612,7 @@ class _MembersListScreenState extends State<MembersListScreen> {
                                     actionLabel:
                                         canManage &&
                                             _searchController.text.isEmpty
-                                        ? 'إضافة عضو جديد'
+                                        ? 'إضافة مخدوم جديد'
                                         : null,
                                     onAction: canManage
                                         ? () async {
@@ -640,11 +649,14 @@ class _MembersListScreenState extends State<MembersListScreen> {
                                     index,
                                   ) {
                                     final member = filteredMembers[index];
+                                    final canManageMember =
+                                        _membersBloc?.canManageMember(member) ??
+                                        canManage;
                                     return MemberTile(
                                       member: member,
                                       classes: _classes,
                                       meetings: _meetings,
-                                      canManage: canManage,
+                                      canManage: canManageMember,
                                       onOpen: () async {
                                         await Navigator.push<bool>(
                                           context,
@@ -656,7 +668,7 @@ class _MembersListScreenState extends State<MembersListScreen> {
                                                 member: member,
                                                 classes: _classes,
                                                 meetings: _meetings,
-                                                canManage: canManage,
+                                                canManage: canManageMember,
                                               ),
                                             ),
                                           ),
@@ -816,6 +828,48 @@ class _MembersListScreenState extends State<MembersListScreen> {
       case _MemberExcelAction.history:
         await _showImportHistory(context);
     }
+  }
+
+  Future<void> _showCopyMembersDialog(BuildContext context) async {
+    final bloc = _membersBloc;
+    final sourceMeetings = _meetings
+        .where((meeting) => bloc?.canViewMeeting(meeting.id) ?? false)
+        .toList();
+    final targetMeetings = _meetings
+        .where((meeting) => bloc?.canManageMeeting(meeting.id) ?? false)
+        .toList();
+    final hasSourceTargetPair = sourceMeetings.any(
+      (source) => targetMeetings.any((target) => target.id != source.id),
+    );
+    if (!hasSourceTargetPair) {
+      _showExcelSnack(
+        context,
+        'تحتاج صلاحية عرض اجتماع وصلاحية إدارة اجتماع آخر لاستخدام النسخ.',
+      );
+      return;
+    }
+    final repository = context.read<DatabaseRepository>();
+    if (repository is! MemberMeetingCopyRepository) {
+      _showExcelSnack(context, 'تعذر فتح خاصية نسخ المخدومين.', isError: true);
+      return;
+    }
+    final result = await showDialog<OfflineSaveResult<int>>(
+      context: context,
+      builder: (_) => _CopyMembersBetweenMeetingsDialog(
+        sourceMeetings: sourceMeetings,
+        targetMeetings: targetMeetings,
+        databaseRepository: context.read<DatabaseRepository>(),
+        repository: repository as MemberMeetingCopyRepository,
+      ),
+    );
+    if (!context.mounted || result == null) return;
+    _membersBloc?.add(LoadMembers());
+    _showExcelSnack(
+      context,
+      result.syncedToServer
+          ? 'تم ربط ${result.data} مخدوم بالاجتماع الآخر. لم يتم إنشاء سجلات جديدة.'
+          : 'تم حفظ ربط ${result.data} مخدومين، وسيكتمل عند عودة الإنترنت.',
+    );
   }
 
   Future<void> _exportMemberQrPdf(BuildContext context) async {
@@ -1246,6 +1300,262 @@ class _MembersListScreenState extends State<MembersListScreen> {
 }
 
 enum _MemberExcelAction { export, qrPdf, template, import, history }
+
+class _CopyMembersBetweenMeetingsDialog extends StatefulWidget {
+  final List<MeetingEntity> sourceMeetings;
+  final List<MeetingEntity> targetMeetings;
+  final DatabaseRepository databaseRepository;
+  final MemberMeetingCopyRepository repository;
+
+  const _CopyMembersBetweenMeetingsDialog({
+    required this.sourceMeetings,
+    required this.targetMeetings,
+    required this.databaseRepository,
+    required this.repository,
+  });
+
+  @override
+  State<_CopyMembersBetweenMeetingsDialog> createState() =>
+      _CopyMembersBetweenMeetingsDialogState();
+}
+
+class _CopyMembersBetweenMeetingsDialogState
+    extends State<_CopyMembersBetweenMeetingsDialog> {
+  String? _sourceMeetingId;
+  String? _targetMeetingId;
+  List<MemberEntity> _sourceMembers = const [];
+  final Set<String> _selectedMemberIds = {};
+  bool _loadingMembers = false;
+  bool _saving = false;
+  String? _error;
+
+  List<MemberEntity> get _selectableMembers => _sourceMembers
+      .where((member) => !member.meetingIds.contains(_targetMeetingId))
+      .toList(growable: false);
+
+  Future<void> _loadSourceMeeting(String meetingId) async {
+    setState(() {
+      _sourceMeetingId = meetingId;
+      if (_targetMeetingId == meetingId) _targetMeetingId = null;
+      _sourceMembers = const [];
+      _selectedMemberIds.clear();
+      _loadingMembers = true;
+      _error = null;
+    });
+    try {
+      final members = await widget.databaseRepository.getMeetingMembers(
+        meetingId,
+      );
+      if (!mounted) return;
+      if (_sourceMeetingId != meetingId) return;
+      setState(() {
+        _sourceMembers = members;
+        _loadingMembers = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      if (_sourceMeetingId != meetingId) return;
+      setState(() {
+        _loadingMembers = false;
+        _error = 'تعذر تحميل مخدومي الاجتماع. تحقق من الاتصال وحاول مرة أخرى.';
+      });
+    }
+  }
+
+  Future<void> _copySelected() async {
+    if (_targetMeetingId == null || _selectedMemberIds.isEmpty) return;
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      final result = await widget.repository.copyMembersToMeeting(
+        memberIds: _selectedMemberIds.toList(growable: false),
+        meetingId: _targetMeetingId!,
+      );
+      if (mounted) Navigator.pop(context, result);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _error = 'تعذر ربط المخدومين بالاجتماع. راجع صلاحياتك وحاول مرة أخرى.';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final selectable = _selectableMembers;
+    final allSelected =
+        selectable.isNotEmpty &&
+        selectable.every((member) => _selectedMemberIds.contains(member.id));
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: AlertDialog(
+        scrollable: false,
+        title: Text(
+          'نسخ مخدومين من اجتماع لاجتماع',
+          style: GoogleFonts.cairo(fontWeight: FontWeight.w900, fontSize: 17),
+        ),
+        content: SizedBox(
+          width: 480,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'هيتم ربط نفس سجل المخدوم بالاجتماع الآخر، من غير إنشاء مخدوم جديد.',
+                style: GoogleFonts.cairo(
+                  color: AppTheme.textLight,
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 14),
+              DropdownButtonFormField<String>(
+                initialValue: _sourceMeetingId,
+                decoration: InputDecoration(
+                  labelText: 'من اجتماع',
+                  labelStyle: GoogleFonts.cairo(),
+                ),
+                items: widget.sourceMeetings
+                    .map(
+                      (meeting) => DropdownMenuItem(
+                        value: meeting.id,
+                        child: Text(meeting.nameAr, style: GoogleFonts.cairo()),
+                      ),
+                    )
+                    .toList(),
+                onChanged: _saving
+                    ? null
+                    : (id) {
+                        if (id != null) _loadSourceMeeting(id);
+                      },
+              ),
+              const SizedBox(height: 10),
+              DropdownButtonFormField<String>(
+                initialValue: _targetMeetingId,
+                decoration: InputDecoration(
+                  labelText: 'إلى اجتماع',
+                  labelStyle: GoogleFonts.cairo(),
+                ),
+                items: widget.targetMeetings
+                    .where((meeting) => meeting.id != _sourceMeetingId)
+                    .map(
+                      (meeting) => DropdownMenuItem(
+                        value: meeting.id,
+                        child: Text(meeting.nameAr, style: GoogleFonts.cairo()),
+                      ),
+                    )
+                    .toList(),
+                onChanged: _saving
+                    ? null
+                    : (id) {
+                        setState(() {
+                          _targetMeetingId = id;
+                          _selectedMemberIds.clear();
+                        });
+                      },
+              ),
+              if (_loadingMembers) ...[
+                const SizedBox(height: 18),
+                const CircularProgressIndicator(),
+              ] else if (_sourceMeetingId != null) ...[
+                const SizedBox(height: 8),
+                if (_targetMeetingId != null && selectable.isNotEmpty)
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: allSelected,
+                    title: Text(
+                      'تحديد الكل (${selectable.length})',
+                      style: GoogleFonts.cairo(fontWeight: FontWeight.w800),
+                    ),
+                    onChanged: _saving
+                        ? null
+                        : (selected) => setState(() {
+                            _selectedMemberIds
+                              ..clear()
+                              ..addAll(
+                                selected == true
+                                    ? selectable.map((member) => member.id)
+                                    : const <String>[],
+                              );
+                          }),
+                  ),
+                if (_targetMeetingId != null)
+                  SizedBox(
+                    height: 260,
+                    child: selectable.isEmpty
+                        ? Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Text(
+                              'لا توجد مخدومين متاحين للنسخ إلى الاجتماع المحدد.',
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.cairo(
+                                color: AppTheme.textLight,
+                              ),
+                            ),
+                          )
+                        : ListView.builder(
+                            shrinkWrap: true,
+                            itemCount: selectable.length,
+                            itemBuilder: (context, index) {
+                              final member = selectable[index];
+                              return CheckboxListTile(
+                                dense: true,
+                                contentPadding: EdgeInsets.zero,
+                                value: _selectedMemberIds.contains(member.id),
+                                title: Text(
+                                  member.fullName,
+                                  style: GoogleFonts.cairo(),
+                                ),
+                                onChanged: _saving
+                                    ? null
+                                    : (selected) => setState(() {
+                                        if (selected == true) {
+                                          _selectedMemberIds.add(member.id);
+                                        } else {
+                                          _selectedMemberIds.remove(member.id);
+                                        }
+                                      }),
+                              );
+                            },
+                          ),
+                  ),
+              ],
+              if (_error != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  _error!,
+                  style: GoogleFonts.cairo(color: AppTheme.accentRed),
+                ),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: _saving ? null : () => Navigator.pop(context),
+            child: Text('إلغاء', style: GoogleFonts.cairo()),
+          ),
+          FilledButton.icon(
+            onPressed: _saving || _selectedMemberIds.isEmpty
+                ? null
+                : _copySelected,
+            icon: _saving
+                ? const SizedBox.square(
+                    dimension: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.copy_all_outlined),
+            label: Text(
+              'نسخ المحدد (${_selectedMemberIds.length})',
+              style: GoogleFonts.cairo(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class _StatItem extends StatelessWidget {
   final IconData icon;

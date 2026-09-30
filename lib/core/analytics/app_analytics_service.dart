@@ -11,17 +11,40 @@ class AppAnalyticsService {
 
   static bool _appOpenRecorded = false;
   static bool _signInRecorded = false;
+  static Future<bool>? _appOpenInFlight;
+  static Future<bool>? _signInInFlight;
+  static final Map<String, Future<String?>> _churchIdReadsInFlight = {};
 
   static Future<void> trackAppOpen() async {
     if (_appOpenRecorded) return;
-    final saved = await _record('app_open');
-    if (saved) _appOpenRecorded = true;
+    final active = _appOpenInFlight;
+    if (active != null) {
+      await active;
+      return;
+    }
+
+    late final Future<bool> recording;
+    recording = _record('app_open').whenComplete(() {
+      if (identical(_appOpenInFlight, recording)) _appOpenInFlight = null;
+    });
+    _appOpenInFlight = recording;
+    if (await recording) _appOpenRecorded = true;
   }
 
   static Future<void> trackSignIn() async {
     if (_signInRecorded) return;
-    final saved = await _record('sign_in');
-    if (saved) _signInRecorded = true;
+    final active = _signInInFlight;
+    if (active != null) {
+      await active;
+      return;
+    }
+
+    late final Future<bool> recording;
+    recording = _record('sign_in').whenComplete(() {
+      if (identical(_signInInFlight, recording)) _signInInFlight = null;
+    });
+    _signInInFlight = recording;
+    if (await recording) _signInRecorded = true;
   }
 
   static Future<bool> _record(String eventName) async {
@@ -30,12 +53,7 @@ class AppAnalyticsService {
       final user = client.auth.currentUser;
       if (user == null) return false;
 
-      final profile = await client
-          .from('profiles')
-          .select('church_id')
-          .eq('id', user.id)
-          .maybeSingle();
-      final churchId = profile?['church_id'] as String?;
+      final churchId = await _readChurchId(client, user.id);
       if (churchId == null) return false;
 
       final packageInfo = await PackageInfo.fromPlatform();
@@ -54,6 +72,29 @@ class AppAnalyticsService {
       debugPrint('[AppAnalytics] Event was not recorded: $error');
       return false;
     }
+  }
+
+  static Future<String?> _readChurchId(
+    SupabaseClient client,
+    String userId,
+  ) async {
+    final active = _churchIdReadsInFlight[userId];
+    if (active != null) return active;
+
+    late final Future<String?> read;
+    read = client
+        .from('profiles')
+        .select('church_id')
+        .eq('id', userId)
+        .maybeSingle()
+        .then((profile) => profile?['church_id'] as String?)
+        .whenComplete(() {
+          if (identical(_churchIdReadsInFlight[userId], read)) {
+            _churchIdReadsInFlight.remove(userId);
+          }
+        });
+    _churchIdReadsInFlight[userId] = read;
+    return read;
   }
 
   static String get _platformName {

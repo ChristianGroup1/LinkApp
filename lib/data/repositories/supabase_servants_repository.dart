@@ -3,7 +3,16 @@ part of 'database_repository.dart';
 mixin _SupabaseServantsRepository on _SupabaseRepositoryBase {
   // Assignments
   @override
-  Future<List<Map<String, dynamic>>> getClassAssignments(String classId) async {
+  Future<List<Map<String, dynamic>>> getClassAssignments(
+    String classId,
+  ) => _joinReadRequest(
+    'class-assignments:${_client.auth.currentUser?.id ?? "signed-out"}:$classId',
+    () => _loadClassAssignments(classId),
+  );
+
+  Future<List<Map<String, dynamic>>> _loadClassAssignments(
+    String classId,
+  ) async {
     return OfflineNetworkPolicy.run(
       online: () async {
         final rows = await _client
@@ -24,6 +33,13 @@ mixin _SupabaseServantsRepository on _SupabaseRepositoryBase {
 
   @override
   Future<List<Map<String, dynamic>>> getMeetingAssignments(
+    String meetingId,
+  ) => _joinReadRequest(
+    'meeting-assignments:${_client.auth.currentUser?.id ?? "signed-out"}:$meetingId',
+    () => _loadMeetingAssignments(meetingId),
+  );
+
+  Future<List<Map<String, dynamic>>> _loadMeetingAssignments(
     String meetingId,
   ) async {
     return OfflineNetworkPolicy.run(
@@ -73,7 +89,7 @@ mixin _SupabaseServantsRepository on _SupabaseRepositoryBase {
     await OfflineNetworkPolicy.ensureReady();
     if (OfflineNetworkPolicy.isConnectivityOffline) {
       await _saveClassAssignmentOffline(payload);
-      AppDataChanges.instance.notify({AppDataArea.assignments});
+      _notifyDataChanged({AppDataArea.assignments});
       return;
     }
     try {
@@ -94,7 +110,7 @@ mixin _SupabaseServantsRepository on _SupabaseRepositoryBase {
       if (!_isRecoverableOfflineError(error)) rethrow;
       await _saveClassAssignmentOffline(payload);
     }
-    AppDataChanges.instance.notify({AppDataArea.assignments});
+    _notifyDataChanged({AppDataArea.assignments});
   }
 
   Future<void> _saveClassAssignmentOffline(Map<String, dynamic> payload) async {
@@ -159,7 +175,7 @@ mixin _SupabaseServantsRepository on _SupabaseRepositoryBase {
     await OfflineNetworkPolicy.ensureReady();
     if (OfflineNetworkPolicy.isConnectivityOffline) {
       await _saveMeetingAssignmentOffline(payload);
-      AppDataChanges.instance.notify({AppDataArea.assignments});
+      _notifyDataChanged({AppDataArea.assignments});
       return;
     }
     try {
@@ -180,7 +196,7 @@ mixin _SupabaseServantsRepository on _SupabaseRepositoryBase {
       if (!_isRecoverableOfflineError(error)) rethrow;
       await _saveMeetingAssignmentOffline(payload);
     }
-    AppDataChanges.instance.notify({AppDataArea.assignments});
+    _notifyDataChanged({AppDataArea.assignments});
   }
 
   Future<void> _saveMeetingAssignmentOffline(
@@ -214,7 +230,7 @@ mixin _SupabaseServantsRepository on _SupabaseRepositoryBase {
       operationType: OfflineOpType.classAssignmentDelete,
       isClassAssignment: true,
     );
-    AppDataChanges.instance.notify({AppDataArea.assignments});
+    _notifyDataChanged({AppDataArea.assignments});
   }
 
   @override
@@ -225,7 +241,7 @@ mixin _SupabaseServantsRepository on _SupabaseRepositoryBase {
       operationType: OfflineOpType.meetingAssignmentDelete,
       isClassAssignment: false,
     );
-    AppDataChanges.instance.notify({AppDataArea.assignments});
+    _notifyDataChanged({AppDataArea.assignments});
   }
 
   Future<void> _removeAssignment(
@@ -265,6 +281,13 @@ mixin _SupabaseServantsRepository on _SupabaseRepositoryBase {
   @override
   Future<List<Map<String, dynamic>>> getUserClassAssignments(
     String userId,
+  ) => _joinReadRequest(
+    'user-class-assignments:${_client.auth.currentUser?.id ?? "signed-out"}:$userId',
+    () => _loadUserClassAssignments(userId),
+  );
+
+  Future<List<Map<String, dynamic>>> _loadUserClassAssignments(
+    String userId,
   ) async {
     return OfflineNetworkPolicy.run(
       online: () async {
@@ -287,6 +310,13 @@ mixin _SupabaseServantsRepository on _SupabaseRepositoryBase {
   @override
   Future<List<Map<String, dynamic>>> getUserMeetingAssignments(
     String userId,
+  ) => _joinReadRequest(
+    'user-meeting-assignments:${_client.auth.currentUser?.id ?? "signed-out"}:$userId',
+    () => _loadUserMeetingAssignments(userId),
+  );
+
+  Future<List<Map<String, dynamic>>> _loadUserMeetingAssignments(
+    String userId,
   ) async {
     return OfflineNetworkPolicy.run(
       online: () async {
@@ -308,7 +338,12 @@ mixin _SupabaseServantsRepository on _SupabaseRepositoryBase {
 
   // Profiles
   @override
-  Future<List<AppProfile>> getProfiles() async {
+  Future<List<AppProfile>> getProfiles() => _joinReadRequest(
+    'profiles:church:${_client.auth.currentUser?.id ?? "signed-out"}',
+    _loadProfiles,
+  );
+
+  Future<List<AppProfile>> _loadProfiles() async {
     final profile = await getCurrentProfile();
     if (profile?.churchId == null) return [];
 
@@ -355,10 +390,7 @@ mixin _SupabaseServantsRepository on _SupabaseRepositoryBase {
         ),
       );
     }
-    AppDataChanges.instance.notify({
-      AppDataArea.profile,
-      AppDataArea.assignments,
-    });
+    _notifyDataChanged({AppDataArea.profile, AppDataArea.assignments});
   }
 
   @override
@@ -387,7 +419,7 @@ mixin _SupabaseServantsRepository on _SupabaseRepositoryBase {
         ),
       );
     }
-    AppDataChanges.instance.notify({AppDataArea.profile});
+    _notifyDataChanged({AppDataArea.profile});
   }
 
   Future<void> _updateCachedProfile(

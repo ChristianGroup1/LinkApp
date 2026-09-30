@@ -3,7 +3,9 @@ part of 'offline_write_handler.dart';
 mixin _OfflineWriteSync on _OfflineWriteHandlerBase {
   @override
   Future<void> _syncWriteQueue() async {
-    final operations = await queue.all();
+    final operations = (await queue.all())
+        .where((operation) => operation.type != OfflineOpType.sessionLockState)
+        .toList();
     if (operations.isEmpty) return;
 
     final sorted = [...operations]
@@ -205,6 +207,50 @@ mixin _OfflineWriteSync on _OfflineWriteHandlerBase {
               'is_active': operation.payload['is_active'],
             })
             .eq('id', operation.payload['id']);
+        return true;
+      case OfflineOpType.memberMeetingCopy:
+        final localMeetingId = operation.payload['meeting_id'] as String;
+        final meetingId = await queue.resolveId(localMeetingId);
+        final localMemberIds = List<String>.from(
+          operation.payload['member_ids'] as List,
+        );
+        final memberIds = <String>[];
+        for (final memberId in localMemberIds) {
+          memberIds.add(await queue.resolveId(memberId));
+        }
+        await client
+            .from('member_meeting_assignments')
+            .upsert(
+              [
+                for (final memberId in memberIds)
+                  {
+                    'church_id': operation.payload['church_id'],
+                    'member_id': memberId,
+                    'meeting_id': meetingId,
+                    'sunday_school_class_id': null,
+                    'is_primary': false,
+                  },
+              ],
+              onConflict: 'member_id,meeting_id',
+              ignoreDuplicates: true,
+            );
+        final churchId = operation.payload['church_id'] as String;
+        final localMemberIdSet = localMemberIds.toSet();
+        final cachedMembers = await cache.readMembers(churchId) ?? const [];
+        final updatedMembers = cachedMembers.map((member) {
+          if (!localMemberIdSet.contains(member.id) &&
+              !memberIds.contains(member.id)) {
+            return member;
+          }
+          final meetingIds =
+              member.meetingIds.where((id) => id != localMeetingId).toSet()
+                ..add(meetingId);
+          return member.copyWith(meetingIds: meetingIds.toList());
+        }).toList();
+        await cache.saveMembers(
+          churchId,
+          updatedMembers.map(memberToJson).toList(),
+        );
         return true;
       case OfflineOpType.memberDelete:
         await client.from('members').delete().eq('id', operation.payload['id']);
@@ -491,6 +537,60 @@ mixin _OfflineWriteSync on _OfflineWriteHandlerBase {
     if (toRemove.isNotEmpty) {
       unsynced.removeWhere(toRemove.contains);
       await prefs.setStringList(OfflineCache.unsyncedSessionsKey, unsynced);
+    }
+  }
+
+  @override
+  Future<void> _syncAttendanceLockChanges() async {
+    final prefs = await SharedPreferences.getInstance();
+    final unsyncedSessions =
+        prefs.getStringList(OfflineCache.unsyncedSessionsKey) ?? [];
+
+    final operations =
+        (await queue.all())
+            .where(
+              (operation) => operation.type == OfflineOpType.sessionLockState,
+            )
+            .toList()
+          ..sort((a, b) => a.queuedAt.compareTo(b.queuedAt));
+
+    for (final operation in operations) {
+      try {
+        final localSessionId = operation.payload['id'] as String;
+        final sessionId = await queue.resolveId(localSessionId);
+        // Push locally saved attendance before freezing this session.
+        if (unsyncedSessions.contains(localSessionId) ||
+            unsyncedSessions.contains(sessionId)) {
+          continue;
+        }
+        final locked = operation.payload['is_locked'] as bool;
+        final row = await client.rpc(
+          locked ? 'lock_attendance_session' : 'unlock_attendance_session',
+          params: {'target_session_id': sessionId},
+        );
+        final session = AttendanceSessionEntity.fromJson(
+          Map<String, dynamic>.from(row as Map),
+        );
+        await cache.upsertSession(session.meetingId, session.classId, session);
+        await queue.remove(operation.id);
+      } catch (error) {
+        if (!isPermanentServerRejection(error)) break;
+
+        await queue.reject(operation, error.toString());
+        await queue.remove(operation.id);
+        final previousRow = Map<String, dynamic>.from(
+          operation.payload['previous_session'] as Map,
+        );
+        final previousSession = AttendanceSessionEntity.fromJson({
+          ...previousRow,
+          'id': await queue.resolveId(previousRow['id'] as String),
+        });
+        await cache.upsertSession(
+          previousSession.meetingId,
+          previousSession.classId,
+          previousSession,
+        );
+      }
     }
   }
 

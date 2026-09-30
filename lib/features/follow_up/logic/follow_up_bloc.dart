@@ -182,15 +182,26 @@ class FollowUpBloc extends Bloc<FollowUpEvent, FollowUpState> {
           final sessions = sessionsByScope[scope.key] ?? [];
           if (sessions.isEmpty) continue;
 
-          final session1 = recordsBySessionId[sessions[0].id] ?? [];
-          final session2 = sessions.length >= 2
-              ? recordsBySessionId[sessions[1].id]
+          // A newly created but not yet recorded sheet is not an attendance
+          // result. Skip empty sheets so they don't hide an actual absence
+          // from the most recent recorded session.
+          final recordedSessions = sessions
+              .where(
+                (session) =>
+                    (recordsBySessionId[session.id] ?? const []).isNotEmpty,
+              )
+              .toList();
+          if (recordedSessions.isEmpty) continue;
+
+          final session1 = recordsBySessionId[recordedSessions[0].id]!;
+          final session2 = recordedSessions.length >= 2
+              ? recordsBySessionId[recordedSessions[1].id]
               : null;
-          final session3 = sessions.length >= 3
-              ? recordsBySessionId[sessions[2].id]
+          final session3 = recordedSessions.length >= 3
+              ? recordsBySessionId[recordedSessions[2].id]
               : null;
           final scopedMembers = scope.classEntity == null
-              ? members.where((m) => m.meetingId == scope.meeting.id)
+              ? members.where((m) => m.meetingIds.contains(scope.meeting.id))
               : members.where(
                   (m) => m.sundaySchoolClassId == scope.classEntity!.id,
                 );
@@ -222,7 +233,7 @@ class FollowUpBloc extends Bloc<FollowUpEvent, FollowUpState> {
                 'member': member,
                 'className': scope.classEntity?.nameAr ?? scope.meeting.nameAr,
                 'consecutiveCount': consecutiveCount,
-                'latestSessionId': sessions[0].id,
+                'latestSessionId': recordedSessions[0].id,
               });
             }
           }
@@ -233,6 +244,7 @@ class FollowUpBloc extends Bloc<FollowUpEvent, FollowUpState> {
             : members
                   .where(
                     (m) =>
+                        m.meetingIds.any(viewMeetingIds.contains) ||
                         viewMeetingIds.contains(m.meetingId) ||
                         viewClassIds.contains(m.sundaySchoolClassId),
                   )

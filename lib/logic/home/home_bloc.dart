@@ -137,8 +137,10 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
               (member) =>
                   member.isActive &&
                   (isAdmin ||
+                      member.meetingIds.any(viewMeetingIds.contains) ||
                       viewMeetingIds.contains(member.meetingId) ||
                       viewClassIds.contains(member.sundaySchoolClassId) ||
+                      member.meetingIds.any(takeMeetingIds.contains) ||
                       takeMeetingIds.contains(member.meetingId) ||
                       takeClassIds.contains(member.sundaySchoolClassId)),
             )
@@ -236,7 +238,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
           final session1Records = recordsBySessionId[sessions[0].id] ?? [];
           final session2Records = recordsBySessionId[sessions[1].id] ?? [];
           final scopedMembers = scope.classEntity == null
-              ? allMembers.where((m) => m.meetingId == scope.meeting.id)
+              ? allMembers.where((m) => m.meetingIds.contains(scope.meeting.id))
               : allMembers.where(
                   (m) => m.sundaySchoolClassId == scope.classEntity!.id,
                 );
@@ -305,6 +307,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
                 : allMembers
                       .where(
                         (member) =>
+                            member.meetingIds.any(viewMeetingIds.contains) ||
                             viewMeetingIds.contains(member.meetingId) ||
                             viewClassIds.contains(member.sundaySchoolClassId),
                       )
@@ -318,10 +321,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
             canManageMembers: canTakeAttendance,
           ),
         );
-
-        // Warm report-stats cache for offline viewing later.
-        unawaited(repository.getAttendanceReportStats());
-        unawaited(repository.warmOfflineCache());
       } catch (e) {
         emit(
           HomeError('حدث خطأ أثناء تحميل لوحة البيانات: ${arabicErrorText(e)}'),

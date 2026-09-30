@@ -463,7 +463,7 @@ mixin _SupabaseAuthRepository on _SupabaseRepositoryBase {
       if (profile.churchId != null) {
         await _offlineCache.upsertProfile(profile.churchId!, profile);
       }
-      AppDataChanges.instance.notify({AppDataArea.profile});
+      _notifyDataChanged({AppDataArea.profile});
       return profile;
     } catch (error) {
       if (!_isRecoverableOfflineError(error)) rethrow;
@@ -511,7 +511,7 @@ mixin _SupabaseAuthRepository on _SupabaseRepositoryBase {
         queuedAt: DateTime.now(),
       ),
     );
-    AppDataChanges.instance.notify({AppDataArea.profile});
+    _notifyDataChanged({AppDataArea.profile});
     return updated;
   }
 
@@ -620,9 +620,34 @@ mixin _SupabaseAuthRepository on _SupabaseRepositoryBase {
 
   Future<AppProfile?> _getCurrentProfile({
     bool throwOnRecoverableError = false,
+  }) {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) return Future.value(null);
+
+    final requestKey = '$userId:$throwOnRecoverableError';
+    final activeRequest = _profileRequestsInFlight[requestKey];
+    if (activeRequest != null) return activeRequest;
+
+    late final Future<AppProfile?> request;
+    request =
+        _loadCurrentProfile(
+          userId,
+          throwOnRecoverableError: throwOnRecoverableError,
+        ).whenComplete(() {
+          if (identical(_profileRequestsInFlight[requestKey], request)) {
+            _profileRequestsInFlight.remove(requestKey);
+          }
+        });
+    _profileRequestsInFlight[requestKey] = request;
+    return request;
+  }
+
+  Future<AppProfile?> _loadCurrentProfile(
+    String expectedUserId, {
+    bool throwOnRecoverableError = false,
   }) async {
     final user = _client.auth.currentUser;
-    if (user == null) return null;
+    if (user == null || user.id != expectedUserId) return null;
 
     await OfflineNetworkPolicy.ensureReady();
 

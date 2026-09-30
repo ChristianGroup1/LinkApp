@@ -63,6 +63,14 @@ class _MemberDetailsView extends StatelessWidget {
   Widget build(BuildContext context) {
     final destination = _destinationDetails();
     final primaryContact = member.phone ?? member.parentPhone;
+    final additionalMeetingNames = meetings
+        .where(
+          (meeting) =>
+              member.meetingIds.contains(meeting.id) &&
+              meeting.id != member.meetingId,
+        )
+        .map((meeting) => meeting.nameAr)
+        .toList(growable: false);
 
     return Directionality(
       textDirection: TextDirection.rtl,
@@ -184,6 +192,13 @@ class _MemberDetailsView extends StatelessWidget {
                       : 'الاجتماع المباشر',
                   value: destination.label,
                 ),
+                if (additionalMeetingNames.isNotEmpty)
+                  _DetailRow(
+                    icon: Icons.groups_3_outlined,
+                    label: 'اجتماعات إضافية',
+                    value: additionalMeetingNames.join('، '),
+                    isLast: true,
+                  ),
                 _DetailRow(
                   icon: member.isActive
                       ? Icons.verified_user_outlined

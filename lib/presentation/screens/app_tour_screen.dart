@@ -47,47 +47,55 @@ class _AppTourScreenState extends State<AppTourScreen> {
     TourStepData(
       title: 'مرحباً بك في تطبيق لينك 💒',
       subtitle:
-          'منظومتك الرقمية المتكاملة لإدارة كنيستك واجتماعاتك ومتابعة الحضور باحترافية وفخامة عالية.',
+          'ابدأ بتجهيز الخدمة بالترتيب: أنشئ اجتماعاً، أضف المخدومين، ثم سجّل الحضور. بعد ذلك تقدر تراجع السجلات وتتابع الغياب.',
       icon: Icons.church_rounded,
       badgeColor: Color(0xFFEFF6FF),
       iconColor: Color(0xFF2563EB),
     ),
     TourStepData(
-      title: '١. قسم الاجتماعات 📅',
+      title: '١. أنشئ الاجتماع أو الفصل 📅',
       subtitle:
-          'أدر وتصفح جميع الاجتماعات والفصول التابعة لها واعرف مواعيد الحضور المباشرة.',
+          'قبل إضافة المخدومين، أنشئ الاجتماع الذي يخدمون فيه. ولو الاجتماع مقسّم لمجموعات، أنشئ الفصول التابعة له أيضاً.',
       icon: Icons.event_rounded,
       badgeColor: Color(0xFFE0F2FE),
       iconColor: Color(0xFF0284C7),
     ),
     TourStepData(
-      title: '٢. سجلات الحضور 📖',
+      title: '٢. أضف المخدومين 👥',
       subtitle:
-          'تصفح وراجع كشوفات ومحاضر الحضور السابقة وعدّلها عند الحاجة بسهولة.',
+          'من الرئيسية افتح «المخدومين» ثم «إضافة مخدوم». اربطه باجتماعه أو فصله، وسجّل تاريخ ميلاده ليصل تذكير عيد الميلاد للخادم المسند إليه.',
+      icon: Icons.person_add_alt_1_rounded,
+      badgeColor: Color(0xFFDCFCE7),
+      iconColor: Color(0xFF166534),
+    ),
+    TourStepData(
+      title: '٣. سجّل الحضور في الاجتماع ✅',
+      subtitle:
+          'افتح شاشة الحضور، واختر الاجتماع أو الفصل وتاريخ اللقاء، ثم حدّد حالة كل مخدوم واحفظ الكشف. يمكن تسجيل الحضور دون إنترنت ومزامنته عند عودة الاتصال.',
+      icon: Icons.fact_check_outlined,
+      badgeColor: Color(0xFFE0F2FE),
+      iconColor: Color(0xFF0284C7),
+    ),
+    TourStepData(
+      title: '٤. راجع سجل الحضور 📖',
+      subtitle:
+          'كل كشف محفوظ يظهر في «سجلات الحضور». افتح السجل لمراجعة التفاصيل، والتعديل متاح حسب صلاحيتك وحالة الكشف.',
       icon: Icons.history_rounded,
       badgeColor: Color(0xFFEFF6FF),
       iconColor: Color(0xFF2563EB),
     ),
     TourStepData(
-      title: '٣. متابعة الغياب 📞',
+      title: '٥. تابع الغياب والتواصل 📞',
       subtitle:
-          'سجل متابعة وافتقاد الأعضاء الغائبين واحتفظ بتفاصيل التواصل أولاً بأول.',
+          'بمجرد تسجيل غياب المخدوم في كشف واحد، ستظهر له حالة في «متابعة الغياب». سجّل التواصل معه وتابع ما تم.',
       icon: Icons.support_agent_rounded,
       badgeColor: Color(0xFFFEF3C7),
       iconColor: Color(0xFFD97706),
     ),
     TourStepData(
-      title: '٤. التقارير والإحصائيات 📊',
+      title: '٦. راجع التقارير والصلاحيات 📊',
       subtitle:
-          'اعرف نسب حضور كل مخدوم وخادم ومعدلات الالتزام وأيام التسجيل بنظرة واحدة.',
-      icon: Icons.analytics_outlined,
-      badgeColor: Color(0xFFDCFCE7),
-      iconColor: Color(0xFF166534),
-    ),
-    TourStepData(
-      title: '٥. الخدام والصلاحيات 🛡️',
-      subtitle:
-          'ادع خدام جدد لخدمتك، حدد أدوارهم في المجموعات والفصول، وإدارة صلاحيات الحضور.',
+          'التقارير تلخص الحضور والمتابعة. ويمكن لمسؤول الكنيسة دعوة الخدام وتحديد الاجتماعات والفصول والصلاحيات المتاحة لكل خادم.',
       icon: Icons.admin_panel_settings_outlined,
       badgeColor: Color(0xFFF3E8FF),
       iconColor: Color(0xFF7E22CE),

@@ -222,6 +222,7 @@ class MemberEntity {
   final MemberScope scope;
   final String? sundaySchoolClassId;
   final String? meetingId;
+  final List<String> meetingIds;
   final String? phone;
   final String? parentName;
   final String? parentPhone;
@@ -237,6 +238,7 @@ class MemberEntity {
     required this.scope,
     this.sundaySchoolClassId,
     this.meetingId,
+    this.meetingIds = const [],
     this.phone,
     this.parentName,
     this.parentPhone,
@@ -247,13 +249,30 @@ class MemberEntity {
   });
 
   factory MemberEntity.fromJson(Map<String, dynamic> json) {
+    final scope = MemberScope.fromJson(json['scope'] as String);
+    final primaryMeetingId = json['meeting_id'] as String?;
+    final linkedMeetings =
+        (json['member_meeting_assignments'] as List? ?? const [])
+            .whereType<Map>()
+            .where((assignment) => assignment['sunday_school_class_id'] == null)
+            .map((assignment) => assignment['meeting_id']?.toString())
+            .whereType<String>()
+            .toSet();
+    final explicitMeetingIds = (json['meeting_ids'] as List? ?? const [])
+        .map((id) => id.toString())
+        .toSet();
+    if (scope == MemberScope.meeting && primaryMeetingId != null) {
+      linkedMeetings.add(primaryMeetingId);
+    }
+    linkedMeetings.addAll(explicitMeetingIds);
     return MemberEntity(
       id: json['id'] as String,
       churchId: json['church_id'] as String,
       fullName: json['full_name'] as String,
-      scope: MemberScope.fromJson(json['scope'] as String),
+      scope: scope,
       sundaySchoolClassId: json['sunday_school_class_id'] as String?,
-      meetingId: json['meeting_id'] as String?,
+      meetingId: primaryMeetingId,
+      meetingIds: linkedMeetings.toList(growable: false),
       phone: json['phone'] as String?,
       parentName: json['parent_name'] as String?,
       parentPhone: json['parent_phone'] as String?,
@@ -265,6 +284,23 @@ class MemberEntity {
       notes: json['notes'] as String?,
     );
   }
+
+  MemberEntity copyWith({List<String>? meetingIds}) => MemberEntity(
+    id: id,
+    churchId: churchId,
+    fullName: fullName,
+    scope: scope,
+    sundaySchoolClassId: sundaySchoolClassId,
+    meetingId: meetingId,
+    meetingIds: meetingIds ?? this.meetingIds,
+    phone: phone,
+    parentName: parentName,
+    parentPhone: parentPhone,
+    code: code,
+    isActive: isActive,
+    birthDate: birthDate,
+    notes: notes,
+  );
 }
 
 class AttendanceSessionEntity {
@@ -275,6 +311,9 @@ class AttendanceSessionEntity {
   final DateTime sessionDate;
   final int weekNumber;
   final String? title;
+  final bool isLocked;
+  final DateTime? lockedAt;
+  final String? lockedBy;
 
   const AttendanceSessionEntity({
     required this.id,
@@ -284,6 +323,9 @@ class AttendanceSessionEntity {
     required this.sessionDate,
     required this.weekNumber,
     this.title,
+    this.isLocked = false,
+    this.lockedAt,
+    this.lockedBy,
   });
 
   factory AttendanceSessionEntity.fromJson(Map<String, dynamic> json) {
@@ -295,6 +337,11 @@ class AttendanceSessionEntity {
       sessionDate: DateTime.parse(json['session_date'] as String),
       weekNumber: json['week_number'] as int,
       title: json['title'] as String?,
+      isLocked: json['is_locked'] as bool? ?? false,
+      lockedAt: json['locked_at'] == null
+          ? null
+          : DateTime.tryParse(json['locked_at'] as String),
+      lockedBy: json['locked_by'] as String?,
     );
   }
 }

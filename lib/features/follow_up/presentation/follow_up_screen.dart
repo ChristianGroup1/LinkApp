@@ -150,7 +150,7 @@ class _FollowUpScreenState extends State<FollowUpScreen>
               ),
               const SizedBox(height: 16),
               Text(
-                'لا توجد حالات غياب تحتاج متابعة حالياً.',
+                'لا توجد حالات غياب تحتاج متابعة حالياً. عند تسجيل غياب مخدوم في كشف واحد، ستظهر حالته هنا.',
                 style: GoogleFonts.cairo(
                   fontWeight: FontWeight.bold,
                   color: AppTheme.textDark,

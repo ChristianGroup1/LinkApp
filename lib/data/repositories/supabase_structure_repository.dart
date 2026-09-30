@@ -3,7 +3,12 @@ part of 'database_repository.dart';
 mixin _SupabaseStructureRepository on _SupabaseRepositoryBase {
   // Churches
   @override
-  Future<Church?> getChurch(String churchId) async {
+  Future<Church?> getChurch(String churchId) => _joinReadRequest(
+    'church:${_client.auth.currentUser?.id ?? "signed-out"}:$churchId',
+    () => _loadChurch(churchId),
+  );
+
+  Future<Church?> _loadChurch(String churchId) async {
     return OfflineNetworkPolicy.run(
       online: () async {
         final row = await _client
@@ -45,7 +50,12 @@ mixin _SupabaseStructureRepository on _SupabaseRepositoryBase {
 
   // Meetings
   @override
-  Future<List<MeetingEntity>> getMeetings() async {
+  Future<List<MeetingEntity>> getMeetings() => _joinReadRequest(
+    'meetings:${_client.auth.currentUser?.id ?? "signed-out"}',
+    _loadMeetings,
+  );
+
+  Future<List<MeetingEntity>> _loadMeetings() async {
     final profile = await getCurrentProfile();
     if (profile?.churchId == null) return [];
 
@@ -149,6 +159,13 @@ mixin _SupabaseStructureRepository on _SupabaseRepositoryBase {
   @override
   Future<List<SundaySchoolClassEntity>> getSundaySchoolClasses(
     String meetingId,
+  ) => _joinReadRequest(
+    'classes:${_client.auth.currentUser?.id ?? "signed-out"}:meeting:$meetingId',
+    () => _loadSundaySchoolClasses(meetingId),
+  );
+
+  Future<List<SundaySchoolClassEntity>> _loadSundaySchoolClasses(
+    String meetingId,
   ) async {
     return OfflineNetworkPolicy.run(
       online: () async {
@@ -176,7 +193,13 @@ mixin _SupabaseStructureRepository on _SupabaseRepositoryBase {
   }
 
   @override
-  Future<List<SundaySchoolClassEntity>> getAllSundaySchoolClasses() async {
+  Future<List<SundaySchoolClassEntity>> getAllSundaySchoolClasses() =>
+      _joinReadRequest(
+        'classes:church:${_client.auth.currentUser?.id ?? "signed-out"}',
+        _loadAllSundaySchoolClasses,
+      );
+
+  Future<List<SundaySchoolClassEntity>> _loadAllSundaySchoolClasses() async {
     final profile = await getCurrentProfile();
     if (profile?.churchId == null) return [];
 

@@ -25,7 +25,12 @@ mixin _SupabaseFollowUpsRepository on _SupabaseRepositoryBase {
   }
 
   @override
-  Future<List<FollowUpEntity>> getAllFollowUps() async {
+  Future<List<FollowUpEntity>> getAllFollowUps() => _joinReadRequest(
+    'follow-ups:${_client.auth.currentUser?.id ?? "signed-out"}',
+    _loadAllFollowUps,
+  );
+
+  Future<List<FollowUpEntity>> _loadAllFollowUps() async {
     final profile = await getCurrentProfile();
     if (profile == null || profile.churchId == null) return [];
 
@@ -98,7 +103,13 @@ mixin _SupabaseFollowUpsRepository on _SupabaseRepositoryBase {
 
   // Reports
   @override
-  Future<List<Map<String, dynamic>>> getAttendanceReportStats() async {
+  Future<List<Map<String, dynamic>>>
+  getAttendanceReportStats() => _joinReadRequest(
+    'attendance-report-stats:${_client.auth.currentUser?.id ?? "signed-out"}',
+    _loadAttendanceReportStats,
+  );
+
+  Future<List<Map<String, dynamic>>> _loadAttendanceReportStats() async {
     final profile = await getCurrentProfile();
     if (profile?.churchId == null) return [];
 

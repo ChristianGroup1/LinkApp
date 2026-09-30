@@ -3,13 +3,22 @@ part of 'database_repository.dart';
 mixin _SupabaseMembersRepository on _SupabaseRepositoryBase {
   // Members
   @override
-  Future<List<MemberEntity>> getClassMembers(String classId) async {
+  Future<List<MemberEntity>> getClassMembers(
+    String classId,
+  ) => _joinReadRequest(
+    'members:${_client.auth.currentUser?.id ?? "signed-out"}:class:$classId',
+    () => _loadClassMembers(classId),
+  );
+
+  Future<List<MemberEntity>> _loadClassMembers(String classId) async {
     final pendingDeletes = await _pendingDeletedEntityIds();
     return OfflineNetworkPolicy.run(
       online: () async {
         final rows = await _client
             .from('members')
-            .select()
+            .select(
+              '*,member_meeting_assignments(meeting_id,sunday_school_class_id)',
+            )
             .eq('sunday_school_class_id', classId)
             .eq('is_active', true)
             .order('full_name');
@@ -34,25 +43,75 @@ mixin _SupabaseMembersRepository on _SupabaseRepositoryBase {
   }
 
   @override
-  Future<List<MemberEntity>> getMeetingMembers(String meetingId) async {
+  Future<List<MemberEntity>> getMeetingMembers(
+    String meetingId,
+  ) => _joinReadRequest(
+    'members:${_client.auth.currentUser?.id ?? "signed-out"}:meeting:$meetingId',
+    () => _loadMeetingMembers(meetingId),
+  );
+
+  Future<OfflineSaveResult<int>> copyMembersToMeeting({
+    required List<String> memberIds,
+    required String meetingId,
+  }) => _notifyAfter(
+    _offlineWriter.copyMembersToMeeting(
+      memberIds: memberIds,
+      meetingId: meetingId,
+    ),
+    {AppDataArea.members},
+  );
+
+  Future<List<MemberEntity>> _loadMeetingMembers(String meetingId) async {
     final pendingDeletes = await _pendingDeletedEntityIds();
     return OfflineNetworkPolicy.run(
       online: () async {
         final rows = await _client
-            .from('members')
-            .select()
+            .from('member_meeting_assignments')
+            .select(
+              'members!inner(*,member_meeting_assignments(meeting_id,sunday_school_class_id))',
+            )
             .eq('meeting_id', meetingId)
-            .eq('is_active', true)
-            .order('full_name');
-        return _filterDeletedRows(
-          rows as List,
-          pendingDeletes,
-        ).map((json) => MemberEntity.fromJson(json)).toList();
+            .filter('sunday_school_class_id', 'is', null);
+        final memberRows =
+            (rows as List)
+                .map((row) => Map<String, dynamic>.from(row as Map)['members'])
+                .whereType<Map>()
+                .map((row) => Map<String, dynamic>.from(row))
+                .where(
+                  (row) =>
+                      row['is_active'] == true &&
+                      !pendingDeletes.contains(row['id']?.toString()),
+                )
+                .toList()
+              ..sort(
+                (a, b) => (a['full_name'] as String).compareTo(
+                  b['full_name'] as String,
+                ),
+              );
+        final members = memberRows
+            .map((row) => MemberEntity.fromJson(row))
+            .toList();
+        final cachedMembers = await _readCachedMembers();
+        final cachedById = {
+          for (final member in cachedMembers) member.id: member,
+        };
+        for (final member in members) {
+          cachedById[member.id] = member;
+        }
+        if (members.isNotEmpty) {
+          await _offlineCache.saveMembers(
+            members.first.churchId,
+            cachedById.values.map(memberToJson).toList(),
+          );
+        }
+        return members;
       },
       offline: () async {
         final members = await _readCachedMembers();
         return _filterDeletedEntities(
-          members.where((m) => m.isActive && m.meetingId == meetingId).toList(),
+          members
+              .where((m) => m.isActive && m.meetingIds.contains(meetingId))
+              .toList(),
           (item) => item.id,
           pendingDeletes,
         )..sort((a, b) => a.fullName.compareTo(b.fullName));
@@ -63,7 +122,12 @@ mixin _SupabaseMembersRepository on _SupabaseRepositoryBase {
   }
 
   @override
-  Future<List<MemberEntity>> getAllMembers() async {
+  Future<List<MemberEntity>> getAllMembers() => _joinReadRequest(
+    'members:all:${_client.auth.currentUser?.id ?? "signed-out"}',
+    _loadAllMembers,
+  );
+
+  Future<List<MemberEntity>> _loadAllMembers() async {
     final profile = await getCurrentProfile();
     if (profile?.churchId == null) return [];
 
@@ -73,7 +137,9 @@ mixin _SupabaseMembersRepository on _SupabaseRepositoryBase {
       online: () async {
         final rows = await _client
             .from('members')
-            .select()
+            .select(
+              '*,member_meeting_assignments(meeting_id,sunday_school_class_id)',
+            )
             .eq('church_id', churchId)
             .order('full_name');
         final filteredRows = _filterDeletedRows(rows as List, pendingDeletes);
@@ -92,7 +158,12 @@ mixin _SupabaseMembersRepository on _SupabaseRepositoryBase {
   }
 
   @override
-  Future<MemberEntity?> getMemberDetails(String memberId) async {
+  Future<MemberEntity?> getMemberDetails(String memberId) => _joinReadRequest(
+    'member:${_client.auth.currentUser?.id ?? "signed-out"}:$memberId',
+    () => _loadMemberDetails(memberId),
+  );
+
+  Future<MemberEntity?> _loadMemberDetails(String memberId) async {
     final pendingDeletes = await _pendingDeletedEntityIds();
     if (pendingDeletes.contains(memberId)) return null;
 
@@ -100,7 +171,9 @@ mixin _SupabaseMembersRepository on _SupabaseRepositoryBase {
       online: () async {
         final row = await _client
             .from('members')
-            .select()
+            .select(
+              '*,member_meeting_assignments(meeting_id,sunday_school_class_id)',
+            )
             .eq('id', memberId)
             .maybeSingle();
         return row == null ? null : MemberEntity.fromJson(row);

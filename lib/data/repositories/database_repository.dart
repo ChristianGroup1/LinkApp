@@ -31,6 +31,13 @@ part 'supabase_members_repository.dart';
 part 'supabase_servants_repository.dart';
 part 'supabase_structure_repository.dart';
 
+abstract interface class MemberMeetingCopyRepository {
+  Future<OfflineSaveResult<int>> copyMembersToMeeting({
+    required List<String> memberIds,
+    required String meetingId,
+  });
+}
+
 abstract class DatabaseRepository {
   // Auth
   Future<AppProfile?> signInWithEmailAndPassword(String email, String password);
@@ -215,6 +222,12 @@ abstract class DatabaseRepository {
   Future<List<MemberAttendanceHistoryEntry>> getMemberAttendanceHistory(
     String memberId,
   );
+  Future<OfflineSaveResult<AttendanceSessionEntity>> lockAttendanceSession(
+    AttendanceSessionEntity session,
+  );
+  Future<OfflineSaveResult<AttendanceSessionEntity>> unlockAttendanceSession(
+    AttendanceSessionEntity session,
+  );
   Future<bool> saveAttendanceRecords({
     required String sessionId,
     required Map<String, AttendanceStatus> statusesByMemberId,
@@ -285,12 +298,90 @@ abstract class _SupabaseRepositoryBase implements DatabaseRepository {
   final SupabaseClient _client = Supabase.instance.client;
   final OfflineCache _offlineCache = OfflineCache();
   final OfflineWriteQueue _writeQueue = OfflineWriteQueue();
+  final Map<String, Future<dynamic>> _readRequestsInFlight = {};
+  final Map<String, Future<AppProfile?>> _profileRequestsInFlight = {};
+  final Map<String, Future<void>> _offlineCacheWarmInFlight = {};
+  final Map<String, DateTime> _offlineCacheWarmCompletedAt = {};
+  Future<void>? _offlineSyncInFlight;
+  static const _offlineCacheWarmCooldown = Duration(minutes: 2);
   late final OfflineWriteHandler _offlineWriter;
 
   Future<T> _notifyAfter<T>(Future<T> operation, Set<AppDataArea> areas) async {
     final result = await operation;
-    AppDataChanges.instance.notify(areas);
+    _notifyDataChanged(areas);
     return result;
+  }
+
+  void _notifyDataChanged(Set<AppDataArea> areas) {
+    if (areas.isEmpty) return;
+
+    // A post-write refresh must not join a read that started before the write.
+    _readRequestsInFlight.removeWhere((key, _) {
+      if (areas.contains(AppDataArea.profile) ||
+          areas.contains(AppDataArea.church)) {
+        return true;
+      }
+      if (areas.contains(AppDataArea.meetings) &&
+          (key.startsWith('meetings:') ||
+              key.startsWith('classes:') ||
+              key.startsWith('attendance-sessions:') ||
+              key.startsWith('meeting-assignments:') ||
+              key.startsWith('user-meeting-assignments:'))) {
+        return true;
+      }
+      if (areas.contains(AppDataArea.classes) &&
+          (key.startsWith('classes:') ||
+              key.startsWith('attendance-sessions:') ||
+              key.startsWith('class-assignments:') ||
+              key.startsWith('user-class-assignments:'))) {
+        return true;
+      }
+      if (areas.contains(AppDataArea.members) &&
+          (key.startsWith('members:') ||
+              key.startsWith('member:') ||
+              key.startsWith('attendance-report-stats:'))) {
+        return true;
+      }
+      if (areas.contains(AppDataArea.assignments) &&
+          (key.startsWith('class-assignments:') ||
+              key.startsWith('meeting-assignments:') ||
+              key.startsWith('user-class-assignments:') ||
+              key.startsWith('user-meeting-assignments:'))) {
+        return true;
+      }
+      if (areas.contains(AppDataArea.attendance) &&
+          (key.startsWith('attendance-sessions:') ||
+              key.startsWith('attendance-records:') ||
+              key.startsWith('attendance-report-stats:'))) {
+        return true;
+      }
+      if (areas.contains(AppDataArea.followUps) &&
+          key.startsWith('follow-ups:')) {
+        return true;
+      }
+      return areas.contains(AppDataArea.invitations) &&
+          key.startsWith('invitations:');
+    });
+    if (areas.contains(AppDataArea.profile)) {
+      _profileRequestsInFlight.clear();
+    }
+    AppDataChanges.instance.notify(areas);
+  }
+
+  Future<T> _joinReadRequest<T>(String key, Future<T> Function() load) {
+    final activeRequest = _readRequestsInFlight[key];
+    if (activeRequest != null) {
+      return activeRequest.then((result) => result as T);
+    }
+
+    late final Future<T> request;
+    request = load().whenComplete(() {
+      if (identical(_readRequestsInFlight[key], request)) {
+        _readRequestsInFlight.remove(key);
+      }
+    });
+    _readRequestsInFlight[key] = request;
+    return request;
   }
 
   bool _isRecoverableOfflineError(Object error) =>
@@ -348,11 +439,23 @@ abstract class _SupabaseRepositoryBase implements DatabaseRepository {
   }
 
   @override
-  Future<void> syncPendingOfflineData() async {
+  Future<void> syncPendingOfflineData() {
+    final activeSync = _offlineSyncInFlight;
+    if (activeSync != null) return activeSync;
+
+    late final Future<void> sync;
+    sync = _performPendingOfflineSync().whenComplete(() {
+      if (identical(_offlineSyncInFlight, sync)) _offlineSyncInFlight = null;
+    });
+    _offlineSyncInFlight = sync;
+    return sync;
+  }
+
+  Future<void> _performPendingOfflineSync() async {
     final hadPendingData = await _offlineWriter.hasPendingData();
     await _offlineWriter.syncAll();
     if (hadPendingData) {
-      AppDataChanges.instance.notify(AppDataArea.values.toSet());
+      _notifyDataChanged(AppDataArea.values.toSet());
     }
   }
 
@@ -370,9 +473,41 @@ abstract class _SupabaseRepositoryBase implements DatabaseRepository {
     await OfflineNetworkPolicy.ensureReady();
     if (OfflineNetworkPolicy.isConnectivityOffline) return;
 
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) return;
+
+    final activeWarm = _offlineCacheWarmInFlight[userId];
+    if (activeWarm != null) {
+      await activeWarm;
+      return;
+    }
+
+    final lastWarm = _offlineCacheWarmCompletedAt[userId];
+    if (lastWarm != null &&
+        DateTime.now().difference(lastWarm) < _offlineCacheWarmCooldown) {
+      return;
+    }
+
+    late final Future<void> warm;
+    warm = _warmOfflineCacheForCurrentUser(userId).whenComplete(() {
+      if (identical(_offlineCacheWarmInFlight[userId], warm)) {
+        _offlineCacheWarmInFlight.remove(userId);
+      }
+    });
+    _offlineCacheWarmInFlight[userId] = warm;
+    await warm;
+  }
+
+  Future<void> _warmOfflineCacheForCurrentUser(String userId) async {
+    var completed = false;
+
     try {
       final profile = await getCurrentProfile();
-      if (profile?.churchId == null) return;
+      if (_client.auth.currentUser?.id != userId || profile == null) return;
+      if (profile.churchId == null) {
+        completed = true;
+        return;
+      }
 
       final results = await Future.wait([
         getAllMembers(),
@@ -380,7 +515,7 @@ abstract class _SupabaseRepositoryBase implements DatabaseRepository {
         getAllSundaySchoolClasses(),
         getAllFollowUps(),
         getProfiles(),
-        getUserClassAssignments(profile!.id),
+        getUserClassAssignments(profile.id),
         getUserMeetingAssignments(profile.id),
         getAttendanceReportStats(),
         getInvitations(),
@@ -388,6 +523,7 @@ abstract class _SupabaseRepositoryBase implements DatabaseRepository {
       final meetings = results[1] as List<MeetingEntity>;
       final classes = results[2] as List<SundaySchoolClassEntity>;
       final profiles = results[4] as List<AppProfile>;
+      if (_client.auth.currentUser?.id != userId) return;
 
       await Future.wait([
         ...classes.map((cls) => getClassAssignments(cls.id)),
@@ -422,7 +558,14 @@ abstract class _SupabaseRepositoryBase implements DatabaseRepository {
         }());
       }
       await Future.wait(sessionFetches);
-    } catch (_) {}
+      completed = true;
+    } catch (_) {
+      // Cache warming is best-effort. A later explicit warm can retry failures.
+    } finally {
+      if (completed) {
+        _offlineCacheWarmCompletedAt[userId] = DateTime.now();
+      }
+    }
   }
 
   Stream<List<T>> _streamTable<T>({
@@ -472,7 +615,8 @@ class SupabaseRepository extends _SupabaseRepositoryBase
         _SupabaseServantsRepository,
         _SupabaseAttendanceRepository,
         _SupabaseFollowUpsRepository,
-        _SupabaseInvitationsRepository {
+        _SupabaseInvitationsRepository
+    implements MemberMeetingCopyRepository {
   SupabaseRepository() {
     _offlineWriter = OfflineWriteHandler(
       client: _client,

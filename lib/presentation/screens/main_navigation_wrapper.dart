@@ -342,6 +342,19 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
       if (areas.any(churchAreas.contains)) {
         _churchBloc.add(LoadChurchContext());
       }
+      const reminderAreas = {
+        AppDataArea.meetings,
+        AppDataArea.classes,
+        AppDataArea.members,
+        AppDataArea.assignments,
+      };
+      if (areas.any(reminderAreas.contains)) {
+        unawaited(
+          MeetingReminderService.instance.syncForCurrentUser(
+            context.read<DatabaseRepository>(),
+          ),
+        );
+      }
 
       setState(() {
         for (final index in _tabsAffectedBy(areas)) {

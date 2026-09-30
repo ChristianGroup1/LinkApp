@@ -6,6 +6,14 @@ mixin _SupabaseAttendanceRepository on _SupabaseRepositoryBase {
   Future<List<AttendanceSessionEntity>> getSessions(
     String meetingId, {
     String? classId,
+  }) => _joinReadRequest(
+    'attendance-sessions:${_client.auth.currentUser?.id ?? "signed-out"}:$meetingId:${classId ?? "meeting"}',
+    () => _loadSessions(meetingId, classId: classId),
+  );
+
+  Future<List<AttendanceSessionEntity>> _loadSessions(
+    String meetingId, {
+    String? classId,
   }) async {
     final pendingDeletes = await _pendingDeletedEntityIds();
     return OfflineNetworkPolicy.run(
@@ -80,9 +88,117 @@ mixin _SupabaseAttendanceRepository on _SupabaseRepositoryBase {
     );
   }
 
+  @override
+  Future<OfflineSaveResult<AttendanceSessionEntity>> lockAttendanceSession(
+    AttendanceSessionEntity session,
+  ) => _setAttendanceSessionLock(session, lock: true);
+
+  @override
+  Future<OfflineSaveResult<AttendanceSessionEntity>> unlockAttendanceSession(
+    AttendanceSessionEntity session,
+  ) => _setAttendanceSessionLock(session, lock: false);
+
+  Future<OfflineSaveResult<AttendanceSessionEntity>> _setAttendanceSessionLock(
+    AttendanceSessionEntity session, {
+    required bool lock,
+  }) async {
+    await OfflineNetworkPolicy.ensureReady();
+    final resolvedId = await _writeQueue.resolveId(session.id);
+    final prefs = await SharedPreferences.getInstance();
+    final unsyncedSessions =
+        prefs.getStringList(OfflineCache.unsyncedSessionsKey) ?? [];
+    final hasPendingAttendance =
+        unsyncedSessions.contains(session.id) ||
+        unsyncedSessions.contains(resolvedId);
+
+    if (OfflineNetworkPolicy.isConnectivityOffline ||
+        hasPendingAttendance ||
+        isOfflineId(session.id)) {
+      final updated = _attendanceSessionWithLock(session, lock: lock);
+      await _queueAttendanceSessionLock(session, updated);
+      await _offlineCache.upsertSession(
+        session.meetingId,
+        session.classId,
+        updated,
+      );
+      _notifyDataChanged({AppDataArea.attendance});
+      return OfflineSaveResult(data: updated, syncedToServer: false);
+    }
+
+    try {
+      final row = await _client.rpc(
+        lock ? 'lock_attendance_session' : 'unlock_attendance_session',
+        params: {'target_session_id': resolvedId},
+      );
+      final updated = AttendanceSessionEntity.fromJson(
+        Map<String, dynamic>.from(row as Map),
+      );
+      await _offlineCache.upsertSession(
+        updated.meetingId,
+        updated.classId,
+        updated,
+      );
+      _notifyDataChanged({AppDataArea.attendance});
+      return OfflineSaveResult(data: updated, syncedToServer: true);
+    } catch (error) {
+      if (!_isRecoverableOfflineError(error)) rethrow;
+      final updated = _attendanceSessionWithLock(session, lock: lock);
+      await _queueAttendanceSessionLock(session, updated);
+      await _offlineCache.upsertSession(
+        session.meetingId,
+        session.classId,
+        updated,
+      );
+      _notifyDataChanged({AppDataArea.attendance});
+      return OfflineSaveResult(data: updated, syncedToServer: false);
+    }
+  }
+
+  AttendanceSessionEntity _attendanceSessionWithLock(
+    AttendanceSessionEntity session, {
+    required bool lock,
+  }) => AttendanceSessionEntity(
+    id: session.id,
+    churchId: session.churchId,
+    meetingId: session.meetingId,
+    classId: session.classId,
+    sessionDate: session.sessionDate,
+    weekNumber: session.weekNumber,
+    title: session.title,
+    isLocked: lock,
+    lockedAt: lock ? (session.lockedAt ?? DateTime.now()) : null,
+    lockedBy: lock ? (session.lockedBy ?? _client.auth.currentUser?.id) : null,
+  );
+
+  Future<void> _queueAttendanceSessionLock(
+    AttendanceSessionEntity previous,
+    AttendanceSessionEntity updated,
+  ) async {
+    await _writeQueue.setAttendanceSessionLock(
+      QueuedOperation(
+        id: await _writeQueue.generateId('op'),
+        type: OfflineOpType.sessionLockState,
+        payload: {
+          ...sessionToJson(updated),
+          'previous_is_locked': previous.isLocked,
+          'previous_session': sessionToJson(previous),
+          'is_locked': updated.isLocked,
+        },
+        queuedAt: DateTime.now(),
+      ),
+    );
+  }
+
   // Attendance Records
   @override
   Future<List<AttendanceRecordEntity>> getAttendanceRecords(
+    String sessionId,
+  ) => _joinReadRequest(
+    'attendance-records:${_client.auth.currentUser?.id ?? "signed-out"}:$sessionId',
+    () => _loadAttendanceRecords(sessionId),
+  );
+
+  Future<List<AttendanceRecordEntity>> _loadAttendanceRecords(
     String sessionId,
   ) async {
     return OfflineNetworkPolicy.run(
@@ -285,7 +401,7 @@ mixin _SupabaseAttendanceRepository on _SupabaseRepositoryBase {
           unsynced.add(sessionId);
           await prefs.setStringList(OfflineCache.unsyncedSessionsKey, unsynced);
         }
-        AppDataChanges.instance.notify({AppDataArea.attendance});
+        _notifyDataChanged({AppDataArea.attendance});
         return false;
       } catch (_) {
         rethrow;

@@ -126,9 +126,12 @@ abstract class _OfflineWriteHandlerBase {
 
   Future<void> _syncAttendanceWithRemapping();
 
+  Future<void> _syncAttendanceLockChanges();
+
   Future<void> _performSync() async {
     await _syncWriteQueue();
     await _syncAttendanceWithRemapping();
+    await _syncAttendanceLockChanges();
   }
 
   String _generateActivationCode() {

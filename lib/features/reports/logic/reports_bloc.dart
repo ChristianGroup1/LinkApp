@@ -103,6 +103,7 @@ class ReportsBloc extends Bloc<ReportsEvent, ReportsState> {
             : members
                   .where(
                     (m) =>
+                        m.meetingIds.any(viewMeetingIds.contains) ||
                         viewMeetingIds.contains(m.meetingId) ||
                         viewClassIds.contains(m.sundaySchoolClassId),
                   )
@@ -221,7 +222,7 @@ class ReportsBloc extends Bloc<ReportsEvent, ReportsState> {
           } else {
             // General meeting
             final mtgMembers = visibleMembers
-                .where((m) => m.meetingId == mtg.id)
+                .where((m) => m.meetingIds.contains(mtg.id))
                 .toList();
             if (mtgMembers.isNotEmpty) {
               double totalPercentage = 0;
@@ -313,6 +314,61 @@ class ReportsBloc extends Bloc<ReportsEvent, ReportsState> {
         final recordsBySessionId = {
           for (final entry in recordResults) entry.key: entry.value,
         };
+
+        // A shared member has one overall profile but can attend multiple
+        // direct meetings. Calculate each meeting's percentage from its own
+        // attendance sheets instead of reusing the member-wide aggregate.
+        for (final meetingStat in meetingStats) {
+          final meetingId = meetingStat['id'] as String;
+          final meeting = meetingsById[meetingId];
+          if (meeting == null) continue;
+          final scopedMembers = meeting.kind == MeetingKind.sundaySchool
+              ? visibleMembers
+                    .where(
+                      (member) => visibleClasses.any(
+                        (cls) =>
+                            cls.meetingId == meetingId &&
+                            member.sundaySchoolClassId == cls.id,
+                      ),
+                    )
+                    .toList()
+              : visibleMembers
+                    .where((member) => member.meetingIds.contains(meetingId))
+                    .toList();
+          final scopedMemberIds = scopedMembers
+              .map((member) => member.id)
+              .toSet();
+          final countsByMember = <String, ({int total, int present})>{};
+          for (final session in sessionsList.where(
+            (item) =>
+                item.meetingId == meetingId &&
+                (meeting.kind == MeetingKind.sundaySchool ||
+                    item.classId == null),
+          )) {
+            for (final record in recordsBySessionId[session.id] ?? const []) {
+              if (!scopedMemberIds.contains(record.memberId)) continue;
+              final counts =
+                  countsByMember[record.memberId] ?? (total: 0, present: 0);
+              countsByMember[record.memberId] = (
+                total: counts.total + 1,
+                present:
+                    counts.present +
+                    (record.status == AttendanceStatus.present ? 1 : 0),
+              );
+            }
+          }
+          final memberPercentages = countsByMember.values
+              .where((counts) => counts.total > 0)
+              .map((counts) => counts.present * 100 / counts.total)
+              .toList();
+          meetingStat['percentage'] = memberPercentages.isEmpty
+              ? 0.0
+              : double.parse(
+                  (memberPercentages.reduce((a, b) => a + b) /
+                          memberPercentages.length)
+                      .toStringAsFixed(2),
+                );
+        }
 
         for (final session in sessionsList) {
           final records = recordsBySessionId[session.id] ?? [];
@@ -412,7 +468,9 @@ class ReportsBloc extends Bloc<ReportsEvent, ReportsState> {
           final session2 = recordsBySessionId[recentSessions[1].id] ?? [];
           final session3 = recordsBySessionId[recentSessions[2].id] ?? [];
           final scopedMembers = scope.classEntity == null
-              ? visibleMembers.where((m) => m.meetingId == scope.meeting.id)
+              ? visibleMembers.where(
+                  (m) => m.meetingIds.contains(scope.meeting.id),
+                )
               : visibleMembers.where(
                   (m) => m.sundaySchoolClassId == scope.classEntity!.id,
                 );
