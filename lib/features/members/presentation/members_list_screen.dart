@@ -90,9 +90,9 @@ class _MembersListScreenState extends State<MembersListScreen> {
         classIdFilter: _selectedScope == 'sunday_school_class'
             ? _selectedClassId
             : null,
-        meetingIdFilter: _selectedScope == 'meeting'
-            ? _selectedMeetingId
-            : null,
+        meetingIdFilter: _selectedScope == 'sunday_school_class'
+            ? null
+            : _selectedMeetingId,
       ),
     );
   }
@@ -535,8 +535,9 @@ class _MembersListScreenState extends State<MembersListScreen> {
                                         ),
                                       ),
                                     ],
-                                    if (_selectedScope == 'meeting' &&
-                                        _meetings.isNotEmpty) ...[
+                                    if (_selectedScope !=
+                                            'sunday_school_class' &&
+                                        _allMeetings.isNotEmpty) ...[
                                       const SizedBox(height: 10),
                                       Container(
                                         padding: const EdgeInsets.symmetric(
@@ -572,11 +573,9 @@ class _MembersListScreenState extends State<MembersListScreen> {
                                           items: [
                                             const DropdownMenuItem<String?>(
                                               value: null,
-                                              child: Text(
-                                                'كل الاجتماعات المباشرة',
-                                              ),
+                                              child: Text('كل الاجتماعات'),
                                             ),
-                                            ..._meetings.map(
+                                            ..._allMeetings.map(
                                               (m) => DropdownMenuItem<String?>(
                                                 value: m.id,
                                                 child: Text(m.nameAr),

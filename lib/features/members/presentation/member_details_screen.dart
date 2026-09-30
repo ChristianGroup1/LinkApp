@@ -434,6 +434,7 @@ class _MemberAttendanceSection extends StatefulWidget {
 
 class _MemberAttendanceSectionState extends State<_MemberAttendanceSection> {
   late Future<_MemberHistoryData> _historyFuture;
+  String? _selectedMeetingId;
 
   @override
   void initState() {
@@ -545,31 +546,82 @@ class _MemberAttendanceSectionState extends State<_MemberAttendanceSection> {
   }
 
   Widget _buildHistory(_MemberHistoryData data) {
-    final history = data.attendance;
-    if (history.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.only(top: 20),
-        child: Column(
-          children: [
-            Icon(
-              Icons.event_available_outlined,
-              color: AppTheme.textLight.withValues(alpha: 0.65),
-              size: 38,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'لا توجد سجلات حضور لهذا العضو حتى الآن',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.cairo(
-                color: AppTheme.textLight,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 18),
-            _buildFollowUpReports(data),
-          ],
+    final history = _selectedMeetingId == null
+        ? data.attendance
+        : data.attendance
+              .where((entry) => entry.meetingId == _selectedMeetingId)
+              .toList();
+    final memberMeetingIds = <String>{
+      ...widget.member.meetingIds,
+      if (widget.member.meetingId != null) widget.member.meetingId!,
+      ...data.attendance.map((entry) => entry.meetingId),
+    };
+    final availableMeetings = widget.meetings
+        .where((meeting) => memberMeetingIds.contains(meeting.id))
+        .toList();
+    final meetingFilter = Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: AppTheme.cardBackground,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppTheme.border.withValues(alpha: 0.8)),
+      ),
+      child: DropdownButtonFormField<String?>(
+        key: ValueKey('member-attendance-$_selectedMeetingId'),
+        initialValue: _selectedMeetingId,
+        decoration: const InputDecoration(
+          labelText: 'تصفية حسب الاجتماع',
+          border: InputBorder.none,
+          isDense: true,
+          contentPadding: EdgeInsets.symmetric(vertical: 8),
         ),
+        style: GoogleFonts.cairo(color: AppTheme.textDark, fontSize: 13),
+        items: [
+          const DropdownMenuItem<String?>(
+            value: null,
+            child: Text('كل الاجتماعات'),
+          ),
+          ...availableMeetings.map(
+            (meeting) => DropdownMenuItem<String?>(
+              value: meeting.id,
+              child: Text(meeting.nameAr),
+            ),
+          ),
+        ],
+        onChanged: (value) => setState(() => _selectedMeetingId = value),
+      ),
+    );
+    if (history.isEmpty) {
+      return Column(
+        children: [
+          if (availableMeetings.isNotEmpty) meetingFilter,
+          Padding(
+            padding: const EdgeInsets.only(top: 20),
+            child: Column(
+              children: [
+                Icon(
+                  Icons.event_available_outlined,
+                  color: AppTheme.textLight.withValues(alpha: 0.65),
+                  size: 38,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'لا توجد سجلات حضور لهذا العضو حتى الآن',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.cairo(
+                    color: AppTheme.textLight,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 18),
+              ],
+            ),
+          ),
+          const SizedBox(height: 18),
+          _buildFollowUpReports(data, meetingIdFilter: _selectedMeetingId),
+        ],
       );
     }
 
@@ -588,6 +640,7 @@ class _MemberAttendanceSectionState extends State<_MemberAttendanceSection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (availableMeetings.isNotEmpty) meetingFilter,
         Row(
           children: [
             Expanded(
@@ -716,7 +769,7 @@ class _MemberAttendanceSectionState extends State<_MemberAttendanceSection> {
         const SizedBox(height: 6),
         ...previewHistory.map(_buildHistoryRow),
         const SizedBox(height: 18),
-        _buildFollowUpReports(data),
+        _buildFollowUpReports(data, meetingIdFilter: _selectedMeetingId),
         if (history.length > 4) ...[
           const SizedBox(height: 8),
           OutlinedButton.icon(
@@ -754,19 +807,27 @@ class _MemberAttendanceSectionState extends State<_MemberAttendanceSection> {
     );
   }
 
-  Widget _buildFollowUpReports(_MemberHistoryData data) {
+  Widget _buildFollowUpReports(
+    _MemberHistoryData data, {
+    String? meetingIdFilter,
+  }) {
     final sessionsById = {
       for (final entry in data.attendance) entry.sessionId: entry,
     };
     final reportsByMeeting = <String, List<FollowUpEntity>>{};
-    for (final report in data.reports) {
+    final visibleReports = data.reports.where((report) {
+      if (meetingIdFilter == null) return true;
+      if (report.sessionId == null) return false;
+      return sessionsById[report.sessionId]?.meetingId == meetingIdFilter;
+    }).toList();
+    for (final report in visibleReports) {
       final meetingId = report.sessionId == null
           ? null
           : sessionsById[report.sessionId]?.meetingId;
       reportsByMeeting.putIfAbsent(meetingId ?? '', () => []).add(report);
     }
 
-    if (data.reports.isEmpty) {
+    if (visibleReports.isEmpty) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -780,7 +841,9 @@ class _MemberAttendanceSectionState extends State<_MemberAttendanceSection> {
           ),
           const SizedBox(height: 6),
           Text(
-            'لا توجد تقارير متابعة مسجلة لهذا المخدوم.',
+            meetingIdFilter == null
+                ? 'لا توجد تقارير متابعة مسجلة لهذا المخدوم.'
+                : 'لا توجد تقارير متابعة مسجلة لهذا الاجتماع.',
             style: GoogleFonts.cairo(color: AppTheme.textLight, fontSize: 12),
           ),
         ],
@@ -816,7 +879,7 @@ class _MemberAttendanceSectionState extends State<_MemberAttendanceSection> {
             ),
             const SizedBox(width: 7),
             Text(
-              'تقارير المتابعة (${data.reports.length})',
+              'تقارير المتابعة (${visibleReports.length})',
               style: GoogleFonts.cairo(
                 color: AppTheme.textDark,
                 fontSize: 13,

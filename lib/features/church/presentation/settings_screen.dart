@@ -16,7 +16,6 @@ import '../../../presentation/screens/app_tour_screen.dart';
 import '../../../presentation/screens/my_invitations_screen.dart';
 import '../../../presentation/widgets/in_app_spotlight_overlay.dart';
 import '../../../shared/ui/app_widgets.dart';
-import '../../updates/presentation/release_notes_screen.dart';
 import '../logic/church_bloc.dart';
 import 'servants_permissions_screen.dart';
 import 'widgets/compact_settings_dialog.dart';

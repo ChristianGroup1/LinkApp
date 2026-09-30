@@ -364,8 +364,15 @@ class _AuthRecoveryListenerState extends State<AuthRecoveryListener> {
         _recoveryScreenOpened = false;
         return;
       }
-      navigator.push(
-        MaterialPageRoute(builder: (_) => const ResetPasswordScreen()),
+      unawaited(
+        navigator
+            .pushAndRemoveUntil<void>(
+              MaterialPageRoute<void>(
+                builder: (_) => const ResetPasswordScreen(),
+              ),
+              (route) => route.isFirst,
+            )
+            .whenComplete(() => _recoveryScreenOpened = false),
       );
     });
   }
