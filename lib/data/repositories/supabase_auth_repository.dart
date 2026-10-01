@@ -256,23 +256,28 @@ mixin _SupabaseAuthRepository on _SupabaseRepositoryBase {
       throw Exception('رابط الدعوة غير صالح أو انتهت صلاحيته.');
     }
 
-    if (!invitationEmailMatchesAccount(
-      invitationEmail: preview.email,
-      accountEmail: email,
-    )) {
+    final invitationHasNoEmail = isNoEmailInvitationAddress(preview.email);
+    if (!invitationHasNoEmail &&
+        !invitationEmailMatchesAccount(
+          invitationEmail: preview.email,
+          accountEmail: email,
+        )) {
       throw Exception(
         'يجب إنشاء الحساب بنفس البريد الإلكتروني المكتوب في الدعوة.',
       );
     }
 
-    final invitationEmail = preview.email!.trim();
+    final invitationEmail = invitationHasNoEmail
+        ? email.trim()
+        : preview.email!.trim();
 
     final invitedUser = _client.auth.currentUser;
     if (invitedUser != null &&
-        invitationEmailMatchesAccount(
-          invitationEmail: invitationEmail,
-          accountEmail: invitedUser.email,
-        )) {
+        (invitationHasNoEmail ||
+            invitationEmailMatchesAccount(
+              invitationEmail: invitationEmail,
+              accountEmail: invitedUser.email,
+            ))) {
       final existingProfile = await getCurrentProfile();
       if (existingProfile != null) {
         // Existing accounts are authenticated by the magic link. Keep their
@@ -281,6 +286,16 @@ mixin _SupabaseAuthRepository on _SupabaseRepositoryBase {
         // not repainted InvitationLinkScreen as authenticated yet.
         await acceptInvitationLink(inviteToken);
         return getCurrentProfile();
+      }
+
+      if (invitationHasNoEmail &&
+          !invitationEmailMatchesAccount(
+            invitationEmail: invitationEmail,
+            accountEmail: invitedUser.email,
+          )) {
+        throw Exception(
+          'البريد الإلكتروني لا يطابق الحساب المفتوح. سجّل الخروج ثم استخدم بريدك عند إكمال الدعوة.',
+        );
       }
 
       await _client.auth.updateUser(

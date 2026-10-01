@@ -28,6 +28,7 @@ class _InvitationLinkScreenState extends State<InvitationLinkScreen> {
 
   bool _matchesAuthenticatedAccount(AuthState state) {
     if (state is! AuthAuthenticated) return false;
+    if (isNoEmailInvitationAddress(_preview?.email)) return true;
     return invitationEmailMatchesAccount(
       invitationEmail: _preview?.email,
       accountEmail: state.profile.email,
@@ -284,8 +285,15 @@ class _InvitationLinkScreenState extends State<InvitationLinkScreen> {
                 ),
                 const SizedBox(height: 16),
                 _InfoRow(label: 'الاسم', value: preview.inviteeName ?? '—'),
-                if (preview.email != null && preview.email!.trim().isNotEmpty)
+                if (preview.email != null &&
+                    preview.email!.trim().isNotEmpty &&
+                    !isNoEmailInvitationAddress(preview.email))
                   _InfoRow(label: 'البريد', value: preview.email!),
+                if (isNoEmailInvitationAddress(preview.email))
+                  const _InfoRow(
+                    label: 'البريد',
+                    value: 'ستدخله عند إكمال إنشاء الحساب',
+                  ),
                 _InfoRow(label: 'نطاق الخدمة', value: preview.scopeLabel),
                 _InfoRow(
                   label: 'الصلاحيات',

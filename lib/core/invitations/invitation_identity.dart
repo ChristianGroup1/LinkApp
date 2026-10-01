@@ -1,5 +1,10 @@
+const noEmailInvitationAddress = 'no-email@linkapp.local';
+
 String normalizeInvitationEmail(String? email) =>
     (email ?? '').trim().toLowerCase();
+
+bool isNoEmailInvitationAddress(String? email) =>
+    normalizeInvitationEmail(email) == noEmailInvitationAddress;
 
 bool invitationEmailMatchesAccount({
   required String? invitationEmail,

@@ -28,6 +28,10 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   bool _obscureConfirmPassword = true;
 
   bool get _isInvitationLinkFlow => widget.invitationToken != null;
+  bool get _isInvitationEmailBound =>
+      _isInvitationLinkFlow &&
+      widget.initialEmail?.trim().isNotEmpty == true &&
+      !isNoEmailInvitationAddress(widget.initialEmail);
 
   @override
   void initState() {
@@ -35,7 +39,9 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     if (widget.initialName != null && widget.initialName!.trim().isNotEmpty) {
       _nameController.text = widget.initialName!.trim();
     }
-    if (widget.initialEmail != null && widget.initialEmail!.trim().isNotEmpty) {
+    if (widget.initialEmail != null &&
+        widget.initialEmail!.trim().isNotEmpty &&
+        !isNoEmailInvitationAddress(widget.initialEmail)) {
       _emailController.text = widget.initialEmail!.trim();
     }
   }
@@ -65,13 +71,13 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     if (name.isEmpty ||
         (!_isInvitationLinkFlow && churchName.isEmpty) ||
         email.isEmpty ||
-        !email.contains('@') ||
+        !RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email) ||
         password.length < 6) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             _isInvitationLinkFlow
-                ? 'أدخل الاسم والبريد وكلمة مرور من ٦ أحرف'
+                ? 'أدخل الاسم وبريدًا إلكترونيًا صحيحًا وكلمة مرور من ٦ أحرف'
                 : 'أدخل الاسم واسم الكنيسة والبريد وكلمة مرور من ٦ أحرف',
             style: GoogleFonts.cairo(),
           ),
@@ -240,9 +246,19 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                       hint: 'example@domain.com',
                       icon: Icons.alternate_email_rounded,
                       latinInput: true,
-                      readOnly: _isInvitationLinkFlow,
+                      readOnly: _isInvitationEmailBound,
                       keyboardType: TextInputType.emailAddress,
                     ),
+                    if (_isInvitationLinkFlow && !_isInvitationEmailBound) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        'الدعوة بدون بريد إلكتروني. أدخل بريدك الحقيقي؛ مطلوب لإنشاء حساب وتسجيل الدخول.',
+                        style: GoogleFonts.cairo(
+                          color: AppTheme.textLight,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 16),
                     // Phone Input
                     const AuthFieldLabel('رقم الهاتف (اختياري)'),

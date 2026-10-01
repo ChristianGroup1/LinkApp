@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/auth/auth_flow_capabilities.dart';
 import '../../core/errors/arabic_error_text.dart';
+import '../../core/invitations/invitation_identity.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/repositories/database_repository.dart';
 import '../../logic/auth/auth_bloc.dart';
@@ -45,12 +46,15 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool get _hasInvitationEmail =>
       widget.invitationToken?.trim().isNotEmpty == true &&
-      widget.initialEmail?.trim().isNotEmpty == true;
+      widget.initialEmail?.trim().isNotEmpty == true &&
+      !isNoEmailInvitationAddress(widget.initialEmail);
 
   @override
   void initState() {
     super.initState();
-    if (widget.initialEmail != null && widget.initialEmail!.trim().isNotEmpty) {
+    if (widget.initialEmail != null &&
+        widget.initialEmail!.trim().isNotEmpty &&
+        !isNoEmailInvitationAddress(widget.initialEmail)) {
       _emailController.text = widget.initialEmail!.trim();
     } else {
       _loadRememberedCredentials();
@@ -199,6 +203,17 @@ class _LoginScreenState extends State<LoginScreen> {
                       readOnly: _hasInvitationEmail,
                       keyboardType: TextInputType.emailAddress,
                     ),
+                    if (widget.invitationToken?.trim().isNotEmpty == true &&
+                        isNoEmailInvitationAddress(widget.initialEmail)) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        'الدعوة بدون بريد محدد. سجّل الدخول ببريد حسابك لقبولها.',
+                        style: GoogleFonts.cairo(
+                          color: AppTheme.textLight,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 16),
                     // Password Soft Grey Input
                     Row(

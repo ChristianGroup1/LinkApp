@@ -1094,7 +1094,12 @@ begin
   select lower(btrim(email)) into current_email
   from auth.users where id = auth.uid();
 
-  if nullif(lower(btrim(inv.email)), '') is null
+  if lower(btrim(inv.email)) = 'no-email@linkapp.local' then
+    if nullif(current_email, '') is null
+       or current_email = 'no-email@linkapp.local' then
+      raise exception 'أدخل بريدك الإلكتروني الحقيقي لإكمال الدعوة.';
+    end if;
+  elsif nullif(lower(btrim(inv.email)), '') is null
      or current_email is distinct from lower(btrim(inv.email)) then
     raise exception 'هذه الدعوة موجهة إلى بريد إلكتروني مختلف. سجّل الدخول بالبريد المدعو.';
   end if;
@@ -1271,7 +1276,13 @@ begin
     select lower(btrim(email)) into current_email
     from auth.users where id = auth.uid();
 
-    if nullif(lower(btrim(inv.email)), '') is null
+    if lower(btrim(inv.email)) = 'no-email@linkapp.local' then
+      if nullif(current_email, '') is null
+         or current_email = 'no-email@linkapp.local'
+         or lower(btrim(profile_email)) is distinct from current_email then
+        raise exception 'أدخل بريدك الإلكتروني الحقيقي لإكمال الدعوة.';
+      end if;
+    elsif nullif(lower(btrim(inv.email)), '') is null
        or current_email is distinct from lower(btrim(inv.email))
        or lower(btrim(profile_email)) is distinct from lower(btrim(inv.email)) then
       raise exception 'يجب إنشاء الحساب بنفس البريد الإلكتروني المكتوب في الدعوة.';
