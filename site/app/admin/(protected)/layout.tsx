@@ -17,6 +17,7 @@ export default async function ProtectedAdminLayout({ children }: { children: Rea
         </Link>
         <nav>
           <Link href="/admin" className="navPrimary">◫ نظرة عامة</Link>
+          <Link href="/admin/groups">المجموعات</Link>
           <p>قاعدة البيانات</p>
           {Object.entries(adminTables).map(([key, table]) => (
             <Link href={`/admin/data/${key}`} key={key}>{table.label}</Link>
@@ -34,4 +35,3 @@ export default async function ProtectedAdminLayout({ children }: { children: Rea
     </div>
   );
 }
-
