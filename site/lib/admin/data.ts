@@ -291,7 +291,9 @@ function buildMeetingGroups({
       members: memberNames,
       memberCount: memberNames.length,
     };
-  }).sort((a, b) => a.church.localeCompare(b.church, 'ar') || a.meeting.localeCompare(b.meeting, 'ar'));
+  }).sort((a, b) => b.memberCount - a.memberCount
+    || a.church.localeCompare(b.church, 'ar')
+    || a.meeting.localeCompare(b.meeting, 'ar'));
 }
 
 export async function getMeetingGroupsData(churchId?: string) {
