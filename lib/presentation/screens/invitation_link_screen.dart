@@ -26,17 +26,26 @@ class _InvitationLinkScreenState extends State<InvitationLinkScreen> {
   bool _isSubmitting = false;
   Object? _error;
 
+  bool _isSignedIn(AuthState state) =>
+      state is AuthAuthenticated || state is AuthPendingInvitation;
+
+  String? _accountEmail(AuthState state) {
+    if (state is AuthAuthenticated) return state.profile.email;
+    if (state is AuthPendingInvitation) return state.email;
+    return null;
+  }
+
   bool _matchesAuthenticatedAccount(AuthState state) {
-    if (state is! AuthAuthenticated) return false;
+    if (!_isSignedIn(state)) return false;
     if (isNoEmailInvitationAddress(_preview?.email)) return true;
     return invitationEmailMatchesAccount(
       invitationEmail: _preview?.email,
-      accountEmail: state.profile.email,
+      accountEmail: _accountEmail(state),
     );
   }
 
   bool _hasMismatchedAuthenticatedAccount(AuthState state) =>
-      state is AuthAuthenticated && !_matchesAuthenticatedAccount(state);
+      _isSignedIn(state) && !_matchesAuthenticatedAccount(state);
 
   @override
   void initState() {
@@ -104,11 +113,15 @@ class _InvitationLinkScreenState extends State<InvitationLinkScreen> {
     try {
       final repo = context.read<DatabaseRepository>();
       await repo.declineInvitationByToken(widget.inviteToken);
+      if (authState is AuthPendingInvitation) {
+        await repo.signOut();
+        context.read<AuthBloc>().add(AuthCheckRequested());
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('تم رفض الدعوة', style: GoogleFonts.cairo())),
       );
-      Navigator.pop(context);
+      Navigator.popUntil(context, (route) => route.isFirst);
     } catch (error) {
       if (!mounted) return;
       setState(() => _isSubmitting = false);
@@ -123,7 +136,7 @@ class _InvitationLinkScreenState extends State<InvitationLinkScreen> {
 
   Future<void> _accept() async {
     final authState = context.read<AuthBloc>().state;
-    if (authState is AuthAuthenticated) {
+    if (_isSignedIn(authState)) {
       if (!_matchesAuthenticatedAccount(authState)) {
         await _switchAccountAndOpen(login: false);
         return;
@@ -353,7 +366,7 @@ class _InvitationLinkScreenState extends State<InvitationLinkScreen> {
                 : Text(
                     accountMismatch
                         ? 'تسجيل الخروج وإنشاء حساب المدعو'
-                        : authState is AuthAuthenticated
+                        : _isSignedIn(authState)
                         ? 'قبول والانضمام'
                         : 'إنشاء حساب لقبول الدعوة',
                     style: GoogleFonts.cairo(fontWeight: FontWeight.w800),
@@ -373,7 +386,7 @@ class _InvitationLinkScreenState extends State<InvitationLinkScreen> {
             child: Text(
               accountMismatch
                   ? 'تسجيل الخروج والدخول بحساب المدعو'
-                  : authState is AuthAuthenticated
+                  : _isSignedIn(authState)
                   ? 'رفض الدعوة'
                   : 'لدي حساب بالفعل',
               style: GoogleFonts.cairo(fontWeight: FontWeight.w800),

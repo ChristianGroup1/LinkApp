@@ -23,6 +23,7 @@ import 'data/offline/offline_sync_listener.dart';
 import 'data/repositories/database_repository.dart';
 import 'logic/auth/auth_bloc.dart';
 import 'presentation/screens/login_screen.dart';
+import 'presentation/screens/invitation_link_screen.dart';
 import 'presentation/screens/main_navigation_wrapper.dart';
 import 'presentation/screens/password_recovery_error_screen.dart';
 import 'presentation/widgets/auth_widgets.dart';
@@ -416,6 +417,8 @@ class AuthenticationGate extends StatelessWidget {
       builder: (context, state) {
         if (state is AuthAuthenticated) {
           return MainNavigationWrapper(key: MainNavigationWrapper.wrapperKey);
+        } else if (state is AuthPendingInvitation) {
+          return InvitationLinkScreen(inviteToken: state.inviteToken);
         } else if (state is AuthUnauthenticated ||
             state is AuthLoginLoading ||
             state is AuthError ||

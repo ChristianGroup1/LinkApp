@@ -38,6 +38,21 @@ abstract interface class MemberMeetingCopyRepository {
   });
 }
 
+abstract interface class PendingInvitationSession {
+  String? getPendingInvitationToken();
+  String? getAuthenticatedEmail();
+}
+
+extension DatabaseRepositoryPendingInvitation on DatabaseRepository {
+  String? getPendingInvitationToken() => this is PendingInvitationSession
+      ? (this as PendingInvitationSession).getPendingInvitationToken()
+      : null;
+
+  String? getAuthenticatedEmail() => this is PendingInvitationSession
+      ? (this as PendingInvitationSession).getAuthenticatedEmail()
+      : null;
+}
+
 abstract class DatabaseRepository {
   // Auth
   Future<AppProfile?> signInWithEmailAndPassword(String email, String password);
@@ -295,7 +310,8 @@ abstract class DatabaseRepository {
   Future<void> warmOfflineCache();
 }
 
-abstract class _SupabaseRepositoryBase implements DatabaseRepository {
+abstract class _SupabaseRepositoryBase
+    implements DatabaseRepository, PendingInvitationSession {
   final SupabaseClient _client = Supabase.instance.client;
   final OfflineCache _offlineCache = OfflineCache();
   final OfflineWriteQueue _writeQueue = OfflineWriteQueue();

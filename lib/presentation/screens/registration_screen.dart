@@ -144,13 +144,17 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         compact: true,
         builder: (context) => BlocConsumer<AuthBloc, AuthState>(
           listener: (context, state) {
-            if (state is AuthAuthenticated) {
+            if (state is AuthPendingInvitation && _isInvitationLinkFlow) {
+              Navigator.of(context).popUntil((route) => route.isFirst);
+            } else if (state is AuthAuthenticated) {
               Navigator.of(context).popUntil((route) => route.isFirst);
             } else if (state is AuthSignUpConfirmationSent) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(
-                    'تم إنشاء الحساب. تحقق من بريدك الإلكتروني لتأكيد الحساب.',
+                    _isInvitationLinkFlow
+                        ? 'تم إنشاء الحساب. أكد بريدك الإلكتروني، ثم اختر قبول الدعوة أو رفضها.'
+                        : 'تم إنشاء الحساب. تحقق من بريدك الإلكتروني لتأكيد الحساب.',
                     style: GoogleFonts.cairo(),
                   ),
                 ),
@@ -482,7 +486,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
             style: GoogleFonts.cairo(fontWeight: FontWeight.w900),
           ),
           content: Text(
-            'هذا البريد الإلكتروني مسجل مسبقاً في التطبيق. قم بتسجيل الدخول وسنربط حسابك بالدعوة تلقائياً.',
+            'هذا البريد الإلكتروني مسجل مسبقاً في التطبيق. سجّل الدخول، وبعدها اختر قبول الدعوة أو رفضها.',
             textAlign: TextAlign.center,
             style: GoogleFonts.cairo(height: 1.5, fontSize: 13),
           ),
@@ -508,7 +512,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                 ),
               ),
               child: Text(
-                'تسجيل الدخول وتفعيل الدعوة',
+                'تسجيل الدخول ومراجعة الدعوة',
                 style: GoogleFonts.cairo(
                   fontWeight: FontWeight.w800,
                   color: Colors.white,

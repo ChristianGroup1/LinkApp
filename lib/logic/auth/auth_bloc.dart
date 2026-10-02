@@ -99,6 +99,13 @@ class AuthAuthenticated extends AuthState {
   AuthAuthenticated(this.profile);
 }
 
+class AuthPendingInvitation extends AuthState {
+  final String inviteToken;
+  final String? email;
+
+  AuthPendingInvitation({required this.inviteToken, this.email});
+}
+
 class AuthUnauthenticated extends AuthState {}
 
 /// The previous device account has been signed out while an invitation flow
@@ -155,6 +162,13 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             unawaited(repository.warmOfflineCache());
             emit(AuthAuthenticated(profile));
           }
+        } else if (repository.getPendingInvitationToken() != null) {
+          emit(
+            AuthPendingInvitation(
+              inviteToken: repository.getPendingInvitationToken()!,
+              email: repository.getAuthenticatedEmail(),
+            ),
+          );
         } else if (repository.hasActiveSession()) {
           emit(
             AuthProfileLoadFailed(
@@ -186,6 +200,13 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         );
         if (profile != null) {
           emit(AuthAuthenticated(profile));
+        } else if (repository.getPendingInvitationToken() != null) {
+          emit(
+            AuthPendingInvitation(
+              inviteToken: repository.getPendingInvitationToken()!,
+              email: repository.getAuthenticatedEmail(),
+            ),
+          );
         } else {
           emit(AuthError('بيانات الدخول غير صحيحة'));
         }
@@ -206,6 +227,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         );
         if (profile != null) {
           emit(AuthAuthenticated(profile));
+        } else if (repository.hasActiveSession() &&
+            repository.getPendingInvitationToken() != null) {
+          emit(
+            AuthPendingInvitation(
+              inviteToken: repository.getPendingInvitationToken()!,
+              email: repository.getAuthenticatedEmail(),
+            ),
+          );
         } else {
           emit(AuthSignUpConfirmationSent(event.email));
         }
@@ -216,11 +245,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
     on<SignUpWithInvitationTokenRequested>((event, emit) async {
       if (!supportsInvitations) {
-        emit(
-          AuthError(
-            'إنشاء الحساب عبر الدعوة متاح من تطبيق الموبايل فقط.',
-          ),
-        );
+        emit(AuthError('إنشاء الحساب عبر الدعوة متاح من تطبيق الموبايل فقط.'));
         return;
       }
       emit(AuthLoading());
@@ -234,6 +259,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         );
         if (profile != null) {
           emit(AuthAuthenticated(profile));
+        } else if (repository.hasActiveSession() &&
+            repository.getPendingInvitationToken() != null) {
+          emit(
+            AuthPendingInvitation(
+              inviteToken: repository.getPendingInvitationToken()!,
+              email: repository.getAuthenticatedEmail(),
+            ),
+          );
         } else {
           emit(AuthSignUpConfirmationSent(event.email));
         }

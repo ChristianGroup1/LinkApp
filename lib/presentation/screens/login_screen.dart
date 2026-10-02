@@ -42,7 +42,6 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   bool remember = false;
   bool obscure = true;
-  bool _handledInvitationAfterLogin = false;
 
   bool get _hasInvitationEmail =>
       widget.invitationToken?.trim().isNotEmpty == true &&
@@ -138,14 +137,12 @@ class _LoginScreenState extends State<LoginScreen> {
       child: AuthShell(
         builder: (context) => BlocConsumer<AuthBloc, AuthState>(
           listener: (context, state) {
-            if (state is AuthAuthenticated) {
-              final inviteToken = widget.invitationToken;
-              if (inviteToken != null &&
-                  inviteToken.isNotEmpty &&
-                  !_handledInvitationAfterLogin) {
-                _handledInvitationAfterLogin = true;
-                _acceptInvitationAfterLogin(inviteToken);
-              }
+            if ((state is AuthPendingInvitation ||
+                    state is AuthAuthenticated) &&
+                widget.invitationToken != null) {
+              if (Navigator.of(context).canPop()) Navigator.of(context).pop();
+            } else if (state is AuthAuthenticated) {
+              Navigator.of(context).popUntil((route) => route.isFirst);
             } else if (state is AuthError) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
@@ -382,34 +379,5 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       ),
     );
-  }
-
-  Future<void> _acceptInvitationAfterLogin(String inviteToken) async {
-    try {
-      await context.read<DatabaseRepository>().acceptInvitationLink(
-        inviteToken,
-      );
-      if (!mounted) return;
-      context.read<AuthBloc>().add(AuthCheckRequested());
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'تم تسجيل الدخول وتفعيل الدعوة بنجاح 🎉',
-            style: GoogleFonts.cairo(),
-          ),
-          backgroundColor: Colors.green,
-        ),
-      );
-      Navigator.popUntil(context, (route) => route.isFirst);
-    } catch (error) {
-      if (!mounted) return;
-      _handledInvitationAfterLogin = false;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(arabicErrorText(error), style: GoogleFonts.cairo()),
-          backgroundColor: AppTheme.accentRed,
-        ),
-      );
-    }
   }
 }

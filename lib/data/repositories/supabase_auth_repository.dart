@@ -42,28 +42,9 @@ mixin _SupabaseAuthRepository on _SupabaseRepositoryBase {
         final pendingInviteToken = metadata['invitation_token'] as String?;
         if (metadata['signup_type'] == 'invitation' &&
             pendingInviteToken?.trim().isNotEmpty == true) {
-          // A previous signup may have created the Auth user but failed before
-          // creating its church profile. A password sign-in proves ownership;
-          // finish the pending invitation instead of stranding that account.
-          debugPrint('[Auth] Completing a pending invitation signup');
-          try {
-            await _registerInvitedProfile(
-              userId: user.id,
-              inviteToken: pendingInviteToken,
-              fullName:
-                  (metadata['full_name'] as String?) ?? user.email ?? 'مستخدم',
-              email: user.email ?? email,
-              phone: metadata['phone'] as String?,
-            );
-            profile = await retryNullableLoad<AppProfile>(
-              load: () => _getCurrentProfile(throwOnRecoverableError: true),
-            );
-          } catch (error) {
-            debugPrint('[Auth] Pending invitation completion failed: $error');
-            throw Exception(
-              'الحساب موجود، لكن إكمال ربطه بالدعوة لم ينجح. احتفظنا بتسجيل دخولك؛ أعد المحاولة بعد قليل، وإذا استمرت المشكلة أبلغ مسؤول الكنيسة بتحديث قاعدة بيانات الدعوات.',
-            );
-          }
+          // Keep the account authenticated and let the invitee make an
+          // explicit accept/decline decision on the invitation screen.
+          return null;
         }
       }
       if (profile == null) {
@@ -301,31 +282,28 @@ mixin _SupabaseAuthRepository on _SupabaseRepositoryBase {
         ? email.trim()
         : preview.email!.trim();
 
-    final invitedUser = _client.auth.currentUser;
+    var invitedUser = _client.auth.currentUser;
     if (invitedUser != null &&
-        (invitationHasNoEmail ||
-            invitationEmailMatchesAccount(
-              invitationEmail: invitationEmail,
-              accountEmail: invitedUser.email,
-            ))) {
+        invitationHasNoEmail &&
+        !invitationEmailMatchesAccount(
+          invitationEmail: invitationEmail,
+          accountEmail: invitedUser.email,
+        )) {
+      // An email-less invitation must accept the address entered by the
+      // invitee. A stale session from another account must not override it.
+      await _client.auth.signOut();
+      invitedUser = null;
+    }
+
+    if (invitedUser != null &&
+        invitationEmailMatchesAccount(
+          invitationEmail: invitationEmail,
+          accountEmail: invitedUser.email,
+        )) {
       final existingProfile = await getCurrentProfile();
       if (existingProfile != null) {
-        // Existing accounts are authenticated by the magic link. Keep their
-        // current password unchanged and complete the invitation the user just
-        // confirmed. This also covers the short race where the auth bloc has
-        // not repainted InvitationLinkScreen as authenticated yet.
-        await acceptInvitationLink(inviteToken);
+        // The invitation screen, not signup, is responsible for acceptance.
         return getCurrentProfile();
-      }
-
-      if (invitationHasNoEmail &&
-          !invitationEmailMatchesAccount(
-            invitationEmail: invitationEmail,
-            accountEmail: invitedUser.email,
-          )) {
-        throw Exception(
-          'البريد الإلكتروني لا يطابق الحساب المفتوح. سجّل الخروج ثم استخدم بريدك عند إكمال الدعوة.',
-        );
       }
 
       await _client.auth.updateUser(
@@ -340,24 +318,7 @@ mixin _SupabaseAuthRepository on _SupabaseRepositoryBase {
         ),
       );
 
-      try {
-        await _registerInvitedProfile(
-          userId: invitedUser.id,
-          inviteToken: inviteToken,
-          fullName: name,
-          email: invitedUser.email ?? invitationEmail,
-          phone: phone,
-        );
-      } catch (e) {
-        debugPrint(
-          '[Auth] Existing invitation account could not be linked: $e',
-        );
-        throw Exception(
-          'الحساب موجود، لكن إكمال ربطه بالدعوة لم ينجح. احتفظنا بتسجيل دخولك؛ أعد المحاولة بعد قليل، وإذا استمرت المشكلة أبلغ مسؤول الكنيسة بتحديث قاعدة بيانات الدعوات.',
-        );
-      }
-
-      return getCurrentProfile();
+      return null;
     }
 
     final response = await _client.auth.signUp(
@@ -380,22 +341,10 @@ mixin _SupabaseAuthRepository on _SupabaseRepositoryBase {
       return null;
     }
 
-    try {
-      await _registerInvitedProfile(
-        userId: response.user!.id,
-        inviteToken: inviteToken,
-        fullName: name,
-        email: response.user!.email ?? invitationEmail,
-        phone: phone,
-      );
-    } catch (e) {
-      debugPrint('[Auth] New invitation account could not be linked: $e');
-      throw Exception(
-        'تم إنشاء الحساب، لكن ربطه بالدعوة لم يكتمل. احتفظنا بتسجيل دخولك؛ اضغط «إكمال وتأكيد الانضمام» للمحاولة مرة أخرى، وإذا استمرت المشكلة أبلغ مسؤول الكنيسة بتحديث قاعدة بيانات الدعوات.',
-      );
-    }
-
-    return getCurrentProfile();
+    // Account creation is deliberately separate from invitation acceptance.
+    // The pending token remains in Auth metadata and the decision screen
+    // completes or declines it after signup / email confirmation.
+    return null;
   }
 
   @override
@@ -417,6 +366,13 @@ mixin _SupabaseAuthRepository on _SupabaseRepositoryBase {
         'decline_invitation_by_token',
         params: {'p_token': inviteToken.trim()},
       );
+      if (getPendingInvitationToken() != null) {
+        await _client.auth.updateUser(
+          UserAttributes(
+            data: {'signup_type': 'account', 'invitation_token': ''},
+          ),
+        );
+      }
     } on PostgrestException catch (error) {
       throw Exception(_invitationActionErrorMessage(error));
     }
@@ -688,6 +644,19 @@ mixin _SupabaseAuthRepository on _SupabaseRepositoryBase {
     return _client.auth.currentSession != null ||
         _client.auth.currentUser != null;
   }
+
+  @override
+  String? getPendingInvitationToken() {
+    if (!hasActiveSession()) return null;
+    final user = _client.auth.currentUser;
+    final metadata = user?.userMetadata;
+    if (metadata?['signup_type'] != 'invitation') return null;
+    final token = metadata?['invitation_token'] as String?;
+    return token?.trim().isNotEmpty == true ? token!.trim() : null;
+  }
+
+  @override
+  String? getAuthenticatedEmail() => _client.auth.currentUser?.email;
 
   @override
   Future<AppProfile?> getCurrentProfile() => _getCurrentProfile();
