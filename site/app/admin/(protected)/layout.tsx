@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { requireSuperAdmin } from '@/lib/admin/auth';
 import { adminTables } from '@/lib/admin/schema';
 import { logoutAction } from '../actions';
+import AdminMobileNav from './admin-mobile-nav';
 
 export default async function ProtectedAdminLayout({ children }: { children: ReactNode }) {
   const admin = await requireSuperAdmin();
@@ -15,7 +16,7 @@ export default async function ProtectedAdminLayout({ children }: { children: Rea
           <Image src="/link-logo.png" alt="Link" width={46} height={46} />
           <span><strong>Link Control</strong><small>إدارة المنظومة</small></span>
         </Link>
-        <nav>
+        <nav className="adminDesktopNav">
           <Link href="/admin" className="navPrimary">◫ نظرة عامة</Link>
           <Link href="/admin/groups">المجموعات</Link>
           <p>قاعدة البيانات</p>
@@ -27,6 +28,7 @@ export default async function ProtectedAdminLayout({ children }: { children: Rea
       </aside>
       <div className="adminMain">
         <header className="adminTopbar">
+          <AdminMobileNav tables={Object.entries(adminTables).map(([key, table]) => ({ href: `/admin/data/${key}`, label: table.label }))} />
           <div><span className="liveDot" /> بيانات مباشرة من الإنتاج</div>
           <div className="adminIdentity"><strong>{admin.fullName}</strong><small>{admin.email}</small></div>
         </header>
