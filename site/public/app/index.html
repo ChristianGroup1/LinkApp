@@ -206,15 +206,12 @@
   </style>
   <script>
     (() => {
-      const dismissKey = 'link-pwa-install-dismissed';
       const host = document.getElementById('pwa-install-host');
       const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
       const isIos = /iPad|iPhone|iPod/.test(window.navigator.userAgent) && !window.MSStream;
       let deferredPrompt = null;
       let dismissed = false;
       let installCard = null;
-
-      try { dismissed = localStorage.getItem(dismissKey) === '1'; } catch (_) {}
 
       const hideInstall = () => {
         if (installCard) {
@@ -232,7 +229,6 @@
           }
         }
         dismissed = true;
-        try { localStorage.setItem(dismissKey, '1'); } catch (_) {}
         hideInstall();
       };
 
@@ -266,8 +262,10 @@
         installButton.addEventListener('click', async (event) => {
           event.preventDefault();
           event.stopPropagation();
-          if (isIos && !deferredPrompt) return;
-          if (!deferredPrompt) return;
+          if (!deferredPrompt) {
+            dismissInstall(event);
+            return;
+          }
           deferredPrompt.prompt();
           await deferredPrompt.userChoice;
           deferredPrompt = null;
@@ -285,6 +283,14 @@
             'على iPhone أو iPad: اضغط زر المشاركة ثم «إضافة إلى الشاشة الرئيسية».';
           card.querySelector('#pwa-install-button').textContent = 'حسناً، فهمت';
           card.querySelector('#pwa-install-button').onclick = (event) => dismissInstall(event);
+        } else if (deferredPrompt) {
+          card.querySelector('#pwa-install-message').textContent =
+            'ثبّت Link على جهازك للوصول إليه بسرعة من الشاشة الرئيسية.';
+          card.querySelector('#pwa-install-button').textContent = 'تثبيت التطبيق';
+        } else {
+          card.querySelector('#pwa-install-message').textContent =
+            'من قائمة المتصفح اختر «تثبيت التطبيق» أو «إضافة إلى الشاشة الرئيسية». ';
+          card.querySelector('#pwa-install-button').textContent = 'حسناً، فهمت';
         }
         card.hidden = false;
         card.removeAttribute('hidden');
@@ -296,14 +302,15 @@
         return;
       }
 
-      // iOS has no beforeinstallprompt — show tip once until dismissed.
-      if (isIos) showInstall();
-
       window.addEventListener('beforeinstallprompt', (event) => {
         event.preventDefault();
         deferredPrompt = event;
         showInstall();
       });
+
+      // Show the banner in the browser login flow even when the browser does
+      // not expose an install prompt. The copy then points to its install menu.
+      if (!isStandalone) showInstall();
 
       window.addEventListener('appinstalled', () => dismissInstall());
     })();
