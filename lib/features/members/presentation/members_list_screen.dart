@@ -4,7 +4,6 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:printing/printing.dart';
 
 import '../../../core/diagnostics/storage_write_error.dart';
 import '../../../core/theme/app_theme.dart';
@@ -183,7 +182,7 @@ class _MembersListScreenState extends State<MembersListScreen> {
                             _excelMenuItem(
                               _MemberExcelAction.qrPdf,
                               Icons.qr_code_2_rounded,
-                              'تصدير بطاقات QR (PDF)',
+                              'تنزيل بطاقات QR (PDF)',
                             ),
                             if (canManage) ...[
                               _excelMenuItem(
@@ -880,14 +879,17 @@ class _MembersListScreenState extends State<MembersListScreen> {
     await _runExcelTask(context, () async {
       final bytes = await _qrPdfService.build(members: members);
       final date = DateTime.now().toIso8601String().split('T').first;
-      await Printing.sharePdf(
+      final savedPath = await FilePicker.saveFile(
+        dialogTitle: 'تنزيل بطاقات QR',
+        fileName: 'Link_member_QR_$date.pdf',
+        type: FileType.custom,
+        allowedExtensions: const ['pdf'],
         bytes: bytes,
-        filename: 'Link_member_QR_$date.pdf',
       );
-      if (context.mounted) {
+      if (savedPath != null && context.mounted) {
         _showExcelSnack(
           context,
-          'تم إنشاء ملف QR لـ ${members.length} عضو نشط',
+          'تم تنزيل ملف بطاقات QR لـ ${members.length} عضو نشط',
         );
       }
     });
