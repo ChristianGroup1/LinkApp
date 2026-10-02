@@ -18,6 +18,7 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="description" content="إدارة الحضور والاجتماعات والأعضاء والافتقاد للكنائس والخدمات.">
   <meta name="theme-color" content="#0F3D5C">
 
@@ -34,7 +35,90 @@
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
-  <!-- Host lives above Flutter's glass pane so dismiss clicks always land. -->
+  <div id="app-startup" role="status" aria-live="polite">
+    <div class="app-startup-card">
+      <img src="icons/Icon-192.png" width="56" height="56" alt="LinkApp" decoding="async">
+      <div class="app-startup-spinner" aria-hidden="true"></div>
+      <strong>جاري فتح التطبيق</strong>
+      <p id="app-startup-message">يرجى الانتظار قليلًا…</p>
+      <button id="app-startup-retry" type="button" hidden onclick="window.location.reload()">إعادة المحاولة</button>
+    </div>
+  </div>
+  <style>
+    #app-startup {
+      position: fixed;
+      inset: 0;
+      z-index: 2147483000;
+      display: grid;
+      place-items: center;
+      padding: max(24px, env(safe-area-inset-top)) 24px max(24px, env(safe-area-inset-bottom));
+      background: #f7f8fc;
+      color: #172033;
+      font-family: Arial, sans-serif;
+      text-align: center;
+      transition: opacity 220ms ease, visibility 220ms ease;
+    }
+    #app-startup.is-ready {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+    .app-startup-card {
+      display: grid;
+      justify-items: center;
+      gap: 14px;
+    }
+    .app-startup-card img { border-radius: 16px; }
+    .app-startup-card strong { font-size: 19px; }
+    .app-startup-card p { margin: 0; color: #697386; line-height: 1.7; }
+    .app-startup-spinner {
+      width: 34px;
+      height: 34px;
+      border: 3px solid #dcdcf5;
+      border-top-color: #5145cd;
+      border-radius: 50%;
+      animation: app-startup-spin .8s linear infinite;
+    }
+    #app-startup-retry {
+      border: 0;
+      border-radius: 12px;
+      padding: 11px 18px;
+      color: #fff;
+      background: #5145cd;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    @keyframes app-startup-spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) {
+      .app-startup-spinner { animation-duration: 1.8s; }
+      #app-startup { transition: none; }
+    }
+  </style>
+  <script>
+    (() => {
+      const splash = document.getElementById('app-startup');
+      const message = document.getElementById('app-startup-message');
+      const retry = document.getElementById('app-startup-retry');
+      let firstFrameReceived = false;
+
+      const hideSplash = () => {
+        if (firstFrameReceived) return;
+        firstFrameReceived = true;
+        splash.classList.add('is-ready');
+        window.setTimeout(() => splash.remove(), 250);
+      };
+
+      window.addEventListener('flutter-first-frame', hideSplash, { once: true });
+      window.setTimeout(() => {
+        if (firstFrameReceived) return;
+        message.textContent = 'التشغيل استغرق وقتًا أطول من المعتاد. تحقق من اتصالك ثم أعد المحاولة.';
+        retry.hidden = false;
+      }, 20000);
+    })();
+  </script>
+
+  <!-- The banner sits above Flutter without disabling interaction beneath it. -->
   <div id="pwa-install-host"></div>
   <style>
     #pwa-install-host {
@@ -126,53 +210,17 @@
       const host = document.getElementById('pwa-install-host');
       const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
       const isIos = /iPad|iPhone|iPod/.test(window.navigator.userAgent) && !window.MSStream;
-      const flutterSelectors = [
-        'flt-glass-pane',
-        'flutter-view',
-        'flt-scene-host',
-        'flt-semantics-host',
-        'canvas[flt-renderer]',
-        'canvas',
-      ].join(',');
-
       let deferredPrompt = null;
       let dismissed = false;
       let installCard = null;
-      let flutterObserver = null;
 
       try { dismissed = localStorage.getItem(dismissKey) === '1'; } catch (_) {}
-
-      const setFlutterPointers = (enabled) => {
-        document.querySelectorAll(flutterSelectors).forEach((el) => {
-          if (enabled) {
-            el.style.removeProperty('pointer-events');
-          } else {
-            el.style.setProperty('pointer-events', 'none', 'important');
-          }
-        });
-      };
-
-      const stopWatchingFlutter = () => {
-        if (flutterObserver) {
-          flutterObserver.disconnect();
-          flutterObserver = null;
-        }
-      };
-
-      const watchFlutter = () => {
-        stopWatchingFlutter();
-        flutterObserver = new MutationObserver(() => setFlutterPointers(false));
-        flutterObserver.observe(document.body, { childList: true, subtree: true });
-        setFlutterPointers(false);
-      };
 
       const hideInstall = () => {
         if (installCard) {
           installCard.hidden = true;
           installCard.setAttribute('hidden', '');
         }
-        stopWatchingFlutter();
-        setFlutterPointers(true);
       };
 
       const dismissInstall = (event) => {
@@ -241,7 +289,6 @@
         card.hidden = false;
         card.removeAttribute('hidden');
         document.documentElement.appendChild(host);
-        watchFlutter();
       };
 
       if (isStandalone || dismissed) {
@@ -259,12 +306,6 @@
       });
 
       window.addEventListener('appinstalled', () => dismissInstall());
-      window.addEventListener('flutter-first-frame', () => {
-        if (installCard && !installCard.hidden) {
-          document.documentElement.appendChild(host);
-          setFlutterPointers(false);
-        }
-      });
     })();
   </script>
   <script src="flutter_bootstrap.js" async></script>

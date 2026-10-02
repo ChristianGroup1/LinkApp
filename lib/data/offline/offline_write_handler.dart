@@ -7,6 +7,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/invitations/invitation_identity.dart';
 import '../../core/invitations/invitation_link.dart';
 import '../../shared/data/app_models.dart';
 import 'invitation_create_result.dart';

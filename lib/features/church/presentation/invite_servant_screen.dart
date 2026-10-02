@@ -154,7 +154,7 @@ class _InviteServantScreenState extends State<InviteServantScreen> {
       final repo = context.read<DatabaseRepository>();
       final result = await repo.createInvitation(
         fullName: _nameController.text.trim(),
-        email: email.isEmpty ? 'no-email@linkapp.local' : email,
+        email: email.isEmpty ? null : email,
         phone: _phoneController.text.trim().isEmpty
             ? null
             : _phoneController.text.trim(),

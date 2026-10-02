@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/auth/auth_flow_capabilities.dart';
 import '../../../core/errors/arabic_error_text.dart';
+import '../../../core/invitations/invitation_identity.dart';
 import '../../../core/invitations/invitation_link.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/models.dart';
@@ -409,6 +410,7 @@ class _ServantsPermissionsScreenState extends State<ServantsPermissionsScreen> {
   }
 
   Future<void> _resendInvitationEmail(HelperInvitation invitation) async {
+    if (isNoEmailInvitationAddress(invitation.email)) return;
     try {
       final repo = context.read<DatabaseRepository>();
       await repo.sendInvitationEmail(invitation.id);
@@ -463,7 +465,11 @@ class _ServantsPermissionsScreenState extends State<ServantsPermissionsScreen> {
 
   Future<void> _editInvitation(HelperInvitation invitation) async {
     final nameController = TextEditingController(text: invitation.fullName);
-    final emailController = TextEditingController(text: invitation.email ?? '');
+    final emailController = TextEditingController(
+      text: isNoEmailInvitationAddress(invitation.email)
+          ? ''
+          : invitation.email ?? '',
+    );
     final formKey = GlobalKey<FormState>();
     var isSaving = false;
 

@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:archive/archive.dart';
 import 'package:csv/csv.dart';
 import 'package:excel/excel.dart';
 import 'package:flutter/foundation.dart';
@@ -9,12 +10,14 @@ import '../../../data/models/models.dart';
 import '../../../data/offline/member_create_draft.dart';
 import '../../../data/offline/offline_save_result.dart';
 import '../../../data/repositories/database_repository.dart';
+import 'member_school_years.dart';
 
 const memberExcelHeaders = [
   'الاسم الكامل *',
-  'نوع التبعية *',
+  'نوع المجموعة *',
   'الاجتماع *',
   'الفصل',
+  'السنة الدراسية',
   'تاريخ الميلاد (YYYY-MM-DD)',
   'رقم هاتف العضو',
   'الكود التعريفي',
@@ -29,6 +32,7 @@ class MemberImportRow {
   final MemberScope scope;
   final String meetingName;
   final String? className;
+  final String? schoolYear;
   final String? sundaySchoolClassId;
   final String? meetingId;
   final String? phone;
@@ -44,6 +48,7 @@ class MemberImportRow {
     required this.scope,
     required this.meetingName,
     this.className,
+    this.schoolYear,
     this.sundaySchoolClassId,
     this.meetingId,
     this.phone,
@@ -56,9 +61,10 @@ class MemberImportRow {
 
   List<String> toCsvValues() => [
     fullName,
-    scope == MemberScope.sundaySchoolClass ? 'فصل' : 'اجتماع',
+    scope == MemberScope.sundaySchoolClass ? 'فصل مدارس الأحد' : 'اجتماع',
     meetingName,
     className ?? '',
+    schoolYear ?? '',
     MemberExcelService._formatDate(birthDate),
     phone ?? '',
     code ?? '',
@@ -561,7 +567,7 @@ class MemberImportWriter {
             code: row.code ?? existing.code,
             birthDate: row.birthDate ?? existing.birthDate,
             isActive: row.isActive,
-            notes: existing.notes,
+            notes: row.schoolYear ?? existing.notes,
           );
           allSyncedToServer = allSyncedToServer && updated.syncedToServer;
           updatedMembers++;
@@ -592,6 +598,7 @@ class MemberImportWriter {
                     ? null
                     : row.code,
                 birthDate: row.birthDate,
+                notes: row.schoolYear,
               ),
             ),
           );
@@ -914,7 +921,7 @@ class MemberExcelService {
 
     final encoded = workbook.encode();
     if (encoded == null) throw StateError('تعذر إنشاء ملف الأخطاء');
-    return Uint8List.fromList(encoded);
+    return _withSchoolYearDropdown(Uint8List.fromList(encoded));
   }
 
   Uint8List buildTemplate({
@@ -1049,9 +1056,18 @@ class MemberExcelService {
       final header = _normalizeHeader(rows.first[index]);
       if (header.isNotEmpty) headerIndexes[header] = index;
     }
-    final requiredHeaders = ['الاسم الكامل', 'نوع التبعية', 'الاجتماع'];
-    final missing = requiredHeaders
-        .where((header) => !headerIndexes.containsKey(header))
+    final requiredHeaders = <String, List<String>>{
+      'الاسم الكامل': ['الاسم الكامل', 'الاسم'],
+      'نوع المجموعة': ['نوع المجموعة', 'نوع التبعية', 'التبعية', 'النوع'],
+      'الاجتماع': ['الاجتماع', 'اسم الاجتماع'],
+    };
+    final missing = requiredHeaders.entries
+        .where(
+          (entry) => !entry.value.any(
+            (alias) => headerIndexes.containsKey(_normalizeHeader(alias)),
+          ),
+        )
+        .map((entry) => entry.key)
         .toList();
     if (missing.isNotEmpty) {
       return MemberImportParseResult(
@@ -1108,10 +1124,13 @@ class MemberExcelService {
 
       final fullName = valueAt(row, ['الاسم الكامل', 'الاسم']);
       final scopeText = _normalize(
-        valueAt(row, ['نوع التبعية', 'التبعية', 'النوع']),
+        valueAt(row, ['نوع المجموعة', 'نوع التبعية', 'التبعية', 'النوع']),
       );
       final meetingText = valueAt(row, ['الاجتماع', 'اسم الاجتماع']);
       final classText = valueAt(row, ['الفصل', 'اسم الفصل']);
+      final schoolYear = _emptyToNull(
+        valueAt(row, ['السنة الدراسية', 'الصف الدراسي', 'المرحلة الدراسية']),
+      );
       final phone = _emptyToNull(
         valueAt(row, [
           'رقم هاتف العضو',
@@ -1145,9 +1164,10 @@ class MemberExcelService {
       );
       final sourceValues = [
         fullName,
-        valueAt(row, ['نوع التبعية', 'التبعية', 'النوع']),
+        valueAt(row, ['نوع المجموعة', 'نوع التبعية', 'التبعية', 'النوع']),
         meetingText,
         classText,
+        schoolYear ?? '',
         birthDateText,
         phone ?? '',
         code ?? '',
@@ -1168,13 +1188,27 @@ class MemberExcelService {
         continue;
       }
 
+      if (schoolYear != null &&
+          !memberSchoolYears.map(_normalize).contains(_normalize(schoolYear))) {
+        issues.add(
+          MemberImportIssue(
+            row: sourceRow,
+            message: 'السنة الدراسية «$schoolYear» غير موجودة في القائمة',
+            suggestion: 'اختر قيمة من القائمة المنسدلة للسنة الدراسية',
+            sourceValues: sourceValues,
+          ),
+        );
+        continue;
+      }
+
       final scope = _parseScope(scopeText);
       if (scope == null) {
         issues.add(
           MemberImportIssue(
             row: sourceRow,
-            message: 'نوع التبعية يجب أن يكون «فصل» أو «اجتماع»',
-            suggestion: 'اكتب فصل أو اجتماع فقط في نوع التبعية',
+            message: 'نوع المجموعة يجب أن يكون «فصل مدارس الأحد» أو «اجتماع»',
+            suggestion:
+                'اختر «فصل مدارس الأحد» أو «اجتماع» من القائمة المنسدلة',
             sourceValues: sourceValues,
           ),
         );
@@ -1200,8 +1234,8 @@ class MemberExcelService {
           issues.add(
             MemberImportIssue(
               row: sourceRow,
-              message: 'اسم الفصل مطلوب لنوع التبعية «فصل»',
-              suggestion: 'اكتب اسم الفصل أو غيّر نوع التبعية إلى اجتماع',
+              message: 'اسم الفصل مطلوب عند اختيار «فصل مدارس الأحد»',
+              suggestion: 'اكتب اسم الفصل أو اختر «اجتماع»',
               sourceValues: sourceValues,
             ),
           );
@@ -1282,6 +1316,7 @@ class MemberExcelService {
         scope: scope,
         meetingName: meetingText,
         className: scope == MemberScope.sundaySchoolClass ? classText : null,
+        schoolYear: schoolYear,
         sundaySchoolClassId: classEntity?.id,
         meetingId: meeting?.id,
         phone: phone,
@@ -1493,8 +1528,9 @@ class MemberExcelService {
         0 => 25,
         1 => 16,
         2 || 3 => 22,
-        4 || 6 => 18,
-        5 => 22,
+        4 => 20,
+        5 || 7 => 18,
+        6 => 22,
         _ => 17,
       });
     }
@@ -1507,10 +1543,13 @@ class MemberExcelService {
       sheet.appendRow([
         TextCellValue(member.fullName),
         TextCellValue(
-          member.scope == MemberScope.sundaySchoolClass ? 'فصل' : 'اجتماع',
+          member.scope == MemberScope.sundaySchoolClass
+              ? 'فصل مدارس الأحد'
+              : 'اجتماع',
         ),
         TextCellValue(meeting?.nameAr ?? ''),
         TextCellValue(classEntity?.nameAr ?? ''),
+        TextCellValue(member.notes ?? ''),
         TextCellValue(_formatDate(member.birthDate)),
         TextCellValue(member.phone ?? ''),
         TextCellValue(member.code ?? ''),
@@ -1527,7 +1566,7 @@ class MemberExcelService {
 
     final encoded = workbook.encode();
     if (encoded == null) throw StateError('تعذر إنشاء ملف Excel');
-    return Uint8List.fromList(encoded);
+    return _withSchoolYearDropdown(Uint8List.fromList(encoded));
   }
 
   void _addValuesSheet(
@@ -1538,8 +1577,9 @@ class MemberExcelService {
     final sheet = workbook['القيم المتاحة']..isRTL = true;
     sheet.appendRow([
       TextCellValue('الاجتماع'),
-      TextCellValue('نوع التبعية'),
+      TextCellValue('نوع المجموعة'),
       TextCellValue('الفصل'),
+      TextCellValue('السنة الدراسية'),
     ]);
     for (final meeting in meetings.where((item) => item.isActive)) {
       final meetingClasses = classes.where(
@@ -1550,6 +1590,7 @@ class MemberExcelService {
           TextCellValue(meeting.nameAr),
           TextCellValue('اجتماع'),
           TextCellValue(''),
+          TextCellValue(''),
         ]);
       }
       for (final classEntity in meetingClasses) {
@@ -1557,34 +1598,79 @@ class MemberExcelService {
           TextCellValue(meeting.nameAr),
           TextCellValue('فصل'),
           TextCellValue(classEntity.nameAr),
+          TextCellValue(''),
         ]);
       }
+    }
+    for (final schoolYear in memberSchoolYears) {
+      sheet.appendRow([
+        TextCellValue(''),
+        TextCellValue(''),
+        TextCellValue(''),
+        TextCellValue(schoolYear),
+      ]);
     }
     sheet.setColumnWidth(0, 25);
     sheet.setColumnWidth(1, 18);
     sheet.setColumnWidth(2, 25);
+    sheet.setColumnWidth(3, 22);
   }
 
   void _addInstructionsSheet(Excel workbook) {
     final sheet = workbook['تعليمات']..isRTL = true;
     final instructions = [
       'اكتب البيانات داخل شيت «الأعضاء» فقط ولا تغير أسماء الأعمدة.',
-      'نوع التبعية يكون «فصل» أو «اجتماع».',
+      'اختر «اجتماع» أو «فصل مدارس الأحد» من القائمة المنسدلة في عمود «نوع المجموعة».',
       'انسخ أسماء الاجتماعات والفصول من شيت «القيم المتاحة».',
+      'اختر السنة الدراسية من القائمة المنسدلة، أو اتركها فارغة.',
       'إذا كان الاجتماع أو الفصل غير موجود، سيُنشأ تلقائيًا بعد ظهوره في المعاينة.',
       'قبل الاستيراد ستختار يوم كل اجتماع جديد من شاشة المعاينة.',
-      'لنوع «فصل»: الاجتماع والفصل مطلوبان. لنوع «اجتماع»: اترك الفصل فارغًا.',
+      'عند اختيار «فصل مدارس الأحد»: الاجتماع والفصل مطلوبان. وعند اختيار «اجتماع»: اترك الفصل فارغًا.',
       'تاريخ الميلاد اختياري ويكتب بالشكل 2012-08-25.',
       'الهاتف والكود اختياريان. يفضل كتابة الهاتف كنص للحفاظ على الصفر الأول.',
       'نشط: نعم أو لا. إذا تركت الخانة فارغة سيُنشأ العضو نشطًا.',
       'ستظهر معاينة بالأخطاء قبل حفظ أي أعضاء.',
       '',
-      'مثال: مينا سمير | فصل | اجتماع مدارس الأحد | أولى إعدادي | 01000000000',
+      'مثال: مينا سمير | فصل مدارس الأحد | اجتماع مدارس الأحد | فصل أولى | أولى إعدادي | 2012-08-25 | 01000000000',
     ];
     for (final instruction in instructions) {
       sheet.appendRow([TextCellValue(instruction)]);
     }
     sheet.setColumnWidth(0, 95);
+  }
+
+  Uint8List _withSchoolYearDropdown(Uint8List workbookBytes) {
+    final archive = ZipDecoder().decodeBytes(workbookBytes);
+    final worksheet = archive.findFile('xl/worksheets/sheet1.xml');
+    if (worksheet == null) return workbookBytes;
+
+    var xml = utf8.decode(worksheet.content as List<int>);
+    const scopeDropdown =
+        '<dataValidation type="list" allowBlank="0" showErrorMessage="1" '
+        'sqref="B2:B1000"><formula1>"اجتماع,فصل مدارس الأحد"</formula1>'
+        '</dataValidation>';
+    final validation =
+        '<dataValidations count="2">$scopeDropdown'
+        '<dataValidation type="list" allowBlank="1" showErrorMessage="1" '
+        'sqref="E2:E1000"><formula1>"${memberSchoolYears.join(',')}"'
+        '</formula1></dataValidation></dataValidations>';
+    xml = xml.replaceAll(
+      RegExp(r'<dataValidations[\s\S]*?</dataValidations>'),
+      '',
+    );
+    if (xml.contains('<pageMargins')) {
+      xml = xml.replaceFirst('<pageMargins', '$validation<pageMargins');
+    } else {
+      xml = xml.replaceFirst('</worksheet>', '$validation</worksheet>');
+    }
+
+    final content = utf8.encode(xml);
+    archive.addFile(
+      ArchiveFile(worksheet.name, content.length, content)..compress = true,
+    );
+    final encoded = ZipEncoder().encode(archive);
+    if (encoded == null) throw StateError('تعذر إضافة قائمة السنة الدراسية');
+    return Uint8List.fromList(encoded);
   }
 
   static String _cellText(Data? cell) {
@@ -1605,13 +1691,17 @@ class MemberExcelService {
   static MemberScope? _parseScope(String value) {
     if (const {
       'فصل',
+      'فصل دراسي',
+      'فصل مدارس الاحد',
+      'فصل مدارس الأحد',
+      'مجموعة فصل',
       'مدارس الاحد',
       'class',
       'sunday_school_class',
     }.contains(value)) {
       return MemberScope.sundaySchoolClass;
     }
-    if (const {'اجتماع', 'meeting'}.contains(value)) {
+    if (const {'اجتماع', 'meeting', 'مجموعة اجتماع'}.contains(value)) {
       return MemberScope.meeting;
     }
     return null;

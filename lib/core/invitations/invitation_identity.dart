@@ -4,6 +4,7 @@ String normalizeInvitationEmail(String? email) =>
     (email ?? '').trim().toLowerCase();
 
 bool isNoEmailInvitationAddress(String? email) =>
+    normalizeInvitationEmail(email).isEmpty ||
     normalizeInvitationEmail(email) == noEmailInvitationAddress;
 
 bool invitationEmailMatchesAccount({

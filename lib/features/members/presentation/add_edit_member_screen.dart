@@ -8,6 +8,7 @@ import '../../../data/models/models.dart';
 import '../../../data/offline/offline_save_result.dart';
 import '../../../data/repositories/database_repository.dart';
 import '../../../shared/ui/offline_editing.dart';
+import '../data/member_school_years.dart';
 import '../logic/members_bloc.dart';
 
 class AddEditMemberScreen extends StatefulWidget {
@@ -500,70 +501,57 @@ class _AddEditMemberScreenState extends State<AddEditMemberScreen> {
                                       ),
                                       const SizedBox(height: 12),
 
-                                      // 5. السنة الدراسية / المرحلة (Educational Stage / Grade)
-                                      Autocomplete<String>(
-                                        initialValue: TextEditingValue(
-                                          text: _notesController.text,
-                                        ),
-                                        optionsBuilder: (textEditingValue) {
-                                          const options = [
-                                            'أولى ابتدائي',
-                                            'ثانية ابتدائي',
-                                            'ثالثة ابتدائي',
-                                            'رابعة ابتدائي',
-                                            'خامسة ابتدائي',
-                                            'سادسة ابتدائي',
-                                            'أولى إعدادي',
-                                            'ثانية إعدادي',
-                                            'ثالثة إعدادي',
-                                            'أولى ثانوي',
-                                            'ثانية ثانوي',
-                                            'ثالثة ثانوي',
-                                            'جامعة / خريج',
-                                          ];
-                                          if (textEditingValue.text.isEmpty) {
-                                            return options;
-                                          }
-                                          return options.where(
-                                            (option) => option.contains(
-                                              textEditingValue.text.trim(),
+                                      // 5. Fixed school-year choices.
+                                      Builder(
+                                        builder: (context) {
+                                          final storedValue = _notesController
+                                              .text
+                                              .trim();
+                                          final hasLegacyValue =
+                                              storedValue.isNotEmpty &&
+                                              !memberSchoolYears.contains(
+                                                storedValue,
+                                              );
+                                          return DropdownButtonFormField<
+                                            String
+                                          >(
+                                            initialValue: storedValue,
+                                            isExpanded: true,
+                                            decoration: _fieldDecoration(
+                                              label: 'السنة الدراسية',
+                                              hint: 'اختر السنة الدراسية',
+                                              icon: Icons.school_outlined,
                                             ),
+                                            style: GoogleFonts.cairo(
+                                              color: AppTheme.textDark,
+                                            ),
+                                            items: [
+                                              const DropdownMenuItem<String>(
+                                                value: '',
+                                                child: Text('بدون تحديد'),
+                                              ),
+                                              if (hasLegacyValue)
+                                                DropdownMenuItem<String>(
+                                                  value: storedValue,
+                                                  child: Text(
+                                                    'قيمة محفوظة: $storedValue',
+                                                  ),
+                                                ),
+                                              ...memberSchoolYears.map(
+                                                (schoolYear) =>
+                                                    DropdownMenuItem<String>(
+                                                      value: schoolYear,
+                                                      child: Text(schoolYear),
+                                                    ),
+                                              ),
+                                            ],
+                                            onChanged: (value) {
+                                              _notesController.text =
+                                                  value?.trim() ?? '';
+                                              _markDirty();
+                                            },
                                           );
                                         },
-                                        onSelected: (selection) {
-                                          _notesController.text = selection;
-                                        },
-                                        fieldViewBuilder:
-                                            (
-                                              context,
-                                              fieldTextEditingController,
-                                              focusNode,
-                                              onFieldSubmitted,
-                                            ) {
-                                              fieldTextEditingController
-                                                  .addListener(() {
-                                                    _notesController.text =
-                                                        fieldTextEditingController
-                                                            .text;
-                                                  });
-                                              return TextFormField(
-                                                controller:
-                                                    fieldTextEditingController,
-                                                focusNode: focusNode,
-                                                textInputAction:
-                                                    TextInputAction.next,
-                                                style: GoogleFonts.cairo(
-                                                  color: AppTheme.textDark,
-                                                ),
-                                                decoration: _fieldDecoration(
-                                                  label:
-                                                      'السنة الدراسية / المرحلة',
-                                                  hint:
-                                                      'مثال: ثانية إعدادي / أولى ابتدائي',
-                                                  icon: Icons.school_outlined,
-                                                ),
-                                              );
-                                            },
                                       ),
                                     ],
                                   ),
@@ -573,9 +561,9 @@ class _AddEditMemberScreenState extends State<AddEditMemberScreen> {
                                   icon: Icons.account_tree_outlined,
                                   iconColor: AppTheme.secondary,
                                   iconBackground: AppTheme.secondaryLight,
-                                  title: 'التبعية',
+                                  title: 'مجموعة العضو',
                                   subtitle:
-                                      'اختر الاجتماع أو الفصل الذي سيظهر فيه العضو',
+                                      'اختر الاجتماع أو فصل مدارس الأحد الذي ينتمي إليه العضو',
                                   child: _buildAssignmentSelector(),
                                 ),
                                 const SizedBox(height: 14),
@@ -694,7 +682,7 @@ class _AddEditMemberScreenState extends State<AddEditMemberScreen> {
         fontWeight: FontWeight.w600,
       ),
       decoration: _fieldDecoration(
-        label: 'تبعية العضو',
+        label: 'الاجتماع أو فصل مدارس الأحد',
         hint: 'اختر الاجتماع أو الفصل',
         icon: Icons.account_tree_outlined,
         requiredField: true,

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../../../core/invitations/invitation_identity.dart';
 import '../../../../core/invitations/invitation_link.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../data/models/models.dart';
@@ -486,7 +487,9 @@ class ServantPermissionCard extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
-        color: servant.isActive ? AppTheme.cardBackground : AppTheme.surfaceMuted,
+        color: servant.isActive
+            ? AppTheme.cardBackground
+            : AppTheme.surfaceMuted,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: AppTheme.border.withValues(alpha: 0.8)),
         boxShadow: [
@@ -1066,7 +1069,9 @@ class ServantsScopeOptionCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(9),
                 decoration: BoxDecoration(
-                  color: selected ? AppTheme.primaryLight : AppTheme.cardBackground,
+                  color: selected
+                      ? AppTheme.primaryLight
+                      : AppTheme.cardBackground,
                   borderRadius: BorderRadius.circular(11),
                 ),
                 child: Icon(
@@ -1311,7 +1316,9 @@ class ServantsPendingInvitationsSection extends StatelessWidget {
         final link = invitation.inviteToken.isNotEmpty
             ? buildInvitationLink(inviteToken: invitation.inviteToken)
             : invitation.code;
-        final email = invitation.email?.trim();
+        final email = isNoEmailInvitationAddress(invitation.email)
+            ? null
+            : invitation.email?.trim();
         return Container(
           margin: const EdgeInsets.only(bottom: 12),
           padding: const EdgeInsets.all(16),

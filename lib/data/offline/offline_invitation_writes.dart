@@ -17,7 +17,9 @@ mixin _OfflineInvitationWrites on _OfflineWriteHandlerBase {
     final resolvedTargetId = targetId == null
         ? null
         : await queue.resolveId(targetId);
-    final normalizedEmail = emptyToNull(email?.trim());
+    final normalizedEmail = isNoEmailInvitationAddress(email)
+        ? null
+        : emptyToNull(email?.trim());
     final inviteLink = buildInvitationLink(
       inviteToken: inviteToken,
       supabaseUrl: dotenv.env['SUPABASE_URL'],
@@ -171,7 +173,9 @@ mixin _OfflineInvitationWrites on _OfflineWriteHandlerBase {
     String? email,
   }) async {
     final normalizedName = fullName.trim();
-    final normalizedEmail = emptyToNull(email?.trim());
+    final normalizedEmail = isNoEmailInvitationAddress(email)
+        ? null
+        : emptyToNull(email?.trim());
     final resolvedId = await queue.resolveId(invitation.id);
     final updated = invitation.copyWith(
       fullName: normalizedName,

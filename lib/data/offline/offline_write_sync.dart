@@ -340,7 +340,12 @@ mixin _OfflineWriteSync on _OfflineWriteHandlerBase {
             .insert({
               'church_id': operation.payload['church_id'],
               'full_name': operation.payload['full_name'],
-              'email': operation.payload['email'],
+              'email':
+                  isNoEmailInvitationAddress(
+                    operation.payload['email'] as String?,
+                  )
+                  ? null
+                  : operation.payload['email'],
               'phone': operation.payload['phone'],
               'role': operation.payload['role'],
               'target_id': targetId == null
@@ -373,7 +378,12 @@ mixin _OfflineWriteSync on _OfflineWriteHandlerBase {
             .from('invitations')
             .update({
               'full_name': operation.payload['full_name'],
-              'email': operation.payload['email'],
+              'email':
+                  isNoEmailInvitationAddress(
+                    operation.payload['email'] as String?,
+                  )
+                  ? null
+                  : operation.payload['email'],
             })
             .eq('id', operation.payload['id'])
             .eq('church_id', operation.payload['church_id'])

@@ -37,6 +37,36 @@ mixin _SupabaseAuthRepository on _SupabaseRepositoryBase {
         rethrow;
       }
       if (profile == null) {
+        final user = response.user!;
+        final metadata = user.userMetadata ?? const <String, dynamic>{};
+        final pendingInviteToken = metadata['invitation_token'] as String?;
+        if (metadata['signup_type'] == 'invitation' &&
+            pendingInviteToken?.trim().isNotEmpty == true) {
+          // A previous signup may have created the Auth user but failed before
+          // creating its church profile. A password sign-in proves ownership;
+          // finish the pending invitation instead of stranding that account.
+          debugPrint('[Auth] Completing a pending invitation signup');
+          try {
+            await _registerInvitedProfile(
+              userId: user.id,
+              inviteToken: pendingInviteToken,
+              fullName:
+                  (metadata['full_name'] as String?) ?? user.email ?? 'مستخدم',
+              email: user.email ?? email,
+              phone: metadata['phone'] as String?,
+            );
+            profile = await retryNullableLoad<AppProfile>(
+              load: () => _getCurrentProfile(throwOnRecoverableError: true),
+            );
+          } catch (error) {
+            debugPrint('[Auth] Pending invitation completion failed: $error');
+            throw Exception(
+              'الحساب موجود، لكن إكمال ربطه بالدعوة لم ينجح. احتفظنا بتسجيل دخولك؛ أعد المحاولة بعد قليل، وإذا استمرت المشكلة أبلغ مسؤول الكنيسة بتحديث قاعدة بيانات الدعوات.',
+            );
+          }
+        }
+      }
+      if (profile == null) {
         debugPrint('[Auth] No profile exists for the authenticated user');
         await _client.auth.signOut();
         throw Exception(
@@ -319,8 +349,12 @@ mixin _SupabaseAuthRepository on _SupabaseRepositoryBase {
           phone: phone,
         );
       } catch (e) {
-        await _client.auth.signOut();
-        rethrow;
+        debugPrint(
+          '[Auth] Existing invitation account could not be linked: $e',
+        );
+        throw Exception(
+          'الحساب موجود، لكن إكمال ربطه بالدعوة لم ينجح. احتفظنا بتسجيل دخولك؛ أعد المحاولة بعد قليل، وإذا استمرت المشكلة أبلغ مسؤول الكنيسة بتحديث قاعدة بيانات الدعوات.',
+        );
       }
 
       return getCurrentProfile();
@@ -355,8 +389,10 @@ mixin _SupabaseAuthRepository on _SupabaseRepositoryBase {
         phone: phone,
       );
     } catch (e) {
-      await _client.auth.signOut();
-      rethrow;
+      debugPrint('[Auth] New invitation account could not be linked: $e');
+      throw Exception(
+        'تم إنشاء الحساب، لكن ربطه بالدعوة لم يكتمل. احتفظنا بتسجيل دخولك؛ اضغط «إكمال وتأكيد الانضمام» للمحاولة مرة أخرى، وإذا استمرت المشكلة أبلغ مسؤول الكنيسة بتحديث قاعدة بيانات الدعوات.',
+      );
     }
 
     return getCurrentProfile();

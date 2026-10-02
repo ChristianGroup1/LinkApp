@@ -1083,7 +1083,6 @@ begin
   into inv
   from public.invitations
   where invite_token = btrim(p_token)
-    and is_used = false
     and declined_at is null
   limit 1;
 
@@ -1094,7 +1093,8 @@ begin
   select lower(btrim(email)) into current_email
   from auth.users where id = auth.uid();
 
-  if lower(btrim(inv.email)) = 'no-email@linkapp.local' then
+  if nullif(lower(btrim(inv.email)), '') is null
+     or lower(btrim(inv.email)) = 'no-email@linkapp.local' then
     if nullif(current_email, '') is null
        or current_email = 'no-email@linkapp.local' then
       raise exception 'أدخل بريدك الإلكتروني الحقيقي لإكمال الدعوة.';
@@ -1143,8 +1143,26 @@ begin
   from auth.users where id = auth.uid();
 
   if nullif(lower(btrim(inv.email)), '') is null
+     or lower(btrim(inv.email)) = 'no-email@linkapp.local' then
+    if nullif(current_email, '') is null
+       or current_email = 'no-email@linkapp.local' then
+      raise exception 'أدخل بريدك الإلكتروني الحقيقي لإكمال الدعوة.';
+    end if;
+  elsif nullif(lower(btrim(inv.email)), '') is null
      or current_email is distinct from lower(btrim(inv.email)) then
     raise exception 'هذه الدعوة موجهة إلى بريد إلكتروني مختلف. سجّل الدخول بالبريد المدعو.';
+  end if;
+
+  -- Make the follow-up accept call safe when signup already marked the invite
+  -- used and linked this same profile to the invited church.
+  if inv.is_used then
+    if exists (
+      select 1 from public.profiles
+      where id = auth.uid() and church_id = inv.church_id
+    ) then
+      return inv.church_id;
+    end if;
+    raise exception 'الدعوة غير صالحة أو انتهت صلاحيتها.';
   end if;
 
   update public.profiles
@@ -1276,7 +1294,8 @@ begin
     select lower(btrim(email)) into current_email
     from auth.users where id = auth.uid();
 
-    if lower(btrim(inv.email)) = 'no-email@linkapp.local' then
+    if nullif(lower(btrim(inv.email)), '') is null
+       or lower(btrim(inv.email)) = 'no-email@linkapp.local' then
       if nullif(current_email, '') is null
          or current_email = 'no-email@linkapp.local'
          or lower(btrim(profile_email)) is distinct from current_email then
