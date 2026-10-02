@@ -220,12 +220,13 @@ export async function getEnhancedDashboardData(filters: DashboardFilters) {
   const scoped = (rows: Array<Record<string, unknown>>) => filters.churchId
     ? rows.filter((row) => String(row.church_id) === filters.churchId)
     : rows;
-  const [churchesResult, profilesResult, meetingsResult, classesResult, membersResult, sessionsResult, recordsResult, invitationsResult, followUpsResult, supportResult, usageResult, classAssignmentsResult, meetingAssignmentsResult, auditResult] = await Promise.all([
+  const [churchesResult, profilesResult, meetingsResult, classesResult, membersResult, memberMeetingAssignmentsResult, sessionsResult, recordsResult, invitationsResult, followUpsResult, supportResult, usageResult, classAssignmentsResult, meetingAssignmentsResult, auditResult] = await Promise.all([
     admin.from('churches').select('id, name_ar, name').order('name_ar').limit(5000),
     admin.from('profiles').select('id, church_id, full_name, email, role, is_active, created_at').limit(20000),
     admin.from('meetings').select('id, church_id, name_ar, name, is_active').limit(20000),
     admin.from('sunday_school_classes').select('id, church_id, meeting_id, name_ar, name, is_active').limit(20000),
-    admin.from('members').select('id, church_id, meeting_id, full_name, code, is_active, created_at, joined_on').limit(50000),
+    admin.from('members').select('id, church_id, meeting_id, sunday_school_class_id, full_name, code, is_active, created_at, joined_on').limit(50000),
+    admin.from('member_meeting_assignments').select('church_id, member_id, meeting_id').limit(100000),
     admin.from('attendance_sessions').select('id, church_id, meeting_id, session_date, title').gte('session_date', previousDate).limit(50000),
     admin.from('attendance_records').select('session_id, member_id, church_id, status, recorded_at').gte('recorded_at', previousStart.toISOString()).limit(100000),
     admin.from('invitations').select('id, church_id, full_name, email, is_used, declined_at, created_at').gte('created_at', previousStart.toISOString()).limit(50000),
@@ -241,6 +242,7 @@ export async function getEnhancedDashboardData(filters: DashboardFilters) {
   const meetings = scoped(safeRows(meetingsResult));
   const classes = scoped(safeRows(classesResult));
   const members = scoped(safeRows(membersResult));
+  const memberMeetingAssignments = scoped(safeRows(memberMeetingAssignmentsResult));
   const sessions = scoped(safeRows(sessionsResult));
   const records = scoped(safeRows(recordsResult));
   const invitations = scoped(safeRows(invitationsResult));
@@ -309,6 +311,55 @@ export async function getEnhancedDashboardData(filters: DashboardFilters) {
     const absent = current.filter((row) => row.status === 'absent').length;
     return { id, name: nameForMeeting(id), church: nameForChurch(String(meeting.church_id)), newMembers: currentMembers.filter((row) => String(row.meeting_id) === id).length, present, absent, change: percentChange(present, previous.filter((row) => row.status === 'present').length) };
   }).sort((a, b) => b.present - a.present);
+  const activeMembers = members.filter((member) => member.is_active);
+  const activeMemberById = new Map(activeMembers.map((member) => [String(member.id), member]));
+  const meetingMemberIds = new Map<string, Set<string>>();
+  const addMeetingMember = (meetingId: string, memberId: string) => {
+    const ids = meetingMemberIds.get(meetingId) ?? new Set<string>();
+    ids.add(memberId);
+    meetingMemberIds.set(meetingId, ids);
+  };
+  const membersWithAssignments = new Set(memberMeetingAssignments.map((row) => String(row.member_id)));
+  for (const assignment of memberMeetingAssignments) {
+    const memberId = String(assignment.member_id);
+    if (activeMemberById.has(memberId)) {
+      addMeetingMember(String(assignment.meeting_id), memberId);
+    }
+  }
+  const classMeetingIds = new Map(classes.map((schoolClass) => [String(schoolClass.id), String(schoolClass.meeting_id)]));
+  for (const member of activeMembers) {
+    const memberId = String(member.id);
+    if (membersWithAssignments.has(memberId)) continue;
+    const meetingId = String(member.meeting_id || classMeetingIds.get(String(member.sunday_school_class_id)) || '');
+    if (meetingId) addMeetingMember(meetingId, memberId);
+  }
+  const servantsByMeeting = new Map<string, string[]>();
+  const profilesById = new Map(profiles.map((profile) => [String(profile.id), profile]));
+  for (const assignment of meetingAssignments) {
+    const profile = profilesById.get(String(assignment.user_id));
+    if (!profile?.is_active) continue;
+    const meetingId = String(assignment.meeting_id);
+    const names = servantsByMeeting.get(meetingId) ?? [];
+    const name = String(profile.full_name || profile.email || 'خادم بلا اسم');
+    if (!names.includes(name)) names.push(name);
+    servantsByMeeting.set(meetingId, names);
+  }
+  const meetingGroups = meetings.map((meeting) => {
+    const meetingId = String(meeting.id);
+    const memberNames = Array.from(meetingMemberIds.get(meetingId) ?? [])
+      .map((memberId) => activeMemberById.get(memberId))
+      .filter((member): member is Record<string, unknown> => Boolean(member))
+      .map((member) => String(member.full_name || 'مخدوم بلا اسم'))
+      .sort((a, b) => a.localeCompare(b, 'ar'));
+    return {
+      id: meetingId,
+      church: nameForChurch(String(meeting.church_id)),
+      meeting: nameForMeeting(meetingId),
+      servants: (servantsByMeeting.get(meetingId) ?? []).sort((a, b) => a.localeCompare(b, 'ar')),
+      members: memberNames,
+      memberCount: memberNames.length,
+    };
+  }).sort((a, b) => a.church.localeCompare(b.church, 'ar') || a.meeting.localeCompare(b.meeting, 'ar'));
   const absenceCounts = currentRecords.filter((row) => row.status === 'absent').reduce<Map<string, number>>((map, row) => {
     const id = String(row.member_id); map.set(id, (map.get(id) ?? 0) + 1); return map;
   }, new Map());
@@ -371,7 +422,7 @@ export async function getEnhancedDashboardData(filters: DashboardFilters) {
   return {
     generatedAt: now.toISOString(), churches, filters, supportReady: !supportResult.error, analyticsReady: !usageResult.error,
     summary: { activeChurchRate: selectedChurches.length ? Math.round((activeChurches.length / selectedChurches.length) * 100) : 0, activeChurches: activeChurches.length, activeMembersTotal, currentMembers: currentMembers.length, present: currentRecords.filter((row) => row.status === 'present').length, absent: currentRecords.filter((row) => row.status === 'absent').length, unresolvedFollowUps, openSupport: openSupport.length, avgResolutionHours, topCategory, invitationStats },
-    churchActivity, meetingPerformance, repeatedAbsences, inactiveProfiles, pendingInvitations, servantPermissions, attendanceTrend, recentChanges, monthlyGoals, smartAlerts, healthScores, atRisk, retention,
+    churchActivity, meetingPerformance, meetingGroups, repeatedAbsences, inactiveProfiles, pendingInvitations, servantPermissions, attendanceTrend, recentChanges, monthlyGoals, smartAlerts, healthScores, atRisk, retention,
   };
 }
 
