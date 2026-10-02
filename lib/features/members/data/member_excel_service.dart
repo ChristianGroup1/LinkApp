@@ -1128,8 +1128,19 @@ class MemberExcelService {
       );
       final meetingText = valueAt(row, ['الاجتماع', 'اسم الاجتماع']);
       final classText = valueAt(row, ['الفصل', 'اسم الفصل']);
+      // Accept older/custom workbook labels too. If a year column label is
+      // unfamiliar, valueAt would otherwise return null and silently create
+      // the member without its school year.
       final schoolYear = _emptyToNull(
-        valueAt(row, ['السنة الدراسية', 'الصف الدراسي', 'المرحلة الدراسية']),
+        valueAt(row, [
+          'السنة الدراسية',
+          'الفصل الدراسي',
+          'الصف الدراسي',
+          'المرحلة الدراسية',
+          'المرحلة',
+          'السنة',
+          'الصف',
+        ]),
       );
       final phone = _emptyToNull(
         valueAt(row, [
