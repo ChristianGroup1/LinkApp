@@ -1224,3 +1224,92 @@ summary:focus-visible {
   .pwaActions { grid-template-columns: 1fr; }
   .pwaActions article { min-height: 0; }
 }
+
+.rootInstallBanner {
+  position: fixed;
+  z-index: 35;
+  inset-inline-end: max(16px, env(safe-area-inset-left));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 12px;
+  width: min(390px, calc(100vw - 32px));
+  padding: 18px 18px 16px;
+  padding-inline-end: 50px;
+  overflow-wrap: anywhere;
+  color: #fff;
+  background: linear-gradient(145deg, #17183e, #292468);
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: 20px;
+  box-shadow: 0 18px 50px rgb(20 19 65 / 30%);
+}
+
+.rootInstallBannerIcon {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border-radius: 14px;
+  color: #292468;
+  background: #fff;
+  font-size: 23px;
+  font-weight: 900;
+}
+
+.rootInstallBannerCopy {
+  display: grid;
+  align-content: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.rootInstallBannerCopy strong { font-size: 15px; }
+.rootInstallBannerCopy span { color: rgb(255 255 255 / 82%); font-size: 13px; line-height: 1.65; }
+
+.rootInstallBannerAction {
+  grid-column: 2;
+  width: fit-content;
+  margin-top: 2px;
+  padding: 9px 13px;
+  border-radius: 10px;
+  color: #24215e;
+  background: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.rootInstallBannerAction:hover { background: #eeedff; }
+
+.rootInstallBannerClose {
+  position: absolute;
+  top: 8px;
+  inset-inline-end: 8px;
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 0;
+  border-radius: 10px;
+  color: #fff;
+  background: rgb(255 255 255 / 12%);
+  font-size: 25px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+@media (max-width: 480px) {
+  .rootInstallBanner {
+    inset-inline-end: max(12px, env(safe-area-inset-left));
+    bottom: max(12px, env(safe-area-inset-bottom));
+    width: min(390px, calc(100vw - 24px));
+    gap: 10px;
+    padding: 14px;
+    padding-inline-end: 48px;
+    border-radius: 16px;
+  }
+  .rootInstallBannerIcon { width: 40px; height: 40px; }
+  .rootInstallBannerCopy strong { font-size: 14px; }
+  .rootInstallBannerCopy span { font-size: 12px; }
+}

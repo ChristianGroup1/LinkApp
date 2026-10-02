@@ -2,6 +2,7 @@ import Image from 'next/image';
 import { FaqSection } from './_components/faq-section';
 import { PlayQr } from './_components/play-qr';
 import { SiteHeader } from './_components/site-header';
+import { RootInstallBanner } from './_components/root-install-banner';
 import {
   AttendanceIcon,
   FollowUpIcon,
@@ -119,6 +120,7 @@ export default async function HomePage() {
   return (
     <>
       <SiteHeader />
+      <RootInstallBanner />
       <main id="content">
         <section className="hero shell" aria-labelledby="hero-title">
           <div className="heroCopy">

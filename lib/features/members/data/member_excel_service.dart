@@ -921,7 +921,10 @@ class MemberExcelService {
 
     final encoded = workbook.encode();
     if (encoded == null) throw StateError('تعذر إنشاء ملف الأخطاء');
-    return _withSchoolYearDropdown(Uint8List.fromList(encoded));
+    return _withMemberDropdowns(
+      Uint8List.fromList(encoded),
+      includeMeetingAndClassLists: false,
+    );
   }
 
   Uint8List buildTemplate({
@@ -1550,13 +1553,27 @@ class MemberExcelService {
         TextCellValue(meeting?.nameAr ?? ''),
         TextCellValue(classEntity?.nameAr ?? ''),
         TextCellValue(member.notes ?? ''),
-        TextCellValue(_formatDate(member.birthDate)),
+        member.birthDate == null
+            ? TextCellValue('')
+            : DateCellValue.fromDateTime(member.birthDate!),
         TextCellValue(member.phone ?? ''),
         TextCellValue(member.code ?? ''),
         TextCellValue(member.parentName ?? ''),
         TextCellValue(member.parentPhone ?? ''),
         TextCellValue(member.isActive ? 'نعم' : 'لا'),
       ]);
+    }
+
+    final birthDateStyle = CellStyle(
+      numberFormat: NumFormat.custom(formatCode: 'yyyy-mm-dd'),
+    );
+    for (var rowIndex = 1; rowIndex < 1000; rowIndex++) {
+      sheet
+              .cell(
+                CellIndex.indexByColumnRow(columnIndex: 5, rowIndex: rowIndex),
+              )
+              .cellStyle =
+          birthDateStyle;
     }
 
     if (includeInstructions) {
@@ -1566,7 +1583,28 @@ class MemberExcelService {
 
     final encoded = workbook.encode();
     if (encoded == null) throw StateError('تعذر إنشاء ملف Excel');
-    return _withSchoolYearDropdown(Uint8List.fromList(encoded));
+    return _withMemberDropdowns(
+      Uint8List.fromList(encoded),
+      includeMeetingAndClassLists: true,
+      meetingOptionCount: meetings
+          .where((item) => item.isActive)
+          .map((item) => item.nameAr.trim())
+          .where((name) => name.isNotEmpty)
+          .toSet()
+          .length,
+      classOptionCount: classes
+          .where(
+            (item) =>
+                item.isActive &&
+                meetings.any(
+                  (meeting) => meeting.id == item.meetingId && meeting.isActive,
+                ),
+          )
+          .map((item) => item.nameAr.trim())
+          .where((name) => name.isNotEmpty)
+          .toSet()
+          .length,
+    );
   }
 
   void _addValuesSheet(
@@ -1580,6 +1618,8 @@ class MemberExcelService {
       TextCellValue('نوع المجموعة'),
       TextCellValue('الفصل'),
       TextCellValue('السنة الدراسية'),
+      TextCellValue('قائمة الاجتماعات'),
+      TextCellValue('قائمة الفصول'),
     ]);
     for (final meeting in meetings.where((item) => item.isActive)) {
       final meetingClasses = classes.where(
@@ -1610,10 +1650,45 @@ class MemberExcelService {
         TextCellValue(schoolYear),
       ]);
     }
+
+    final activeMeetings = meetings
+        .where((item) => item.isActive)
+        .map((item) => item.nameAr.trim())
+        .where((name) => name.isNotEmpty)
+        .toSet()
+        .toList();
+    final activeMeetingIds = meetings
+        .where((item) => item.isActive)
+        .map((item) => item.id)
+        .toSet();
+    final activeClasses = classes
+        .where(
+          (item) => item.isActive && activeMeetingIds.contains(item.meetingId),
+        )
+        .map((item) => item.nameAr.trim())
+        .where((name) => name.isNotEmpty)
+        .toSet()
+        .toList();
+    for (var index = 0; index < activeMeetings.length; index++) {
+      sheet
+          .cell(CellIndex.indexByColumnRow(columnIndex: 4, rowIndex: index + 1))
+          .value = TextCellValue(
+        activeMeetings[index],
+      );
+    }
+    for (var index = 0; index < activeClasses.length; index++) {
+      sheet
+          .cell(CellIndex.indexByColumnRow(columnIndex: 5, rowIndex: index + 1))
+          .value = TextCellValue(
+        activeClasses[index],
+      );
+    }
     sheet.setColumnWidth(0, 25);
     sheet.setColumnWidth(1, 18);
     sheet.setColumnWidth(2, 25);
     sheet.setColumnWidth(3, 22);
+    sheet.setColumnWidth(4, 28);
+    sheet.setColumnWidth(5, 28);
   }
 
   void _addInstructionsSheet(Excel workbook) {
@@ -1621,7 +1696,7 @@ class MemberExcelService {
     final instructions = [
       'اكتب البيانات داخل شيت «الأعضاء» فقط ولا تغير أسماء الأعمدة.',
       'اختر «اجتماع» أو «فصل مدارس الأحد» من القائمة المنسدلة في عمود «نوع المجموعة».',
-      'انسخ أسماء الاجتماعات والفصول من شيت «القيم المتاحة».',
+      'اختر الاجتماع والفصل من القوائم المنسدلة، أو انسخ القيم من شيت «القيم المتاحة».',
       'اختر السنة الدراسية من القائمة المنسدلة، أو اتركها فارغة.',
       'إذا كان الاجتماع أو الفصل غير موجود، سيُنشأ تلقائيًا بعد ظهوره في المعاينة.',
       'قبل الاستيراد ستختار يوم كل اجتماع جديد من شاشة المعاينة.',
@@ -1639,7 +1714,12 @@ class MemberExcelService {
     sheet.setColumnWidth(0, 95);
   }
 
-  Uint8List _withSchoolYearDropdown(Uint8List workbookBytes) {
+  Uint8List _withMemberDropdowns(
+    Uint8List workbookBytes, {
+    required bool includeMeetingAndClassLists,
+    int meetingOptionCount = 0,
+    int classOptionCount = 0,
+  }) {
     final archive = ZipDecoder().decodeBytes(workbookBytes);
     final worksheet = archive.findFile('xl/worksheets/sheet1.xml');
     if (worksheet == null) return workbookBytes;
@@ -1649,11 +1729,34 @@ class MemberExcelService {
         '<dataValidation type="list" allowBlank="0" showErrorMessage="1" '
         'sqref="B2:B1000"><formula1>"اجتماع,فصل مدارس الأحد"</formula1>'
         '</dataValidation>';
+    final validations = <String>[
+      scopeDropdown,
+      '<dataValidation type="list" allowBlank="1" showErrorMessage="1" '
+          'sqref="E2:E1000"><formula1>"${memberSchoolYears.join(',')}"'
+          '</formula1></dataValidation>',
+      '<dataValidation type="date" operator="between" allowBlank="1" '
+          'showErrorMessage="1" sqref="F2:F1000"><formula1>1</formula1>'
+          '<formula2>TODAY()</formula2></dataValidation>',
+    ];
+    if (includeMeetingAndClassLists) {
+      final meetingEndRow = meetingOptionCount > 0 ? meetingOptionCount + 1 : 2;
+      final classEndRow = classOptionCount > 0 ? classOptionCount + 1 : 2;
+      validations.insert(
+        1,
+        '<dataValidation type="list" allowBlank="1" showErrorMessage="0" '
+        'sqref="C2:C1000"><formula1>INDIRECT("\'القيم المتاحة\'!'
+        '\$E\$2:\$E\$$meetingEndRow")</formula1></dataValidation>',
+      );
+      validations.insert(
+        2,
+        '<dataValidation type="list" allowBlank="1" showErrorMessage="0" '
+        'sqref="D2:D1000"><formula1>INDIRECT("\'القيم المتاحة\'!'
+        '\$F\$2:\$F\$$classEndRow")</formula1></dataValidation>',
+      );
+    }
     final validation =
-        '<dataValidations count="2">$scopeDropdown'
-        '<dataValidation type="list" allowBlank="1" showErrorMessage="1" '
-        'sqref="E2:E1000"><formula1>"${memberSchoolYears.join(',')}"'
-        '</formula1></dataValidation></dataValidations>';
+        '<dataValidations count="${validations.length}">'
+        '${validations.join()}</dataValidations>';
     xml = xml.replaceAll(
       RegExp(r'<dataValidations[\s\S]*?</dataValidations>'),
       '',
@@ -1669,7 +1772,7 @@ class MemberExcelService {
       ArchiveFile(worksheet.name, content.length, content)..compress = true,
     );
     final encoded = ZipEncoder().encode(archive);
-    if (encoded == null) throw StateError('تعذر إضافة قائمة السنة الدراسية');
+    if (encoded == null) throw StateError('تعذر إضافة القوائم المنسدلة');
     return Uint8List.fromList(encoded);
   }
 
