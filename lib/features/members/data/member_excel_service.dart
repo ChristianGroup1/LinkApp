@@ -921,10 +921,7 @@ class MemberExcelService {
 
     final encoded = workbook.encode();
     if (encoded == null) throw StateError('تعذر إنشاء ملف الأخطاء');
-    return _withMemberDropdowns(
-      Uint8List.fromList(encoded),
-      includeMeetingAndClassLists: false,
-    );
+    return _withMemberValidations(Uint8List.fromList(encoded));
   }
 
   Uint8List buildTemplate({
@@ -1583,28 +1580,7 @@ class MemberExcelService {
 
     final encoded = workbook.encode();
     if (encoded == null) throw StateError('تعذر إنشاء ملف Excel');
-    return _withMemberDropdowns(
-      Uint8List.fromList(encoded),
-      includeMeetingAndClassLists: true,
-      meetingOptionCount: meetings
-          .where((item) => item.isActive)
-          .map((item) => item.nameAr.trim())
-          .where((name) => name.isNotEmpty)
-          .toSet()
-          .length,
-      classOptionCount: classes
-          .where(
-            (item) =>
-                item.isActive &&
-                meetings.any(
-                  (meeting) => meeting.id == item.meetingId && meeting.isActive,
-                ),
-          )
-          .map((item) => item.nameAr.trim())
-          .where((name) => name.isNotEmpty)
-          .toSet()
-          .length,
-    );
+    return _withMemberValidations(Uint8List.fromList(encoded));
   }
 
   void _addValuesSheet(
@@ -1696,12 +1672,12 @@ class MemberExcelService {
     final instructions = [
       'اكتب البيانات داخل شيت «الأعضاء» فقط ولا تغير أسماء الأعمدة.',
       'اختر «اجتماع» أو «فصل مدارس الأحد» من القائمة المنسدلة في عمود «نوع المجموعة».',
-      'اختر الاجتماع والفصل من القوائم المنسدلة، أو انسخ القيم من شيت «القيم المتاحة».',
+      'اكتب اسم الاجتماع والفصل يدويًا كما يظهران في التطبيق. يمكنك مراجعة الأسماء في شيت «القيم المتاحة».',
       'اختر السنة الدراسية من القائمة المنسدلة، أو اتركها فارغة.',
       'إذا كان الاجتماع أو الفصل غير موجود، سيُنشأ تلقائيًا بعد ظهوره في المعاينة.',
       'قبل الاستيراد ستختار يوم كل اجتماع جديد من شاشة المعاينة.',
       'عند اختيار «فصل مدارس الأحد»: الاجتماع والفصل مطلوبان. وعند اختيار «اجتماع»: اترك الفصل فارغًا.',
-      'تاريخ الميلاد اختياري ويكتب بالشكل 2012-08-25.',
+      'تاريخ الميلاد اختياري ويكتب بالشكل 2012-08-25. ملفات Excel لا تفتح تقويمًا تلقائيًا عند الضغط على الخلية.',
       'الهاتف والكود اختياريان. يفضل كتابة الهاتف كنص للحفاظ على الصفر الأول.',
       'نشط: نعم أو لا. إذا تركت الخانة فارغة سيُنشأ العضو نشطًا.',
       'ستظهر معاينة بالأخطاء قبل حفظ أي أعضاء.',
@@ -1714,12 +1690,7 @@ class MemberExcelService {
     sheet.setColumnWidth(0, 95);
   }
 
-  Uint8List _withMemberDropdowns(
-    Uint8List workbookBytes, {
-    required bool includeMeetingAndClassLists,
-    int meetingOptionCount = 0,
-    int classOptionCount = 0,
-  }) {
+  Uint8List _withMemberValidations(Uint8List workbookBytes) {
     final archive = ZipDecoder().decodeBytes(workbookBytes);
     final worksheet = archive.findFile('xl/worksheets/sheet1.xml');
     if (worksheet == null) return workbookBytes;
@@ -1735,25 +1706,12 @@ class MemberExcelService {
           'sqref="E2:E1000"><formula1>"${memberSchoolYears.join(',')}"'
           '</formula1></dataValidation>',
       '<dataValidation type="date" operator="between" allowBlank="1" '
-          'showErrorMessage="1" sqref="F2:F1000"><formula1>1</formula1>'
+          'showErrorMessage="1" showInputMessage="1" '
+          'promptTitle="تاريخ الميلاد" '
+          'prompt="اكتب التاريخ بالشكل 2012-08-25" '
+          'sqref="F2:F1000"><formula1>1</formula1>'
           '<formula2>TODAY()</formula2></dataValidation>',
     ];
-    if (includeMeetingAndClassLists) {
-      final meetingEndRow = meetingOptionCount > 0 ? meetingOptionCount + 1 : 2;
-      final classEndRow = classOptionCount > 0 ? classOptionCount + 1 : 2;
-      validations.insert(
-        1,
-        '<dataValidation type="list" allowBlank="1" showErrorMessage="0" '
-        'sqref="C2:C1000"><formula1>INDIRECT("\'القيم المتاحة\'!'
-        '\$E\$2:\$E\$$meetingEndRow")</formula1></dataValidation>',
-      );
-      validations.insert(
-        2,
-        '<dataValidation type="list" allowBlank="1" showErrorMessage="0" '
-        'sqref="D2:D1000"><formula1>INDIRECT("\'القيم المتاحة\'!'
-        '\$F\$2:\$F\$$classEndRow")</formula1></dataValidation>',
-      );
-    }
     final validation =
         '<dataValidations count="${validations.length}">'
         '${validations.join()}</dataValidations>';
@@ -1772,7 +1730,7 @@ class MemberExcelService {
       ArchiveFile(worksheet.name, content.length, content)..compress = true,
     );
     final encoded = ZipEncoder().encode(archive);
-    if (encoded == null) throw StateError('تعذر إضافة القوائم المنسدلة');
+    if (encoded == null) throw StateError('تعذر إضافة قواعد إدخال الشيت');
     return Uint8List.fromList(encoded);
   }
 
