@@ -266,6 +266,7 @@ abstract class DatabaseRepository {
     String? result,
     String? responsibleUserId,
     required DateTime followUpDate,
+    String activityType = 'absence_follow_up',
   });
   Future<bool> deleteFollowUp(String id);
 

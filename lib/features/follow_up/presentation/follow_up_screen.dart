@@ -174,7 +174,9 @@ class _FollowUpScreenState extends State<FollowUpScreen>
           'yyyy/MM/dd',
         ).format(row['latestSessionDate'] as DateTime);
         final latestMeetingFollowUp = state.followUpHistory.where((followUp) {
-          if (followUp.memberId != member.id || followUp.sessionId == null) {
+          if (followUp.activityType == 'visit' ||
+              followUp.memberId != member.id ||
+              followUp.sessionId == null) {
             return false;
           }
           return state.sessionsById[followUp.sessionId]?.meetingId ==
@@ -317,7 +319,9 @@ class _FollowUpScreenState extends State<FollowUpScreen>
                         member,
                         row['meetingName'] as String,
                         row['latestSessionId'] as String?,
-                        state.servants,
+                        state.servants
+                            .where((servant) => servant.isActive)
+                            .toList(),
                       ),
                       icon: const Icon(Icons.add_comment_outlined, size: 16),
                       label: Text(
@@ -343,7 +347,9 @@ class _FollowUpScreenState extends State<FollowUpScreen>
   }
 
   Widget _buildHistoryTab(FollowUpDataLoaded state) {
-    final history = state.followUpHistory;
+    final history = state.followUpHistory
+        .where((item) => item.activityType != 'visit')
+        .toList();
     if (history.isEmpty) {
       return Center(
         child: Text(

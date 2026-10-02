@@ -69,6 +69,7 @@ mixin _SupabaseFollowUpsRepository on _SupabaseRepositoryBase {
     String? result,
     String? responsibleUserId,
     required DateTime followUpDate,
+    String activityType = 'absence_follow_up',
   }) async {
     final profile = await getCurrentProfile();
     if (profile == null || profile.churchId == null) {
@@ -85,6 +86,7 @@ mixin _SupabaseFollowUpsRepository on _SupabaseRepositoryBase {
         result: result,
         responsibleUserId: responsibleUserId,
         followUpDate: followUpDate,
+        activityType: activityType,
       ),
       {AppDataArea.followUps},
     );

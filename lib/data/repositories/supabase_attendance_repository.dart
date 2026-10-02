@@ -122,6 +122,9 @@ mixin _SupabaseAttendanceRepository on _SupabaseRepositoryBase {
         updated,
       );
       _notifyDataChanged({AppDataArea.attendance});
+      if (!OfflineNetworkPolicy.isConnectivityOffline) {
+        _scheduleQueuedAttendanceLockSync();
+      }
       return OfflineSaveResult(data: updated, syncedToServer: false);
     }
 
@@ -150,8 +153,26 @@ mixin _SupabaseAttendanceRepository on _SupabaseRepositoryBase {
         updated,
       );
       _notifyDataChanged({AppDataArea.attendance});
+      if (!OfflineNetworkPolicy.isConnectivityOffline) {
+        _scheduleQueuedAttendanceLockSync();
+      }
       return OfflineSaveResult(data: updated, syncedToServer: false);
     }
+  }
+
+  void _scheduleQueuedAttendanceLockSync() {
+    final syncWasAlreadyRunning = _offlineSyncInFlight != null;
+    unawaited(
+      syncPendingOfflineData()
+          .then((_) async {
+            // A sync already in progress may have taken its queue snapshot
+            // before this lock was added. Run one more pass in that case.
+            if (syncWasAlreadyRunning && await hasPendingOfflineData()) {
+              await syncPendingOfflineData();
+            }
+          })
+          .catchError((_) {}),
+    );
   }
 
   AttendanceSessionEntity _attendanceSessionWithLock(

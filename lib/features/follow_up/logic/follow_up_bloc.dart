@@ -23,6 +23,7 @@ class CreateFollowUpNote extends FollowUpEvent {
   final String? result;
   final String? responsibleUserId;
   final DateTime followUpDate;
+  final String activityType;
 
   CreateFollowUpNote({
     required this.memberId,
@@ -32,6 +33,7 @@ class CreateFollowUpNote extends FollowUpEvent {
     this.result,
     this.responsibleUserId,
     required this.followUpDate,
+    this.activityType = 'absence_follow_up',
   });
 }
 
@@ -326,6 +328,7 @@ class FollowUpBloc extends Bloc<FollowUpEvent, FollowUpState> {
           result: event.result,
           responsibleUserId: event.responsibleUserId,
           followUpDate: event.followUpDate,
+          activityType: event.activityType,
         );
         add(
           LoadFollowUpData(flashMessage: synced ? null : kOfflineSavedMessage),

@@ -346,6 +346,8 @@ mixin _OfflineWriteSync on _OfflineWriteHandlerBase {
               'result': operation.payload['result'],
               'responsible_user_id': operation.payload['responsible_user_id'],
               'follow_up_date': operation.payload['follow_up_date'],
+              'activity_type':
+                  operation.payload['activity_type'] ?? 'absence_follow_up',
               'created_by': operation.payload['created_by'],
             })
             .select()

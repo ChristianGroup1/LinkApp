@@ -13,8 +13,10 @@ import '../../../shared/ui/app_widgets.dart';
 import '../../attendance/presentation/attendance_records_screen.dart';
 import '../../follow_up/presentation/follow_up_screen.dart';
 import '../../meetings/presentation/meetings_list_screen.dart';
+import '../../members/presentation/birthdays_screen.dart';
 import '../../members/presentation/members_list_screen.dart';
 import '../../reports/presentation/reports_screen.dart';
+import '../../visits/presentation/visits_screen.dart';
 import '../logic/church_bloc.dart';
 import 'servants_permissions_screen.dart';
 
@@ -142,6 +144,13 @@ class DashboardScreen extends StatelessWidget {
                         _buildUpcomingMeetingsCard(homeState.upcomingMeetings),
                         const SizedBox(height: 18),
 
+                        // Birthdays preview and full date-range view.
+                        _buildBirthdaysCard(
+                          context,
+                          homeState.upcomingBirthdays,
+                        ),
+                        const SizedBox(height: 18),
+
                         if (homeState.canTakeAttendance) ...[
                           _buildQuickActionCard(context),
                           const SizedBox(height: 18),
@@ -180,6 +189,11 @@ class DashboardScreen extends StatelessWidget {
                           const SizedBox(height: 18),
                         ],
 
+                        if (homeState.canManageMembers) ...[
+                          _buildVisitsEntryCard(context),
+                          const SizedBox(height: 18),
+                        ],
+
                         // 4. التقارير والإحصائيات
                         if (homeState.canViewReports) ...[
                           KeyedSubtree(
@@ -215,9 +229,6 @@ class DashboardScreen extends StatelessWidget {
                           ),
                           const SizedBox(height: 18),
                         ],
-
-                        if (homeState.upcomingBirthdays.isNotEmpty)
-                          _buildBirthdaysCard(homeState.upcomingBirthdays),
                       ],
                     ),
                   );
@@ -279,7 +290,10 @@ class DashboardScreen extends StatelessWidget {
     context.read<ChurchBloc>().add(LoadChurchContext());
   }
 
-  Widget _buildBirthdaysCard(List<BirthdayReminder> birthdays) {
+  Widget _buildBirthdaysCard(
+    BuildContext context,
+    List<BirthdayReminder> birthdays,
+  ) {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -356,6 +370,18 @@ class DashboardScreen extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
+          if (birthdays.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Text(
+                'لا توجد أعياد ميلاد خلال الثلاثين يومًا القادمة',
+                style: GoogleFonts.cairo(
+                  fontSize: 12,
+                  color: AppTheme.textLight,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
           ...birthdays.take(4).map((birthday) {
             final dateLabel = intl.DateFormat(
               'd MMMM',
@@ -456,6 +482,26 @@ class DashboardScreen extends StatelessWidget {
                 ),
               ),
             ),
+          const SizedBox(height: 4),
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: TextButton.icon(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const BirthdaysScreen(),
+                ),
+              ),
+              icon: const Icon(Icons.arrow_back_rounded, size: 18),
+              label: Text(
+                'عرض أعياد الميلاد حسب الفترة',
+                style: GoogleFonts.cairo(fontWeight: FontWeight.w800),
+              ),
+              style: TextButton.styleFrom(
+                foregroundColor: AppTheme.primary,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -678,6 +724,16 @@ class DashboardScreen extends StatelessWidget {
       title: 'متابعة الغياب',
       subtitle: 'سجل تواصل ومتابعة حتى بعد غياب مرة واحدة.',
       onTap: () => _openAndRefreshHome(context, const FollowUpScreen()),
+    );
+  }
+
+  Widget _buildVisitsEntryCard(BuildContext context) {
+    return AppActionTile(
+      icon: Icons.volunteer_activism_rounded,
+      iconColor: AppTheme.secondary,
+      title: 'الزيارات والافتقاد',
+      subtitle: 'خطط زيارة أو افتقادًا وسجّل المسؤول والنتيجة.',
+      onTap: () => _openAndRefreshHome(context, const VisitsScreen()),
     );
   }
 

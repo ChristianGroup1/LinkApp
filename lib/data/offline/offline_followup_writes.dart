@@ -11,6 +11,7 @@ mixin _OfflineFollowUpWrites on _OfflineWriteHandlerBase {
     String? result,
     String? responsibleUserId,
     required DateTime followUpDate,
+    String activityType = 'absence_follow_up',
   }) async {
     final resolvedMemberId = await queue.resolveId(memberId);
     final resolvedSessionId = sessionId == null
@@ -27,6 +28,7 @@ mixin _OfflineFollowUpWrites on _OfflineWriteHandlerBase {
         'result': emptyToNull(result),
         'responsible_user_id': responsibleUserId,
         'follow_up_date': followUpDate.toIso8601String().split('T').first,
+        'activity_type': activityType,
         'created_by': createdBy,
       });
       return true;
@@ -43,6 +45,7 @@ mixin _OfflineFollowUpWrites on _OfflineWriteHandlerBase {
         result: emptyToNull(result),
         responsibleUserId: responsibleUserId,
         followUpDate: followUpDate,
+        activityType: activityType,
       );
       await cache.upsertFollowUp(churchId, followUp);
       await queue.enqueue(
@@ -60,6 +63,7 @@ mixin _OfflineFollowUpWrites on _OfflineWriteHandlerBase {
             'result': emptyToNull(result),
             'responsible_user_id': responsibleUserId,
             'follow_up_date': followUpDate.toIso8601String().split('T').first,
+            'activity_type': activityType,
           },
           queuedAt: DateTime.now(),
         ),

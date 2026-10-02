@@ -501,6 +501,7 @@ class FollowUpEntity {
   final String? result;
   final String? responsibleUserId;
   final DateTime followUpDate;
+  final String activityType;
 
   const FollowUpEntity({
     required this.id,
@@ -512,6 +513,7 @@ class FollowUpEntity {
     this.result,
     this.responsibleUserId,
     required this.followUpDate,
+    this.activityType = 'absence_follow_up',
   });
 
   factory FollowUpEntity.fromJson(Map<String, dynamic> json) {
@@ -525,6 +527,7 @@ class FollowUpEntity {
       result: json['result'] as String?,
       responsibleUserId: json['responsible_user_id'] as String?,
       followUpDate: DateTime.parse(json['follow_up_date'] as String),
+      activityType: json['activity_type'] as String? ?? 'absence_follow_up',
     );
   }
 }

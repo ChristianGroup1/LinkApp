@@ -3,13 +3,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/auth/auth_flow_capabilities.dart';
 import '../../../core/diagnostics/diagnostics_visibility.dart';
 import '../../../core/errors/arabic_error_text.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
-import '../../../core/utils/whatsapp_launcher.dart';
 import '../../../data/models/models.dart';
 import '../../../data/repositories/database_repository.dart';
 import '../../../logic/auth/auth_bloc.dart';
@@ -227,19 +227,20 @@ class _ProfileActionsCard extends StatelessWidget {
         ),
         Divider(height: 1, color: AppTheme.border.withValues(alpha: 0.7)),
         _ProfileActionRow(
-          icon: Icons.chat_rounded,
-          title: 'تواصل معنا على واتساب',
-          subtitle: '01224999086',
+          icon: Icons.facebook_rounded,
+          title: 'تواصل معنا على فيسبوك',
+          subtitle: 'صفحة Link Church',
           onTap: () async {
-            final opened = await launchWhatsAppChat(
-              phone: '01224999086',
-              message: 'مرحبًا، أحتاج مساعدة في تطبيق LinkApp.',
+            final uri = Uri.parse('https://www.facebook.com/linkchurchapp/');
+            final opened = await launchUrl(
+              uri,
+              mode: LaunchMode.externalApplication,
             );
             if (!opened && context.mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(
-                    'تعذر فتح واتساب. يمكنك مراسلتنا على 01224999086',
+                    'تعذر فتح صفحة Link Church على فيسبوك',
                     style: GoogleFonts.cairo(),
                   ),
                 ),

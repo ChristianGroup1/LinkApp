@@ -798,6 +798,7 @@ class _MemberAttendanceSectionState extends State<_MemberAttendanceSection> {
     };
     final reportsByMeeting = <String, List<FollowUpEntity>>{};
     final visibleReports = data.reports.where((report) {
+      if (report.activityType == 'visit') return false;
       if (meetingIdFilter == null) return true;
       if (report.sessionId == null) return false;
       return sessionsById[report.sessionId]?.meetingId == meetingIdFilter;

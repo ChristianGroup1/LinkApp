@@ -85,6 +85,7 @@ Map<String, dynamic> followUpToJson(FollowUpEntity followUp) => {
   'result': followUp.result,
   'responsible_user_id': followUp.responsibleUserId,
   'follow_up_date': followUp.followUpDate.toIso8601String().split('T').first,
+  'activity_type': followUp.activityType,
 };
 
 Map<String, dynamic> invitationToJson(HelperInvitation invitation) => {

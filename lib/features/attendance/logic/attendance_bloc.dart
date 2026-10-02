@@ -4,6 +4,7 @@ import '../../../core/errors/arabic_error_text.dart';
 import '../../../data/models/models.dart';
 import '../../../data/offline/offline_messages.dart';
 import '../../../data/repositories/database_repository.dart';
+import '../../../shared/data/app_data_changes.dart';
 
 // EVENTS
 abstract class AttendanceEvent {}
@@ -179,8 +180,25 @@ class AttendanceError extends AttendanceState {
 class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
   final DatabaseRepository repository;
   StreamSubscription? _recordsSubscription;
+  StreamSubscription<AppDataChange>? _attendanceDataSubscription;
 
   AttendanceBloc({required this.repository}) : super(AttendanceInitial()) {
+    _attendanceDataSubscription = AppDataChanges.instance.stream.listen((
+      change,
+    ) {
+      final current = state;
+      if (!change.affectsAny({AppDataArea.attendance}) ||
+          current is! SessionsLoaded) {
+        return;
+      }
+      add(
+        LoadAttendanceSessions(
+          meetingId: current.meetingId,
+          classId: current.classId,
+        ),
+      );
+    });
+
     on<LoadAttendanceSessions>((event, emit) async {
       emit(AttendanceLoading());
       try {
@@ -606,6 +624,7 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
   @override
   Future<void> close() {
     unawaited(_recordsSubscription?.cancel());
+    unawaited(_attendanceDataSubscription?.cancel());
     return super.close();
   }
 }
