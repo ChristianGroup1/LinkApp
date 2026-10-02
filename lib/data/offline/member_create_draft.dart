@@ -11,6 +11,7 @@ class MemberCreateDraft {
   final String? parentPhone;
   final String? code;
   final DateTime? birthDate;
+  final String? schoolYear;
   final String? notes;
 
   const MemberCreateDraft({
@@ -23,6 +24,7 @@ class MemberCreateDraft {
     this.parentPhone,
     this.code,
     this.birthDate,
+    this.schoolYear,
     this.notes,
   });
 }

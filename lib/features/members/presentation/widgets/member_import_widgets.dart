@@ -898,6 +898,15 @@ class ImportDuplicatesSection extends StatelessWidget {
             fontWeight: FontWeight.w900,
           ),
         ),
+        const SizedBox(height: 5),
+        Text(
+          'عند تخطي العضو المطابق، سيتم ربط السنة الدراسية من الشيت به فقط دون تغيير باقي بياناته.',
+          style: GoogleFonts.cairo(
+            color: AppTheme.textLight,
+            fontSize: 10.5,
+            height: 1.6,
+          ),
+        ),
         if (duplicates.length > 1)
           Padding(
             padding: const EdgeInsets.only(top: 8),

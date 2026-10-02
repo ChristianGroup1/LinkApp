@@ -6,6 +6,7 @@ export const adminColumnLabels: Record<string, string> = {
   phone: 'الهاتف', email: 'البريد الإلكتروني', address: 'العنوان', role: 'الدور', kind: 'نوع الاجتماع', weekday: 'يوم الأسبوع',
   attendance_reminder_minutes: 'دقائق التذكير', description: 'الوصف', is_active: 'الحساب نشط', display_order: 'ترتيب العرض',
   code: 'الكود', scope: 'نطاق المخدوم', sunday_school_class_id: 'فصل مدارس الأحد', birth_date: 'تاريخ الميلاد',
+  school_year: 'السنة الدراسية',
   whatsapp: 'واتساب', parent_name: 'اسم ولي الأمر', parent_phone: 'هاتف ولي الأمر', notes: 'ملاحظات', avatar_url: 'رابط الصورة',
   joined_on: 'تاريخ الانضمام', session_date: 'تاريخ الجلسة', week_number: 'رقم الأسبوع', title: 'عنوان الجلسة',
   status: 'الحالة', reason: 'سبب المتابعة', result: 'نتيجة المتابعة', contact_status: 'حالة التواصل', follow_up_date: 'تاريخ المتابعة',

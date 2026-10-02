@@ -169,6 +169,7 @@ abstract class DatabaseRepository {
     String? parentPhone,
     String? code,
     DateTime? birthDate,
+    String? schoolYear,
     String? notes,
   });
   Future<List<OfflineSaveResult<MemberEntity>>> createMembers(
@@ -186,6 +187,7 @@ abstract class DatabaseRepository {
     String? code,
     DateTime? birthDate,
     required bool isActive,
+    String? schoolYear,
     String? notes,
   });
   Future<bool> deleteMember(String id);

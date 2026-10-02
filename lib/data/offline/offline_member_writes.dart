@@ -11,6 +11,7 @@ mixin _OfflineMemberWrites on _OfflineWriteHandlerBase {
     String? parentPhone,
     String? code,
     DateTime? birthDate,
+    String? schoolYear,
     String? notes,
   }) async {
     final profile = await _requireProfile();
@@ -37,6 +38,7 @@ mixin _OfflineMemberWrites on _OfflineWriteHandlerBase {
             'parent_phone': emptyToNull(parentPhone),
             'code': emptyToNull(code),
             'birth_date': _dateOnly(birthDate),
+            'school_year': emptyToNull(schoolYear),
             'notes': emptyToNull(notes),
             'is_active': true,
             'joined_on': DateTime.now().toIso8601String().split('T').first,
@@ -67,6 +69,7 @@ mixin _OfflineMemberWrites on _OfflineWriteHandlerBase {
         parentPhone: emptyToNull(parentPhone),
         code: emptyToNull(code),
         birthDate: birthDate,
+        schoolYear: emptyToNull(schoolYear),
         notes: emptyToNull(notes),
         isActive: true,
       );
@@ -87,6 +90,7 @@ mixin _OfflineMemberWrites on _OfflineWriteHandlerBase {
             'parent_phone': emptyToNull(parentPhone),
             'code': emptyToNull(code),
             'birth_date': _dateOnly(birthDate),
+            'school_year': emptyToNull(schoolYear),
             'notes': emptyToNull(notes),
             'is_active': true,
           },
@@ -131,6 +135,7 @@ mixin _OfflineMemberWrites on _OfflineWriteHandlerBase {
           'parent_phone': emptyToNull(draft.parentPhone),
           'code': emptyToNull(draft.code),
           'birth_date': _dateOnly(draft.birthDate),
+          'school_year': emptyToNull(draft.schoolYear),
           'notes': emptyToNull(draft.notes),
           'is_active': true,
           'joined_on': joinedOn,
@@ -165,6 +170,7 @@ mixin _OfflineMemberWrites on _OfflineWriteHandlerBase {
             parentPhone: draft.parentPhone,
             code: draft.code,
             birthDate: draft.birthDate,
+            schoolYear: draft.schoolYear,
             notes: draft.notes,
           ),
         );
@@ -272,6 +278,7 @@ mixin _OfflineMemberWrites on _OfflineWriteHandlerBase {
     String? code,
     DateTime? birthDate,
     required bool isActive,
+    String? schoolYear,
     String? notes,
   }) async {
     final profile = await _requireProfile();
@@ -310,6 +317,7 @@ mixin _OfflineMemberWrites on _OfflineWriteHandlerBase {
         parentPhone: emptyToNull(parentPhone),
         code: emptyToNull(code),
         birthDate: birthDate,
+        schoolYear: emptyToNull(schoolYear),
         notes: emptyToNull(notes),
         isActive: isActive,
       );
@@ -331,6 +339,7 @@ mixin _OfflineMemberWrites on _OfflineWriteHandlerBase {
             'parent_phone': emptyToNull(parentPhone),
             'code': emptyToNull(code),
             'birth_date': _dateOnly(birthDate),
+            'school_year': emptyToNull(schoolYear),
             'notes': emptyToNull(notes),
             'is_active': isActive,
           },
@@ -358,6 +367,7 @@ mixin _OfflineMemberWrites on _OfflineWriteHandlerBase {
             'parent_phone': emptyToNull(parentPhone),
             'code': emptyToNull(code),
             'birth_date': _dateOnly(birthDate),
+            'school_year': emptyToNull(schoolYear),
             'notes': emptyToNull(notes),
             'is_active': isActive,
           })
@@ -386,6 +396,7 @@ mixin _OfflineMemberWrites on _OfflineWriteHandlerBase {
         parentPhone: emptyToNull(parentPhone),
         code: emptyToNull(code),
         birthDate: birthDate,
+        schoolYear: emptyToNull(schoolYear),
         notes: emptyToNull(notes),
         isActive: isActive,
       );
@@ -406,6 +417,7 @@ mixin _OfflineMemberWrites on _OfflineWriteHandlerBase {
             'parent_phone': emptyToNull(parentPhone),
             'code': emptyToNull(code),
             'birth_date': _dateOnly(birthDate),
+            'school_year': emptyToNull(schoolYear),
             'notes': emptyToNull(notes),
             'is_active': isActive,
           },

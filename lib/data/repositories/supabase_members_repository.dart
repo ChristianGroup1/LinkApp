@@ -199,6 +199,7 @@ mixin _SupabaseMembersRepository on _SupabaseRepositoryBase {
     String? parentPhone,
     String? code,
     DateTime? birthDate,
+    String? schoolYear,
     String? notes,
   }) {
     return _notifyAfter(
@@ -212,6 +213,7 @@ mixin _SupabaseMembersRepository on _SupabaseRepositoryBase {
         parentPhone: parentPhone,
         code: code,
         birthDate: birthDate,
+        schoolYear: schoolYear,
         notes: notes,
       ),
       {AppDataArea.members},
@@ -240,6 +242,7 @@ mixin _SupabaseMembersRepository on _SupabaseRepositoryBase {
     String? code,
     DateTime? birthDate,
     required bool isActive,
+    String? schoolYear,
     String? notes,
   }) {
     return _notifyAfter(
@@ -255,6 +258,7 @@ mixin _SupabaseMembersRepository on _SupabaseRepositoryBase {
         code: code,
         birthDate: birthDate,
         isActive: isActive,
+        schoolYear: schoolYear,
         notes: notes,
       ),
       {AppDataArea.members},

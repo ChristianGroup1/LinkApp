@@ -34,7 +34,7 @@ class _AddEditMemberScreenState extends State<AddEditMemberScreen> {
   late TextEditingController _phoneController;
   late TextEditingController _parentNameController;
   late TextEditingController _parentPhoneController;
-  late TextEditingController _notesController;
+  late TextEditingController _schoolYearController;
   DateTime? _birthDate;
 
   MemberScope _scope = MemberScope.sundaySchoolClass;
@@ -63,7 +63,9 @@ class _AddEditMemberScreenState extends State<AddEditMemberScreen> {
     _parentPhoneController = TextEditingController(
       text: widget.member?.parentPhone,
     );
-    _notesController = TextEditingController(text: widget.member?.notes);
+    _schoolYearController = TextEditingController(
+      text: widget.member?.schoolYear,
+    );
     _birthDate = widget.member?.birthDate;
 
     if (widget.member != null) {
@@ -171,7 +173,7 @@ class _AddEditMemberScreenState extends State<AddEditMemberScreen> {
     _phoneController.dispose();
     _parentNameController.dispose();
     _parentPhoneController.dispose();
-    _notesController.dispose();
+    _schoolYearController.dispose();
     super.dispose();
   }
 
@@ -273,7 +275,7 @@ class _AddEditMemberScreenState extends State<AddEditMemberScreen> {
     final phone = _phoneController.text.trim();
     final parentName = _parentNameController.text.trim();
     final parentPhone = _parentPhoneController.text.trim();
-    final notes = _notesController.text.trim();
+    final schoolYear = _schoolYearController.text.trim();
 
     final isEdit = widget.member != null;
 
@@ -310,7 +312,8 @@ class _AddEditMemberScreenState extends State<AddEditMemberScreen> {
           parentPhone: parentPhone.isEmpty ? null : parentPhone,
           code: code.isEmpty ? null : code,
           birthDate: _birthDate,
-          notes: notes.isEmpty ? null : notes,
+          schoolYear: schoolYear.isEmpty ? null : schoolYear,
+          notes: null,
           completion: completion,
         ),
       );
@@ -330,7 +333,8 @@ class _AddEditMemberScreenState extends State<AddEditMemberScreen> {
           code: code.isEmpty ? null : code,
           birthDate: _birthDate,
           isActive: _isActive,
-          notes: notes.isEmpty ? null : notes,
+          schoolYear: schoolYear.isEmpty ? null : schoolYear,
+          notes: widget.member?.notes,
           completion: completion,
         ),
       );
@@ -504,9 +508,8 @@ class _AddEditMemberScreenState extends State<AddEditMemberScreen> {
                                       // 5. Fixed school-year choices.
                                       Builder(
                                         builder: (context) {
-                                          final storedValue = _notesController
-                                              .text
-                                              .trim();
+                                          final storedValue =
+                                              _schoolYearController.text.trim();
                                           final hasLegacyValue =
                                               storedValue.isNotEmpty &&
                                               !memberSchoolYears.contains(
@@ -546,7 +549,7 @@ class _AddEditMemberScreenState extends State<AddEditMemberScreen> {
                                               ),
                                             ],
                                             onChanged: (value) {
-                                              _notesController.text =
+                                              _schoolYearController.text =
                                                   value?.trim() ?? '';
                                               _markDirty();
                                             },

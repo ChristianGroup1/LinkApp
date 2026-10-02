@@ -1,5 +1,37 @@
 part of 'offline_write_handler.dart';
 
+String? _legacyQueuedSchoolYear(Map<String, dynamic> payload) {
+  if (payload.containsKey('school_year')) {
+    return payload['school_year'] as String?;
+  }
+  final legacy = payload['notes'] as String?;
+  const years = {
+    'أولى حضانة',
+    'ثانية حضانة',
+    'أولى ابتدائي',
+    'ثانية ابتدائي',
+    'ثالثة ابتدائي',
+    'رابعة ابتدائي',
+    'خامسة ابتدائي',
+    'سادسة ابتدائي',
+    'أولى إعدادي',
+    'ثانية إعدادي',
+    'ثالثة إعدادي',
+    'أولى ثانوي',
+    'ثانية ثانوي',
+    'ثالثة ثانوي',
+  };
+  return years.contains(legacy) ? legacy : null;
+}
+
+String? _queuedMemberNotes(Map<String, dynamic> payload) {
+  final legacySchoolYear = _legacyQueuedSchoolYear(payload);
+  if (!payload.containsKey('school_year') && legacySchoolYear != null) {
+    return null;
+  }
+  return payload['notes'] as String?;
+}
+
 mixin _OfflineWriteSync on _OfflineWriteHandlerBase {
   @override
   Future<void> _syncWriteQueue() async {
@@ -167,6 +199,8 @@ mixin _OfflineWriteSync on _OfflineWriteHandlerBase {
               'parent_phone': operation.payload['parent_phone'],
               'code': operation.payload['code'],
               'birth_date': operation.payload['birth_date'],
+              'school_year': _legacyQueuedSchoolYear(operation.payload),
+              'notes': _queuedMemberNotes(operation.payload),
               'is_active': operation.payload['is_active'] ?? true,
               'joined_on': DateTime.now().toIso8601String().split('T').first,
             })
@@ -204,6 +238,8 @@ mixin _OfflineWriteSync on _OfflineWriteHandlerBase {
               'parent_phone': operation.payload['parent_phone'],
               'code': operation.payload['code'],
               'birth_date': operation.payload['birth_date'],
+              'school_year': _legacyQueuedSchoolYear(operation.payload),
+              'notes': _queuedMemberNotes(operation.payload),
               'is_active': operation.payload['is_active'],
             })
             .eq('id', operation.payload['id']);

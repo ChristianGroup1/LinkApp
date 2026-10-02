@@ -274,11 +274,11 @@ class MemberTile extends StatelessWidget {
                                       color: accent,
                                       backgroundColor: accentLight,
                                     ),
-                                    if (member.notes != null &&
-                                        member.notes!.isNotEmpty)
+                                    if (member.schoolYear != null &&
+                                        member.schoolYear!.isNotEmpty)
                                       _MemberTag(
                                         icon: Icons.school_outlined,
-                                        label: 'المرحلة: ${member.notes}',
+                                        label: 'المرحلة: ${member.schoolYear}',
                                         color: AppTheme.secondary,
                                         backgroundColor:
                                             AppTheme.secondaryLight,

@@ -45,9 +45,9 @@ export const adminTables = {
   },
   members: {
     table: 'members', label: 'المخدومون', description: 'بيانات الأعضاء والمخدومين وحالة نشاطهم.',
-    visibleColumns: ['full_name', 'code', 'scope', 'phone', 'is_active', 'church_id'],
+    visibleColumns: ['full_name', 'code', 'scope', 'school_year', 'phone', 'is_active', 'church_id'],
     searchableColumns: ['full_name', 'code', 'phone', 'whatsapp', 'parent_name'],
-    editableColumns: ['church_id', 'full_name', 'code', 'scope', 'sunday_school_class_id', 'meeting_id', 'birth_date', 'phone', 'whatsapp', 'parent_name', 'parent_phone', 'notes', 'avatar_url', 'is_active', 'joined_on'],
+    editableColumns: ['church_id', 'full_name', 'code', 'scope', 'sunday_school_class_id', 'meeting_id', 'school_year', 'birth_date', 'phone', 'whatsapp', 'parent_name', 'parent_phone', 'notes', 'avatar_url', 'is_active', 'joined_on'],
     insertTemplate: { church_id: '', full_name: '', scope: 'meeting', meeting_id: '', sunday_school_class_id: null, is_active: true },
     orderBy: 'created_at',
   },

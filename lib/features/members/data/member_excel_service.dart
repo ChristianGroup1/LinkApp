@@ -389,6 +389,7 @@ class MemberImportWriter {
           code: member.code,
           birthDate: member.birthDate,
           isActive: false,
+          schoolYear: member.schoolYear,
           notes: member.notes,
         );
         allSyncedToServer = allSyncedToServer && updated.syncedToServer;
@@ -453,6 +454,8 @@ class MemberImportWriter {
               parentPhone: item.draft.parentPhone,
               code: item.draft.code,
               birthDate: item.draft.birthDate,
+              schoolYear: item.draft.schoolYear,
+              notes: item.draft.notes,
             );
             await registerCreated(item, created);
           } catch (error) {
@@ -488,7 +491,53 @@ class MemberImportWriter {
           duplicateActions[row.sourceRow] ?? MemberImportDuplicateAction.skip;
       if (duplicate != null &&
           duplicateAction == MemberImportDuplicateAction.skip) {
-        skippedMembers++;
+        final existing = duplicate.existingMember;
+        final incomingSchoolYear = row.schoolYear?.trim();
+        if (incomingSchoolYear != null &&
+            incomingSchoolYear.isNotEmpty &&
+            incomingSchoolYear != existing.schoolYear) {
+          try {
+            final updated = await repository.updateMember(
+              id: existing.id,
+              fullName: existing.fullName,
+              scope: existing.scope,
+              sundaySchoolClassId: existing.sundaySchoolClassId,
+              meetingId: existing.meetingId,
+              phone: existing.phone,
+              parentName: existing.parentName,
+              parentPhone: existing.parentPhone,
+              code: existing.code,
+              birthDate: existing.birthDate,
+              isActive: existing.isActive,
+              schoolYear: incomingSchoolYear,
+              notes: existing.notes,
+            );
+            allSyncedToServer = allSyncedToServer && updated.syncedToServer;
+            updatedMembers++;
+            updatedPreviousVersions.add(existing);
+            imported++;
+            if (existing.scope == MemberScope.sundaySchoolClass &&
+                existing.sundaySchoolClassId != null) {
+              successfulClassIds.add(existing.sundaySchoolClassId!);
+            } else if (existing.meetingId != null) {
+              successfulMeetingIds.add(existing.meetingId!);
+            }
+          } catch (error) {
+            failedRows.add(row);
+            issues.add(
+              MemberImportIssue(
+                row: row.sourceRow,
+                message: _errorText(error, action: 'ربط السنة الدراسية بالعضو'),
+                suggestion:
+                    'راجع اتصال الإنترنت أو صلاحية تعديل العضو ثم أعد المحاولة',
+                sourceValues: row.toCsvValues(),
+                importRow: row,
+              ),
+            );
+          }
+        } else {
+          skippedMembers++;
+        }
         processed++;
         report();
         continue;
@@ -567,7 +616,8 @@ class MemberImportWriter {
             code: row.code ?? existing.code,
             birthDate: row.birthDate ?? existing.birthDate,
             isActive: row.isActive,
-            notes: row.schoolYear ?? existing.notes,
+            schoolYear: row.schoolYear ?? existing.schoolYear,
+            notes: existing.notes,
           );
           allSyncedToServer = allSyncedToServer && updated.syncedToServer;
           updatedMembers++;
@@ -598,7 +648,7 @@ class MemberImportWriter {
                     ? null
                     : row.code,
                 birthDate: row.birthDate,
-                notes: row.schoolYear,
+                schoolYear: row.schoolYear,
               ),
             ),
           );
@@ -755,6 +805,7 @@ class MemberImportWriter {
           code: previous.code,
           birthDate: previous.birthDate,
           isActive: previous.isActive,
+          schoolYear: previous.schoolYear,
           notes: previous.notes,
         );
         restoredMembers++;
@@ -1560,7 +1611,7 @@ class MemberExcelService {
         ),
         TextCellValue(meeting?.nameAr ?? ''),
         TextCellValue(classEntity?.nameAr ?? ''),
-        TextCellValue(member.notes ?? ''),
+        TextCellValue(member.schoolYear ?? ''),
         member.birthDate == null
             ? TextCellValue('')
             : DateCellValue.fromDateTime(member.birthDate!),

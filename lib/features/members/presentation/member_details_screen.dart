@@ -168,14 +168,15 @@ class _MemberDetailsView extends StatelessWidget {
                   icon: Icons.qr_code_2_rounded,
                   label: 'الكود التعريفي',
                   value: member.code,
-                  isLast: member.notes == null || member.notes!.isEmpty,
+                  isLast:
+                      member.schoolYear == null || member.schoolYear!.isEmpty,
                 ),
                 // 5. السنة الدراسية / المرحلة
-                if (member.notes != null && member.notes!.isNotEmpty)
+                if (member.schoolYear != null && member.schoolYear!.isNotEmpty)
                   _DetailRow(
                     icon: Icons.school_outlined,
                     label: 'السنة الدراسية / المرحلة',
-                    value: member.notes,
+                    value: member.schoolYear,
                     isLast: true,
                   ),
               ],

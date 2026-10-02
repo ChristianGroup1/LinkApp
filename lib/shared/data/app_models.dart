@@ -298,6 +298,7 @@ class MemberEntity {
   final String? code;
   final bool isActive;
   final DateTime? birthDate;
+  final String? schoolYear;
   final String? notes;
 
   const MemberEntity({
@@ -314,6 +315,7 @@ class MemberEntity {
     this.code,
     required this.isActive,
     this.birthDate,
+    this.schoolYear,
     this.notes,
   });
 
@@ -350,6 +352,7 @@ class MemberEntity {
       birthDate: json['birth_date'] != null
           ? DateTime.parse(json['birth_date'] as String)
           : null,
+      schoolYear: json['school_year'] as String? ?? json['notes'] as String?,
       notes: json['notes'] as String?,
     );
   }
@@ -368,6 +371,7 @@ class MemberEntity {
     code: code,
     isActive: isActive,
     birthDate: birthDate,
+    schoolYear: schoolYear,
     notes: notes,
   );
 }

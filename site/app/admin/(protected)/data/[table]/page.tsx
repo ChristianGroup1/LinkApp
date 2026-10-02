@@ -11,6 +11,7 @@ import PermanentDeleteButton from './permanent-delete-button';
 import CancelEditorButton from './cancel-editor-button';
 
 const weekdays = adminWeekdayNames.map((day, index) => ({ value: String(index + 1), label: day }));
+const schoolYears = ['أولى حضانة', 'ثانية حضانة', 'أولى ابتدائي', 'ثانية ابتدائي', 'ثالثة ابتدائي', 'رابعة ابتدائي', 'خامسة ابتدائي', 'سادسة ابتدائي', 'أولى إعدادي', 'ثانية إعدادي', 'ثالثة إعدادي', 'أولى ثانوي', 'ثانية ثانوي', 'ثالثة ثانوي'].map((year) => ({ value: year, label: year }));
 
 function displayValue(value: unknown) {
   if (value === null || value === undefined || value === '') return '—';
@@ -39,7 +40,7 @@ function editableFields(row: Record<string, unknown>, columns: string[], options
     key,
     label: columnLabels[key] ?? key,
     value: row[key] ?? null,
-    options: options[key] ?? (key === 'weekday' ? weekdays : undefined),
+    options: options[key] ?? (key === 'weekday' ? weekdays : key === 'school_year' ? schoolYears : undefined),
   }));
 }
 

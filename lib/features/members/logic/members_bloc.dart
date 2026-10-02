@@ -47,6 +47,7 @@ class CreateMember extends MembersEvent {
   final String? parentPhone;
   final String? code;
   final DateTime? birthDate;
+  final String? schoolYear;
   final String? notes;
   final Completer<OfflineSaveResult<MemberEntity>>? completion;
 
@@ -60,6 +61,7 @@ class CreateMember extends MembersEvent {
     this.parentPhone,
     this.code,
     this.birthDate,
+    this.schoolYear,
     this.notes,
     this.completion,
   });
@@ -77,6 +79,7 @@ class UpdateMemberEvent extends MembersEvent {
   final String? code;
   final DateTime? birthDate;
   final bool isActive;
+  final String? schoolYear;
   final String? notes;
   final Completer<OfflineSaveResult<MemberEntity>>? completion;
 
@@ -92,6 +95,7 @@ class UpdateMemberEvent extends MembersEvent {
     this.code,
     this.birthDate,
     required this.isActive,
+    this.schoolYear,
     this.notes,
     this.completion,
   });
@@ -339,6 +343,7 @@ class MembersBloc extends Bloc<MembersEvent, MembersState> {
           parentPhone: event.parentPhone,
           code: event.code,
           birthDate: event.birthDate,
+          schoolYear: event.schoolYear,
           notes: event.notes,
         );
         add(
@@ -375,6 +380,7 @@ class MembersBloc extends Bloc<MembersEvent, MembersState> {
           code: event.code,
           birthDate: event.birthDate,
           isActive: event.isActive,
+          schoolYear: event.schoolYear,
           notes: event.notes,
         );
         add(
