@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart' as intl;
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/errors/arabic_error_text.dart';
 import '../../../core/theme/app_theme.dart';
@@ -17,11 +18,43 @@ class MySupportTicketsScreen extends StatefulWidget {
 
 class _MySupportTicketsScreenState extends State<MySupportTicketsScreen> {
   late Future<List<SupportTicketEntity>> _ticketsFuture;
+  RealtimeChannel? _ticketStatusChannel;
 
   @override
   void initState() {
     super.initState();
     _reload();
+    _listenForStatusChanges();
+  }
+
+  void _listenForStatusChanges() {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) return;
+    _ticketStatusChannel = Supabase.instance.client
+        .channel('my-support-ticket-status-$userId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'support_tickets',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'user_id',
+            value: userId,
+          ),
+          callback: (_) {
+            if (mounted) setState(_reload);
+          },
+        )
+        .subscribe();
+  }
+
+  @override
+  void dispose() {
+    final channel = _ticketStatusChannel;
+    if (channel != null) {
+      Supabase.instance.client.removeChannel(channel);
+    }
+    super.dispose();
   }
 
   void _reload() {

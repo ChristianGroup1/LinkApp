@@ -56,7 +56,7 @@ export default async function AdminTablePage({
   const search = await searchParams;
   const config: AdminTableConfig = adminTables[table];
   const tableColumns = table === 'support_tickets'
-    ? ['status', 'subject', 'reporter_name', 'category', 'platform', 'created_at']
+    ? ['current_status', 'change_status', 'subject', 'reporter_name', 'category', 'platform', 'created_at']
     : config.visibleColumns;
   const currentPage = Math.max(1, Number.parseInt(search.page ?? '1', 10) || 1);
   const [result, formOptions] = await Promise.all([
@@ -91,7 +91,7 @@ export default async function AdminTablePage({
       <section className={`databaseTableCard ${table === 'support_tickets' ? 'supportTicketsCard' : ''}`}>
         <div className="databaseTableScroll">
           <table className={`databaseTable ${table === 'support_tickets' ? 'supportTicketsTable' : ''}`}>
-            <thead><tr>{tableColumns.map((column) => <th key={column}>{columnLabels[column] ?? column}</th>)}<th>الإدارة</th></tr></thead>
+            <thead><tr>{tableColumns.map((column) => <th key={column}>{column === 'current_status' ? 'الحالة الحالية' : column === 'change_status' ? 'تغيير الحالة' : columnLabels[column] ?? column}</th>)}<th>الإدارة</th></tr></thead>
             <tbody>
               {result.rows.map((row, index) => {
                 const id = String(row.id ?? '');
@@ -102,14 +102,19 @@ export default async function AdminTablePage({
                 return (
                   <tr key={id || index} className={table === 'support_tickets' ? 'supportTicketRow' : undefined}>
                     {tableColumns.map((column) => {
+                      if (table === 'support_tickets' && column === 'current_status') {
+                        const currentStatus = String(row.status ?? 'open');
+                        const statusLabels: Record<string, string> = { open: 'جديد', in_progress: 'قيد المتابعة', resolved: 'تم الحل', closed: 'مغلق' };
+                        return <td key={column}><span className={`ticketTableStatus ticketTableStatus-${currentStatus}`}>{statusLabels[currentStatus] ?? currentStatus}</span></td>;
+                      }
+                      if (table === 'support_tickets' && column === 'change_status') {
+                        return <td key={column}><form action={updateSupportTicketStatus} className="ticketStatusForm"><input type="hidden" name="id" value={id} /><select name="status" defaultValue={String(row.status ?? 'open')} aria-label={`تغيير حالة البلاغ ${String(row.subject || '')}`}><option value="open">جديد</option><option value="in_progress">قيد المتابعة</option><option value="resolved">تم الحل</option><option value="closed">مغلق</option></select><button type="submit">تغيير الحالة</button></form></td>;
+                      }
                       const value = displayRow[column];
                       const dayName = column === 'weekday'
                         ? weekdays.find((day) => day.value === String(value))?.label
                         : undefined;
                       if (table === 'support_tickets') {
-                        if (column === 'status') {
-                          return <td key={column}><form action={updateSupportTicketStatus} className="ticketStatusForm"><input type="hidden" name="id" value={id} /><select name="status" defaultValue={String(row.status ?? 'open')} aria-label={`حالة البلاغ ${String(row.subject || '')}`}><option value="open">جديد</option><option value="in_progress">قيد المتابعة</option><option value="resolved">تم الحل</option><option value="closed">مغلق</option></select><button type="submit">حفظ الحالة</button></form></td>;
-                        }
                         if (column === 'subject') {
                           const description = String(row.description ?? '').trim();
                           return <td key={column}><div className="ticketTableSubject"><strong>{String(row.subject || 'بلاغ بدون عنوان')}</strong><small>{description || 'لم يضف صاحب البلاغ وصفًا.'}</small></div></td>;
