@@ -4,32 +4,13 @@ import { deleteDatabaseRow, permanentlyDeleteChurchOrUser, saveDatabaseRow } fro
 import { getAdminFormOptions, getTableRows, type AdminFormOption } from '@/lib/admin/data';
 import { requireSuperAdmin } from '@/lib/admin/auth';
 import { adminTables, isAdminTable, type AdminTableConfig } from '@/lib/admin/schema';
+import { adminColumnLabels as columnLabels, adminWeekdayNames } from '@/lib/admin/labels';
 import ConfirmDeleteButton from './confirm-delete-button';
 import RecordFieldsForm from './record-fields-form';
 import PermanentDeleteButton from './permanent-delete-button';
 import CancelEditorButton from './cancel-editor-button';
 
-const columnLabels: Record<string, string> = {
-  church_id: 'الكنيسة', user_id: 'الخادم', responsible_user_id: 'مسؤول المتابعة',
-  meeting_id: 'الاجتماع', class_id: 'الفصل', member_id: 'المخدوم', session_id: 'جلسة الحضور',
-  created_by: 'أُنشئ بواسطة', assigned_by: 'كُلّف بواسطة', recorded_by: 'سجّل بواسطة', admin_user_id: 'المدير',
-  row_id: 'السجل المتأثر',
-  name: 'الاسم', name_ar: 'الاسم بالعربية', full_name: 'الاسم الكامل', slug: 'الرابط المختصر', phone: 'الهاتف', email: 'البريد الإلكتروني',
-  address: 'العنوان', role: 'الدور', kind: 'نوع الاجتماع', weekday: 'يوم الأسبوع', attendance_reminder_minutes: 'دقائق التذكير', description: 'الوصف', is_active: 'الحساب نشط',
-  display_order: 'ترتيب العرض', code: 'الكود', scope: 'نطاق المخدوم', sunday_school_class_id: 'فصل مدارس الأحد', birth_date: 'تاريخ الميلاد', whatsapp: 'واتساب', parent_name: 'اسم ولي الأمر', parent_phone: 'هاتف ولي الأمر', notes: 'ملاحظات', avatar_url: 'رابط الصورة', joined_on: 'تاريخ الانضمام',
-  session_date: 'تاريخ الجلسة', week_number: 'رقم الأسبوع', title: 'عنوان الجلسة', status: 'الحالة', reason: 'سبب المتابعة', result: 'نتيجة المتابعة', contact_status: 'حالة التواصل', follow_up_date: 'تاريخ المتابعة',
-  target_id: 'التكليف المستهدف', assignment_scope: 'نطاق التكليف', can_take_attendance: 'يسجل الحضور', can_view_reports: 'يشاهد التقارير', invite_token: 'رمز رابط الدعوة', declined_at: 'وقت الرفض', admin_note: 'ملاحظة المدير',
-};
-
-const weekdays = [
-  'الاثنين',
-  'الثلاثاء',
-  'الأربعاء',
-  'الخميس',
-  'الجمعة',
-  'السبت',
-  'الأحد',
-].map((day, index) => ({ value: String(index + 1), label: day }));
+const weekdays = adminWeekdayNames.map((day, index) => ({ value: String(index + 1), label: day }));
 
 function displayValue(value: unknown) {
   if (value === null || value === undefined || value === '') return '—';

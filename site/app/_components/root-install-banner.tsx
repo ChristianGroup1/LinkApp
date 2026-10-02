@@ -1,28 +1,40 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useSyncExternalStore } from 'react';
 
 const dismissKey = 'link-root-install-banner-dismissed';
+const changeEvent = 'link-root-install-banner-change';
+let dismissedInMemory = false;
+
+function subscribe(onStoreChange: () => void) {
+  window.addEventListener(changeEvent, onStoreChange);
+  window.addEventListener('storage', onStoreChange);
+  return () => {
+    window.removeEventListener(changeEvent, onStoreChange);
+    window.removeEventListener('storage', onStoreChange);
+  };
+}
+
+function getSnapshot() {
+  if (dismissedInMemory) return false;
+  try {
+    return window.sessionStorage.getItem(dismissKey) !== '1';
+  } catch {
+    return true;
+  }
+}
 
 export function RootInstallBanner() {
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    try {
-      if (window.sessionStorage.getItem(dismissKey) === '1') return;
-    } catch {
-      // Continue without persistence when browser storage is unavailable.
-    }
-    setVisible(true);
-  }, []);
+  const visible = useSyncExternalStore(subscribe, getSnapshot, () => false);
 
   const dismiss = () => {
+    dismissedInMemory = true;
     try {
       window.sessionStorage.setItem(dismissKey, '1');
     } catch {
-      // Dismiss for the current render even when storage is unavailable.
+      // The in-memory snapshot still dismisses the banner for this page session.
     }
-    setVisible(false);
+    window.dispatchEvent(new Event(changeEvent));
   };
 
   if (!visible) return null;

@@ -313,17 +313,22 @@ export async function getEnhancedDashboardData(filters: DashboardFilters) {
   }).sort((a, b) => b.present - a.present);
   const activeMembers = members.filter((member) => member.is_active);
   const activeMemberById = new Map(activeMembers.map((member) => [String(member.id), member]));
+  const meetingChurchById = new Map(meetings.map((meeting) => [String(meeting.id), String(meeting.church_id)]));
   const meetingMemberIds = new Map<string, Set<string>>();
   const addMeetingMember = (meetingId: string, memberId: string) => {
     const ids = meetingMemberIds.get(meetingId) ?? new Set<string>();
     ids.add(memberId);
     meetingMemberIds.set(meetingId, ids);
   };
-  const membersWithAssignments = new Set(memberMeetingAssignments.map((row) => String(row.member_id)));
+  const membersWithAssignments = new Set<string>();
   for (const assignment of memberMeetingAssignments) {
     const memberId = String(assignment.member_id);
-    if (activeMemberById.has(memberId)) {
-      addMeetingMember(String(assignment.meeting_id), memberId);
+    const meetingId = String(assignment.meeting_id);
+    const member = activeMemberById.get(memberId);
+    if (member && String(member.church_id) === String(assignment.church_id)
+      && meetingChurchById.get(meetingId) === String(assignment.church_id)) {
+      membersWithAssignments.add(memberId);
+      addMeetingMember(meetingId, memberId);
     }
   }
   const classMeetingIds = new Map(classes.map((schoolClass) => [String(schoolClass.id), String(schoolClass.meeting_id)]));
@@ -331,21 +336,22 @@ export async function getEnhancedDashboardData(filters: DashboardFilters) {
     const memberId = String(member.id);
     if (membersWithAssignments.has(memberId)) continue;
     const meetingId = String(member.meeting_id || classMeetingIds.get(String(member.sunday_school_class_id)) || '');
-    if (meetingId) addMeetingMember(meetingId, memberId);
+    if (meetingId && meetingChurchById.get(meetingId) === String(member.church_id)) addMeetingMember(meetingId, memberId);
   }
   const servantsByMeeting = new Map<string, string[]>();
   const profilesById = new Map(profiles.map((profile) => [String(profile.id), profile]));
   for (const assignment of meetingAssignments) {
     const profile = profilesById.get(String(assignment.user_id));
     if (!profile?.is_active) continue;
-    const meetingId = String(assignment.meeting_id);
-    const names = servantsByMeeting.get(meetingId) ?? [];
+    const meetingKey = `${assignment.church_id}:${assignment.meeting_id}`;
+    const names = servantsByMeeting.get(meetingKey) ?? [];
     const name = String(profile.full_name || profile.email || 'خادم بلا اسم');
     if (!names.includes(name)) names.push(name);
-    servantsByMeeting.set(meetingId, names);
+    servantsByMeeting.set(meetingKey, names);
   }
   const meetingGroups = meetings.map((meeting) => {
     const meetingId = String(meeting.id);
+    const meetingKey = `${meeting.church_id}:${meetingId}`;
     const memberNames = Array.from(meetingMemberIds.get(meetingId) ?? [])
       .map((memberId) => activeMemberById.get(memberId))
       .filter((member): member is Record<string, unknown> => Boolean(member))
@@ -355,7 +361,7 @@ export async function getEnhancedDashboardData(filters: DashboardFilters) {
       id: meetingId,
       church: nameForChurch(String(meeting.church_id)),
       meeting: nameForMeeting(meetingId),
-      servants: (servantsByMeeting.get(meetingId) ?? []).sort((a, b) => a.localeCompare(b, 'ar')),
+      servants: (servantsByMeeting.get(meetingKey) ?? []).sort((a, b) => a.localeCompare(b, 'ar')),
       members: memberNames,
       memberCount: memberNames.length,
     };
