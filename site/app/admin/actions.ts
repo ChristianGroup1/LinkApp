@@ -149,6 +149,39 @@ export async function replyToSupportTicket(ticketId: string, formData: FormData)
   redirect(`${target}?success=${encodeURIComponent('تم إرسال الرد.')}`);
 }
 
+export async function updateSupportTicketStatus(formData: FormData) {
+  const ticketId = String(formData.get('id') ?? '');
+  const status = String(formData.get('status') ?? '');
+  const target = '/admin/data/support_tickets';
+  const allowedStatuses = new Set(['open', 'in_progress', 'resolved', 'closed']);
+  if (!ticketId || !allowedStatuses.has(status)) {
+    redirect(messageUrl('support_tickets', 'error', 'حالة البلاغ غير صالحة.'));
+  }
+
+  const identity = await requireSuperAdmin();
+  const admin = createSupabaseAdminClient();
+  const { data: updated, error } = await admin
+    .from('support_tickets')
+    .update({ status })
+    .eq('id', ticketId)
+    .select('id')
+    .maybeSingle();
+  if (error || !updated) {
+    redirect(messageUrl('support_tickets', 'error', 'تعذر تحديث حالة البلاغ.'));
+  }
+
+  await admin.from('admin_audit_logs').insert({
+    admin_user_id: identity.id,
+    action: 'update',
+    table_name: 'support_tickets',
+    row_id: ticketId,
+    changes: { status },
+  });
+  revalidatePath(target);
+  revalidatePath(`/admin/data/support_tickets/${ticketId}`);
+  redirect(messageUrl('support_tickets', 'success', 'تم تحديث حالة البلاغ.'));
+}
+
 export async function deleteDatabaseRow(formData: FormData) {
   const tableKey = String(formData.get('table') ?? '');
   const id = String(formData.get('id') ?? '');

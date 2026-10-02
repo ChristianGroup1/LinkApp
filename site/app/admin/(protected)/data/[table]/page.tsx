@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { deleteDatabaseRow, permanentlyDeleteChurchOrUser, saveDatabaseRow } from '@/app/admin/actions';
+import { deleteDatabaseRow, permanentlyDeleteChurchOrUser, saveDatabaseRow, updateSupportTicketStatus } from '@/app/admin/actions';
 import { getAdminFormOptions, getTableRows, type AdminFormOption } from '@/lib/admin/data';
 import { requireSuperAdmin } from '@/lib/admin/auth';
 import { adminTables, isAdminTable, type AdminTableConfig } from '@/lib/admin/schema';
@@ -108,8 +108,7 @@ export default async function AdminTablePage({
                         : undefined;
                       if (table === 'support_tickets') {
                         if (column === 'status') {
-                          const statusClass = ['open', 'in_progress', 'resolved', 'closed'].includes(String(row.status)) ? String(row.status) : 'unknown';
-                          return <td key={column}><span className={`ticketTableStatus ticketTableStatus-${statusClass}`}>{displayValue(value)}</span></td>;
+                          return <td key={column}><form action={updateSupportTicketStatus} className="ticketStatusForm"><input type="hidden" name="id" value={id} /><select name="status" defaultValue={String(row.status ?? 'open')} aria-label={`حالة البلاغ ${String(row.subject || '')}`}><option value="open">جديد</option><option value="in_progress">قيد المتابعة</option><option value="resolved">تم الحل</option><option value="closed">مغلق</option></select><button type="submit">حفظ الحالة</button></form></td>;
                         }
                         if (column === 'subject') {
                           const description = String(row.description ?? '').trim();
@@ -129,7 +128,7 @@ export default async function AdminTablePage({
                       {table === 'support_tickets' && (
                         <Link className="ticketConversationLink" href={`/admin/data/support_tickets/${id}`}><span>فتح المحادثة</span><span aria-hidden="true">←</span></Link>
                       )}
-                      {config.editableColumns.length ? (
+                      {table === 'support_tickets' ? null : config.editableColumns.length ? (
                         <div className="tableRowActions"><details className="rowActions">
                           <summary>تعديل</summary>
                           <div className="recordEditor">
