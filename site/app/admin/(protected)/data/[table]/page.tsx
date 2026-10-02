@@ -55,6 +55,9 @@ export default async function AdminTablePage({
   await requireSuperAdmin();
   const search = await searchParams;
   const config: AdminTableConfig = adminTables[table];
+  const tableColumns = table === 'support_tickets'
+    ? ['status', 'subject', 'reporter_name', 'category', 'platform', 'created_at']
+    : config.visibleColumns;
   const currentPage = Math.max(1, Number.parseInt(search.page ?? '1', 10) || 1);
   const [result, formOptions] = await Promise.all([
     getTableRows(table, search.q ?? '', currentPage),
@@ -85,10 +88,10 @@ export default async function AdminTablePage({
         )}
       </section>
 
-      <section className="databaseTableCard">
+      <section className={`databaseTableCard ${table === 'support_tickets' ? 'supportTicketsCard' : ''}`}>
         <div className="databaseTableScroll">
-          <table className="databaseTable">
-            <thead><tr>{config.visibleColumns.map((column) => <th key={column}>{columnLabels[column] ?? column}</th>)}<th>الإدارة</th></tr></thead>
+          <table className={`databaseTable ${table === 'support_tickets' ? 'supportTicketsTable' : ''}`}>
+            <thead><tr>{tableColumns.map((column) => <th key={column}>{columnLabels[column] ?? column}</th>)}<th>الإدارة</th></tr></thead>
             <tbody>
               {result.rows.map((row, index) => {
                 const id = String(row.id ?? '');
@@ -97,17 +100,34 @@ export default async function AdminTablePage({
                   ? String(row.name_ar || row.name || '')
                   : table === 'profiles' ? String(row.full_name || row.email || '') : '';
                 return (
-                  <tr key={id || index}>
-                    {config.visibleColumns.map((column) => {
+                  <tr key={id || index} className={table === 'support_tickets' ? 'supportTicketRow' : undefined}>
+                    {tableColumns.map((column) => {
                       const value = displayRow[column];
                       const dayName = column === 'weekday'
                         ? weekdays.find((day) => day.value === String(value))?.label
                         : undefined;
+                      if (table === 'support_tickets') {
+                        if (column === 'status') {
+                          const statusClass = ['open', 'in_progress', 'resolved', 'closed'].includes(String(row.status)) ? String(row.status) : 'unknown';
+                          return <td key={column}><span className={`ticketTableStatus ticketTableStatus-${statusClass}`}>{displayValue(value)}</span></td>;
+                        }
+                        if (column === 'subject') {
+                          const description = String(row.description ?? '').trim();
+                          return <td key={column}><div className="ticketTableSubject"><strong>{String(row.subject || 'بلاغ بدون عنوان')}</strong><small>{description || 'لم يضف صاحب البلاغ وصفًا.'}</small></div></td>;
+                        }
+                        if (column === 'reporter_name') {
+                          return <td key={column}><div className="ticketTableReporter"><strong>{String(row.reporter_name || 'مستخدم')}</strong><small dir="ltr">{String(row.contact_email || 'بدون بريد مسجل')}</small></div></td>;
+                        }
+                        if (column === 'platform') {
+                          const version = [row.app_version && `v${row.app_version}`, row.build_number && `Build ${row.build_number}`].filter(Boolean).join(' · ');
+                          return <td key={column}><div className="ticketTablePlatform"><strong>{String(row.platform || 'غير محدد')}</strong>{version && <small>{version}</small>}</div></td>;
+                        }
+                      }
                       return <td key={column} title={String(value ?? '')}>{dayName ?? displayValue(value)}</td>;
                     })}
                     <td>
                       {table === 'support_tickets' && (
-                        <Link className="saveButton" href={`/admin/data/support_tickets/${id}`}>فتح المحادثة</Link>
+                        <Link className="ticketConversationLink" href={`/admin/data/support_tickets/${id}`}><span>فتح المحادثة</span><span aria-hidden="true">←</span></Link>
                       )}
                       {config.editableColumns.length ? (
                         <div className="tableRowActions"><details className="rowActions">
@@ -126,7 +146,7 @@ export default async function AdminTablePage({
                   </tr>
                 );
               })}
-              {!result.rows.length && <tr><td colSpan={config.visibleColumns.length + 1} className="emptyRows">لا توجد بيانات مطابقة.</td></tr>}
+              {!result.rows.length && <tr><td colSpan={tableColumns.length + 1} className="emptyRows">لا توجد بيانات مطابقة.</td></tr>}
             </tbody>
           </table>
         </div>
