@@ -1,13 +1,22 @@
 {
     "name": "Link — إدارة الخدمة",
     "short_name": "Link",
+    "id": "/app/",
     "start_url": ".",
+    "scope": "/app/",
     "display": "standalone",
     "background_color": "#FFFFFF",
     "theme_color": "#0F3D5C",
     "description": "إدارة الحضور والاجتماعات والأعضاء والافتقاد للكنائس والخدمات.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
+    "related_applications": [
+        {
+            "platform": "webapp",
+            "url": "/app/manifest.json",
+            "id": "https://linkchurch.space/app/"
+        }
+    ],
     "icons": [
         {
             "src": "icons/Icon-192.png",

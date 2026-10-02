@@ -129,13 +129,14 @@
     }
     .pwa-install {
       position: absolute !important;
-      inset-inline-end: max(16px, env(safe-area-inset-right));
+      inset-inline-end: max(16px, env(safe-area-inset-left));
       bottom: max(16px, env(safe-area-inset-bottom));
-      width: min(330px, calc(100vw - 32px));
+      box-sizing: border-box;
+      width: min(360px, calc(100vw - 24px));
       display: grid;
-      gap: 10px;
-      padding: 16px;
-      padding-inline-end: 44px;
+      gap: 9px;
+      padding: 14px;
+      padding-inline-end: 52px;
       color: #fff;
       background: #0f3d5c;
       border: 1px solid rgba(255, 255, 255, .2);
@@ -145,6 +146,7 @@
       text-align: start;
       pointer-events: auto !important;
       touch-action: manipulation;
+      overflow-wrap: anywhere;
       -webkit-user-select: none;
       user-select: none;
     }
@@ -188,10 +190,10 @@
     }
     .pwa-install-close {
       position: absolute;
-      top: 4px;
-      inset-inline-end: 4px;
-      width: 44px;
-      height: 44px;
+      top: 8px;
+      inset-inline-end: 8px;
+      width: 38px;
+      height: 38px;
       border: 0;
       color: #fff;
       background: rgba(255, 255, 255, .12);
@@ -203,6 +205,21 @@
       pointer-events: auto !important;
       touch-action: manipulation;
     }
+    @media (max-width: 480px) {
+      .pwa-install {
+        inset-inline-end: max(12px, env(safe-area-inset-left));
+        bottom: max(12px, env(safe-area-inset-bottom));
+        width: min(360px, calc(100vw - 24px));
+        gap: 8px;
+        padding: 13px;
+        padding-inline-end: 50px;
+        border-radius: 16px;
+      }
+      .pwa-install-logo { width: 42px; height: 42px; }
+      .pwa-install strong { font-size: 14px; }
+      .pwa-install span { font-size: 12px; }
+      .pwa-install-button { padding: 8px 12px; font-size: 12px; }
+    }
   </style>
   <script>
     (() => {
@@ -211,6 +228,8 @@
       const isIos = /iPad|iPhone|iPod/.test(window.navigator.userAgent) && !window.MSStream;
       let deferredPrompt = null;
       let dismissed = false;
+      let installed = isStandalone;
+      let installationCheckComplete = false;
       let installCard = null;
 
       const hideInstall = () => {
@@ -230,6 +249,17 @@
         }
         dismissed = true;
         hideInstall();
+      };
+
+      const detectInstalledApp = async () => {
+        if (isStandalone) return true;
+        if (typeof navigator.getInstalledRelatedApps !== 'function') return false;
+        try {
+          const installedApps = await navigator.getInstalledRelatedApps();
+          return installedApps.some((app) => app.platform === 'webapp');
+        } catch (_) {
+          return false;
+        }
       };
 
       const ensureCard = () => {
@@ -276,7 +306,7 @@
       };
 
       const showInstall = () => {
-        if (dismissed || isStandalone) return;
+        if (dismissed || installed || !installationCheckComplete) return;
         const card = ensureCard();
         if (isIos) {
           card.querySelector('#pwa-install-message').textContent =
@@ -297,22 +327,22 @@
         document.documentElement.appendChild(host);
       };
 
-      if (isStandalone || dismissed) {
-        hideInstall();
-        return;
-      }
-
       window.addEventListener('beforeinstallprompt', (event) => {
         event.preventDefault();
         deferredPrompt = event;
         showInstall();
       });
 
-      // Show the banner in the browser login flow even when the browser does
-      // not expose an install prompt. The copy then points to its install menu.
-      if (!isStandalone) showInstall();
+      detectInstalledApp().then((isInstalled) => {
+        installed = isInstalled;
+        installationCheckComplete = true;
+        if (!installed && !dismissed) showInstall();
+      });
 
-      window.addEventListener('appinstalled', () => dismissInstall());
+      window.addEventListener('appinstalled', () => {
+        installed = true;
+        dismissInstall();
+      });
     })();
   </script>
   <script src="flutter_bootstrap.js" async></script>
