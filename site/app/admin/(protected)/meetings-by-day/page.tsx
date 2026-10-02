@@ -42,7 +42,7 @@ export default async function MeetingsByDayPage({
               {dayMeetings.length ? <div className="meetingsDayGrid">{dayMeetings.map((meeting) => (
                 <article className="meetingsDayCard" key={meeting.id}>
                   <div><h3>{meeting.name}</h3><p>{meeting.church}</p></div>
-                  <span className={meeting.isActive ? 'statusActive' : 'statusQuiet'}>{meeting.isActive ? 'نشط' : 'متوقف'}</span>
+                  <div className="meetingDayBadges"><span className="meetingMembersCount">{number(meeting.memberCount)} مخدوم نشط</span><span className={meeting.isActive ? 'statusActive' : 'statusQuiet'}>{meeting.isActive ? 'نشط' : 'متوقف'}</span></div>
                 </article>
               ))}</div> : <p className="meetingsDayEmpty">لا توجد اجتماعات مسجلة لهذا اليوم.</p>}
             </section>

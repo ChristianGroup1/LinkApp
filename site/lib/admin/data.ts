@@ -325,23 +325,22 @@ export async function getMeetingGroupsData(churchId?: string) {
 
 export async function getMeetingsByWeekdayData() {
   const admin = createSupabaseAdminClient();
-  const [meetingsResult, churchesResult] = await Promise.all([
+  const [{ groups }, meetingsResult] = await Promise.all([
+    getMeetingGroupsData(),
     admin.from('meetings').select('id, church_id, name_ar, name, weekday, is_active').limit(20000),
-    admin.from('churches').select('id, name_ar, name').limit(5000),
   ]);
-  if (meetingsResult.error || churchesResult.error) {
+  if (meetingsResult.error) {
     throw new Error('تعذر تحميل الاجتماعات حسب اليوم.');
   }
 
-  const churchNames = new Map(safeRows(churchesResult).map((church) => [
-    String(church.id), String(church.name_ar || church.name || 'كنيسة بلا اسم'),
-  ]));
+  const groupByMeeting = new Map(groups.map((group) => [group.id, group]));
   const meetings = safeRows(meetingsResult).map((meeting) => ({
     id: String(meeting.id),
-    church: churchNames.get(String(meeting.church_id)) ?? 'كنيسة بلا اسم',
+    church: groupByMeeting.get(String(meeting.id))?.church ?? 'كنيسة بلا اسم',
     name: String(meeting.name_ar || meeting.name || 'اجتماع بلا اسم'),
     weekday: Number(meeting.weekday),
     isActive: meeting.is_active !== false,
+    memberCount: groupByMeeting.get(String(meeting.id))?.memberCount ?? 0,
   })).filter((meeting) => Number.isInteger(meeting.weekday) && meeting.weekday >= 1 && meeting.weekday <= 7)
     .sort((a, b) => a.weekday - b.weekday || a.name.localeCompare(b.name, 'ar') || a.church.localeCompare(b.church, 'ar'));
   return meetings;
