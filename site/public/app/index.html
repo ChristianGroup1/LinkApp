@@ -294,7 +294,14 @@
           event.preventDefault();
           event.stopPropagation();
           if (!deferredPrompt) {
-            dismissInstall(event);
+            const message = installCard.querySelector('#pwa-install-message');
+            if (isIos) {
+              message.textContent = 'اضغط زر المشاركة في المتصفح، ثم اختر «إضافة إلى الشاشة الرئيسية». هذه هي طريقة التثبيت على iPhone.';
+            } else if (isMobile) {
+              message.textContent = 'افتح قائمة المتصفح واختر «تثبيت التطبيق» أو «إضافة إلى الشاشة الرئيسية». إذا لم يظهر الخيار، افتح الصفحة في Chrome.';
+            } else {
+              message.textContent = 'لم يوفّر المتصفح نافذة تثبيت مباشرة. اضغط أيقونة التثبيت بجوار شريط العنوان، أو افتح قائمة المتصفح واختر «تثبيت Link».';
+            }
             return;
           }
           deferredPrompt.prompt();
@@ -315,20 +322,19 @@
         if (isIos) {
           title.textContent = 'ثبّت Link على هاتفك';
           message.textContent = 'على iPhone أو iPad: اضغط زر المشاركة ثم «إضافة إلى الشاشة الرئيسية».';
-          button.textContent = 'حسناً، فهمت';
-          button.onclick = (event) => dismissInstall(event);
+          button.textContent = 'تثبيت Link';
         } else if (deferredPrompt) {
           title.textContent = isMobile ? 'ثبّت Link على هاتفك' : 'ثبّت Link على الكمبيوتر';
           message.textContent = isMobile
             ? 'افتح Link كتطبيق من الشاشة الرئيسية للوصول إليه بسرعة.'
             : 'ثبّت Link كتطبيق مستقل وافتحه مباشرة من جهازك.';
-          button.textContent = isMobile ? 'تثبيت التطبيق' : 'تثبيت على الكمبيوتر';
+          button.textContent = 'تثبيت Link';
         } else {
           title.textContent = isMobile ? 'ثبّت Link على هاتفك' : 'ثبّت Link على الكمبيوتر';
           message.textContent = isMobile
             ? 'من قائمة المتصفح اختر «تثبيت التطبيق» أو «إضافة إلى الشاشة الرئيسية».'
             : 'من قائمة المتصفح أو أيقونة التثبيت بجوار شريط العنوان اختر «تثبيت Link».';
-          button.textContent = 'حسناً، فهمت';
+          button.textContent = 'تثبيت Link';
         }
         card.hidden = false;
         card.removeAttribute('hidden');
