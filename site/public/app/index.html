@@ -226,6 +226,7 @@
       const host = document.getElementById('pwa-install-host');
       const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
       const isIos = /iPad|iPhone|iPod/.test(window.navigator.userAgent) && !window.MSStream;
+      const isMobile = /Android|iPhone|iPad|iPod/.test(window.navigator.userAgent) || window.matchMedia('(max-width: 700px)').matches;
       let deferredPrompt = null;
       let dismissed = false;
       let installed = isStandalone;
@@ -274,7 +275,7 @@
           <div class="pwa-install-row">
             <img class="pwa-install-logo" src="icons/Icon-192.png" width="48" height="48" alt="Link" decoding="async">
             <div class="pwa-install-copy">
-              <strong>ثبّت Link على جهازك</strong>
+              <strong id="pwa-install-title">ثبّت Link على جهازك</strong>
               <span id="pwa-install-message">افتحه كتطبيق مستقل من الشاشة الرئيسية.</span>
             </div>
           </div>
@@ -308,19 +309,26 @@
       const showInstall = () => {
         if (dismissed || installed || !installationCheckComplete) return;
         const card = ensureCard();
+        const title = card.querySelector('#pwa-install-title');
+        const message = card.querySelector('#pwa-install-message');
+        const button = card.querySelector('#pwa-install-button');
         if (isIos) {
-          card.querySelector('#pwa-install-message').textContent =
-            'على iPhone أو iPad: اضغط زر المشاركة ثم «إضافة إلى الشاشة الرئيسية».';
-          card.querySelector('#pwa-install-button').textContent = 'حسناً، فهمت';
-          card.querySelector('#pwa-install-button').onclick = (event) => dismissInstall(event);
+          title.textContent = 'ثبّت Link على هاتفك';
+          message.textContent = 'على iPhone أو iPad: اضغط زر المشاركة ثم «إضافة إلى الشاشة الرئيسية».';
+          button.textContent = 'حسناً، فهمت';
+          button.onclick = (event) => dismissInstall(event);
         } else if (deferredPrompt) {
-          card.querySelector('#pwa-install-message').textContent =
-            'ثبّت Link على جهازك للوصول إليه بسرعة من الشاشة الرئيسية.';
-          card.querySelector('#pwa-install-button').textContent = 'تثبيت التطبيق';
+          title.textContent = isMobile ? 'ثبّت Link على هاتفك' : 'ثبّت Link على الكمبيوتر';
+          message.textContent = isMobile
+            ? 'افتح Link كتطبيق من الشاشة الرئيسية للوصول إليه بسرعة.'
+            : 'ثبّت Link كتطبيق مستقل وافتحه مباشرة من جهازك.';
+          button.textContent = isMobile ? 'تثبيت التطبيق' : 'تثبيت على الكمبيوتر';
         } else {
-          card.querySelector('#pwa-install-message').textContent =
-            'من قائمة المتصفح اختر «تثبيت التطبيق» أو «إضافة إلى الشاشة الرئيسية». ';
-          card.querySelector('#pwa-install-button').textContent = 'حسناً، فهمت';
+          title.textContent = isMobile ? 'ثبّت Link على هاتفك' : 'ثبّت Link على الكمبيوتر';
+          message.textContent = isMobile
+            ? 'من قائمة المتصفح اختر «تثبيت التطبيق» أو «إضافة إلى الشاشة الرئيسية».'
+            : 'من قائمة المتصفح أو أيقونة التثبيت بجوار شريط العنوان اختر «تثبيت Link».';
+          button.textContent = 'حسناً، فهمت';
         }
         card.hidden = false;
         card.removeAttribute('hidden');
