@@ -9,6 +9,7 @@ import '../../../core/diagnostics/diagnostics_visibility.dart';
 import '../../../core/errors/arabic_error_text.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
+import '../../../core/utils/whatsapp_launcher.dart';
 import '../../../data/models/models.dart';
 import '../../../data/repositories/database_repository.dart';
 import '../../../logic/auth/auth_bloc.dart';
@@ -223,6 +224,28 @@ class _ProfileActionsCard extends StatelessWidget {
             context,
             MaterialPageRoute(builder: (_) => const MySupportTicketsScreen()),
           ),
+        ),
+        Divider(height: 1, color: AppTheme.border.withValues(alpha: 0.7)),
+        _ProfileActionRow(
+          icon: Icons.chat_rounded,
+          title: 'تواصل معنا على واتساب',
+          subtitle: '01224999086',
+          onTap: () async {
+            final opened = await launchWhatsAppChat(
+              phone: '01224999086',
+              message: 'مرحبًا، أحتاج مساعدة في تطبيق LinkApp.',
+            );
+            if (!opened && context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    'تعذر فتح واتساب. يمكنك مراسلتنا على 01224999086',
+                    style: GoogleFonts.cairo(),
+                  ),
+                ),
+              );
+            }
+          },
         ),
         if (shouldShowDeveloperDiagnostics()) ...[
           Divider(height: 1, color: AppTheme.border.withValues(alpha: 0.7)),

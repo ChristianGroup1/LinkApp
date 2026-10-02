@@ -5,6 +5,7 @@ import 'package:intl/intl.dart' as intl;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/whatsapp_launcher.dart';
 import '../../../data/models/models.dart';
 import '../../../data/repositories/database_repository.dart';
 import '../../../shared/data/follow_up_contact_status.dart';
@@ -390,27 +391,7 @@ class _MemberDetailsView extends StatelessWidget {
   }
 
   Future<void> _openWhatsApp(String number) async {
-    var cleanNumber = number.replaceAll(RegExp(r'[^0-9]'), '');
-    if (cleanNumber.isEmpty) return;
-
-    if (cleanNumber.startsWith('01') && cleanNumber.length == 11) {
-      cleanNumber = '2$cleanNumber';
-    }
-
-    final urls = [
-      'whatsapp://send?phone=$cleanNumber',
-      'https://wa.me/$cleanNumber',
-      'https://api.whatsapp.com/send?phone=$cleanNumber',
-    ];
-
-    for (final urlStr in urls) {
-      try {
-        final uri = Uri.parse(urlStr);
-        if (await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-          return;
-        }
-      } catch (_) {}
-    }
+    await launchWhatsAppChat(phone: number, message: 'مرحبًا');
   }
 }
 

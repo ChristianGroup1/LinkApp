@@ -105,6 +105,50 @@ export async function saveDatabaseRow(formData: FormData) {
   redirect(messageUrl(tableKey, 'success', 'تم حفظ البيانات بنجاح.'));
 }
 
+export async function replyToSupportTicket(ticketId: string, formData: FormData) {
+  const message = String(formData.get('message') ?? '').trim();
+  const target = `/admin/data/support_tickets/${encodeURIComponent(ticketId)}`;
+  if (!ticketId || !message || message.length > 5000) {
+    redirect(`${target}?error=${encodeURIComponent('اكتب ردًا من 1 إلى 5000 حرف.')}`);
+  }
+
+  const identity = await requireSuperAdmin();
+  const admin = createSupabaseAdminClient();
+  const { data: ticket, error: ticketError } = await admin
+    .from('support_tickets')
+    .select('id')
+    .eq('id', ticketId)
+    .maybeSingle();
+  if (ticketError || !ticket) {
+    redirect(`${target}?error=${encodeURIComponent('البلاغ غير موجود.')}`);
+  }
+
+  const { data: inserted, error } = await admin
+    .from('support_ticket_messages')
+    .insert({
+      ticket_id: ticketId,
+      sender_id: identity.id,
+      sender_role: 'support',
+      message,
+    })
+    .select('id')
+    .single();
+  if (error) {
+    redirect(`${target}?error=${encodeURIComponent('تعذر إرسال الرد. تأكد من تطبيق تحديث قاعدة البيانات.')}`);
+  }
+
+  await admin.from('admin_audit_logs').insert({
+    admin_user_id: identity.id,
+    action: 'reply',
+    table_name: 'support_ticket_messages',
+    row_id: inserted.id,
+    changes: { ticket_id: ticketId, message },
+  });
+  revalidatePath(target);
+  revalidatePath('/admin/data/support_tickets');
+  redirect(`${target}?success=${encodeURIComponent('تم إرسال الرد.')}`);
+}
+
 export async function deleteDatabaseRow(formData: FormData) {
   const tableKey = String(formData.get('table') ?? '');
   const id = String(formData.get('id') ?? '');

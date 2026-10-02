@@ -17,6 +17,7 @@ import '../data/member_excel_service.dart';
 import '../data/member_qr_pdf_service.dart';
 import '../logic/members_bloc.dart';
 import 'add_edit_member_screen.dart';
+import 'birthdays_screen.dart';
 import 'member_details_screen.dart';
 import 'widgets/member_import_widgets.dart';
 import 'widgets/member_tile.dart';
@@ -145,6 +146,15 @@ class _MembersListScreenState extends State<MembersListScreen> {
                     ),
                     centerTitle: true,
                     actions: [
+                      IconButton(
+                        tooltip: 'أعياد الميلاد حسب الفترة',
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => const BirthdaysScreen(),
+                          ),
+                        ),
+                        icon: const Icon(Icons.cake_outlined),
+                      ),
                       if (canManage)
                         IconButton(
                           tooltip: 'نسخ مخدومين من اجتماع لاجتماع',
@@ -1379,7 +1389,8 @@ class _CopyMembersBetweenMeetingsDialogState
       if (!mounted) return;
       debugPrint('[MemberMeetingCopy] Copy failed: $error');
       final errorText = error.toString().toLowerCase();
-      final message = errorText.contains('42501') ||
+      final message =
+          errorText.contains('42501') ||
               errorText.contains('row-level security')
           ? 'ليس لديك صلاحية تسجيل الحضور في الاجتماع الهدف. اطلب من مسؤول الكنيسة مراجعة صلاحيات الاجتماع.'
           : errorText.contains('pgrst204') ||

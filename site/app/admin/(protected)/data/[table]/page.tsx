@@ -21,6 +21,16 @@ const columnLabels: Record<string, string> = {
   target_id: 'التكليف المستهدف', assignment_scope: 'نطاق التكليف', can_take_attendance: 'يسجل الحضور', can_view_reports: 'يشاهد التقارير', invite_token: 'رمز رابط الدعوة', declined_at: 'وقت الرفض', admin_note: 'ملاحظة المدير',
 };
 
+const weekdays = [
+  'الاثنين',
+  'الثلاثاء',
+  'الأربعاء',
+  'الخميس',
+  'الجمعة',
+  'السبت',
+  'الأحد',
+].map((day, index) => ({ value: String(index + 1), label: day }));
+
 function displayValue(value: unknown) {
   if (value === null || value === undefined || value === '') return '—';
   if (typeof value === 'boolean') return value ? 'نعم' : 'لا';
@@ -44,7 +54,12 @@ function displayValue(value: unknown) {
 }
 
 function editableFields(row: Record<string, unknown>, columns: string[], options: Record<string, AdminFormOption[]>) {
-  return columns.map((key) => ({ key, label: columnLabels[key] ?? key, value: row[key] ?? null, options: options[key] }));
+  return columns.map((key) => ({
+    key,
+    label: columnLabels[key] ?? key,
+    value: row[key] ?? null,
+    options: options[key] ?? (key === 'weekday' ? weekdays : undefined),
+  }));
 }
 
 export default async function AdminTablePage({
@@ -102,8 +117,17 @@ export default async function AdminTablePage({
                   : table === 'profiles' ? String(row.full_name || row.email || '') : '';
                 return (
                   <tr key={id || index}>
-                    {config.visibleColumns.map((column) => <td key={column} title={String(displayRow[column] ?? '')}>{displayValue(displayRow[column])}</td>)}
+                    {config.visibleColumns.map((column) => {
+                      const value = displayRow[column];
+                      const dayName = column === 'weekday'
+                        ? weekdays.find((day) => day.value === String(value))?.label
+                        : undefined;
+                      return <td key={column} title={String(value ?? '')}>{dayName ?? displayValue(value)}</td>;
+                    })}
                     <td>
+                      {table === 'support_tickets' && (
+                        <Link className="saveButton" href={`/admin/data/support_tickets/${id}`}>فتح المحادثة</Link>
+                      )}
                       {config.editableColumns.length ? (
                         <div className="tableRowActions"><details className="rowActions">
                           <summary>تعديل</summary>

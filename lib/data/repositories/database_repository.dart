@@ -94,6 +94,10 @@ abstract class DatabaseRepository {
     required String description,
   });
   Future<List<SupportTicketEntity>> getMySupportTickets();
+  Future<void> replyToSupportTicket({
+    required String ticketId,
+    required String message,
+  });
   Future<void> deleteCurrentAccount();
   Future<void> signOut();
   bool hasActiveSession();

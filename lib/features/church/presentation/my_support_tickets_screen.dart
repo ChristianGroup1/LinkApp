@@ -104,7 +104,7 @@ class _MySupportTicketsScreenState extends State<MySupportTicketsScreen> {
               itemCount: tickets.length,
               separatorBuilder: (_, __) => const SizedBox(height: 10),
               itemBuilder: (context, index) =>
-                  _TicketCard(ticket: tickets[index]),
+                  _TicketCard(ticket: tickets[index], onReplySent: _refresh),
             ),
           );
         },
@@ -113,13 +113,66 @@ class _MySupportTicketsScreenState extends State<MySupportTicketsScreen> {
   );
 }
 
-class _TicketCard extends StatelessWidget {
+class _TicketCard extends StatefulWidget {
   final SupportTicketEntity ticket;
+  final Future<void> Function() onReplySent;
 
-  const _TicketCard({required this.ticket});
+  const _TicketCard({required this.ticket, required this.onReplySent});
+
+  @override
+  State<_TicketCard> createState() => _TicketCardState();
+}
+
+class _TicketCardState extends State<_TicketCard> {
+  late final TextEditingController _replyController;
+  bool _sending = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _replyController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _replyController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _sendReply() async {
+    final message = _replyController.text.trim();
+    if (message.isEmpty || _sending) return;
+    setState(() => _sending = true);
+    try {
+      await context.read<DatabaseRepository>().replyToSupportTicket(
+        ticketId: widget.ticket.id,
+        message: message,
+      );
+      _replyController.clear();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('تم إرسال ردك', style: GoogleFonts.cairo()),
+          backgroundColor: AppTheme.secondary,
+        ),
+      );
+      await widget.onReplySent();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(arabicErrorText(error), style: GoogleFonts.cairo()),
+          backgroundColor: AppTheme.accentRed,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final ticket = widget.ticket;
     final status = _ticketStatus(ticket.status);
     final date = intl.DateFormat(
       'yyyy/MM/dd - HH:mm',
@@ -203,23 +256,52 @@ class _TicketCard extends StatelessWidget {
             ],
           ),
           if (ticket.adminNote?.trim().isNotEmpty == true) ...[
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(11),
-              decoration: BoxDecoration(
-                color: AppTheme.primary.withValues(alpha: 0.06),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                'رد الدعم: ${ticket.adminNote}',
-                style: GoogleFonts.cairo(
-                  color: AppTheme.textDark,
-                  fontSize: 11.5,
-                  height: 1.6,
-                ),
+            const SizedBox(height: 10),
+            _ReplyBubble(label: 'رد الدعم', message: ticket.adminNote!),
+          ],
+          ...ticket.messages.map(
+            (message) => Padding(
+              padding: const EdgeInsets.only(top: 9),
+              child: _ReplyBubble(
+                label: message.senderRole == 'support' ? 'رد الدعم' : 'ردك',
+                message: message.message,
+                date: intl.DateFormat(
+                  'yyyy/MM/dd - HH:mm',
+                ).format(message.createdAt.toLocal()),
+                isSupport: message.senderRole == 'support',
               ),
             ),
-          ],
+          ),
+          const SizedBox(height: 14),
+          TextField(
+            controller: _replyController,
+            minLines: 1,
+            maxLines: 4,
+            maxLength: 5000,
+            decoration: InputDecoration(
+              labelText: 'اكتب ردك على البلاغ',
+              labelStyle: GoogleFonts.cairo(fontSize: 12),
+              filled: true,
+              fillColor: AppTheme.surfaceMuted,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(13),
+                borderSide: BorderSide.none,
+              ),
+            ),
+          ),
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: FilledButton.icon(
+              onPressed: _sending ? null : _sendReply,
+              icon: _sending
+                  ? const SizedBox.square(
+                      dimension: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.send_rounded, size: 17),
+              label: Text('إرسال الرد', style: GoogleFonts.cairo()),
+            ),
+          ),
         ],
       ),
     );
@@ -241,6 +323,68 @@ class _TicketCard extends StatelessWidget {
     'notifications' => 'الإشعارات والتذكيرات',
     _ => 'مشكلة أخرى',
   };
+}
+
+class _ReplyBubble extends StatelessWidget {
+  final String label;
+  final String message;
+  final String? date;
+  final bool isSupport;
+
+  const _ReplyBubble({
+    required this.label,
+    required this.message,
+    this.date,
+    this.isSupport = true,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(11),
+    decoration: BoxDecoration(
+      color: (isSupport ? AppTheme.primary : AppTheme.secondary).withValues(
+        alpha: 0.08,
+      ),
+      borderRadius: BorderRadius.circular(12),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              label,
+              style: GoogleFonts.cairo(
+                color: isSupport ? AppTheme.primary : AppTheme.secondary,
+                fontSize: 11,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            if (date != null) ...[
+              const Spacer(),
+              Text(
+                date!,
+                style: GoogleFonts.cairo(
+                  color: AppTheme.textLight,
+                  fontSize: 9,
+                ),
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 3),
+        Text(
+          message,
+          style: GoogleFonts.cairo(
+            color: AppTheme.textDark,
+            fontSize: 11.5,
+            height: 1.6,
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _MessageState extends StatelessWidget {

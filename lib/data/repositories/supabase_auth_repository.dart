@@ -589,7 +589,7 @@ mixin _SupabaseAuthRepository on _SupabaseRepositoryBase {
     final rows = await _client
         .from('support_tickets')
         .select(
-          'id, category, subject, description, status, admin_note, created_at, updated_at',
+          'id, category, subject, description, status, admin_note, created_at, updated_at, support_ticket_messages(id, sender_id, sender_role, message, created_at)',
         )
         .eq('user_id', user.id)
         .order('created_at', ascending: false)
@@ -597,6 +597,46 @@ mixin _SupabaseAuthRepository on _SupabaseRepositoryBase {
     return List<Map<String, dynamic>>.from(
       rows as List,
     ).map(SupportTicketEntity.fromJson).toList(growable: false);
+  }
+
+  @override
+  Future<void> replyToSupportTicket({
+    required String ticketId,
+    required String message,
+  }) async {
+    final user = _client.auth.currentUser;
+    if (user == null) throw Exception('سجّل الدخول للرد على البلاغ.');
+
+    await OfflineNetworkPolicy.ensureReady();
+    if (OfflineNetworkPolicy.isConnectivityOffline) {
+      throw Exception('إرسال الرد يحتاج اتصالًا بالإنترنت.');
+    }
+
+    final trimmed = message.trim();
+    if (trimmed.isEmpty) throw Exception('اكتب الرد أولاً.');
+    if (trimmed.length > 5000) {
+      throw Exception('الرد طويل جدًا. الحد الأقصى 5000 حرف.');
+    }
+
+    try {
+      await _client
+          .from('support_ticket_messages')
+          .insert({
+            'ticket_id': ticketId,
+            'sender_id': user.id,
+            'sender_role': 'reporter',
+            'message': trimmed,
+          })
+          .timeout(OfflineNetworkPolicy.requestTimeout);
+    } on PostgrestException catch (error) {
+      debugPrint('[Support] Reply rejected: ${error.code}');
+      if (error.code == '42P01' || error.code == 'PGRST205') {
+        throw Exception('ميزة الردود لم تُفعّل على الخادم بعد.');
+      }
+      rethrow;
+    } on TimeoutException {
+      throw Exception('استغرق إرسال الرد وقتًا طويلًا. حاول مرة أخرى.');
+    }
   }
 
   String get _supportPlatformName {

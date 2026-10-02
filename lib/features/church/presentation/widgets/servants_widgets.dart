@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:url_launcher/url_launcher.dart';
+
 import '../../../../core/invitations/invitation_identity.dart';
 import '../../../../core/invitations/invitation_link.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/utils/whatsapp_launcher.dart';
 import '../../../../data/models/models.dart';
 import '../../../../data/repositories/database_repository.dart';
 
@@ -1192,8 +1193,13 @@ class ServantsAssignmentTargetDropdown extends StatelessWidget {
 
 class ServantsGeneratedInviteLinkCard extends StatelessWidget {
   final String inviteLink;
+  final String? phone;
 
-  const ServantsGeneratedInviteLinkCard({super.key, required this.inviteLink});
+  const ServantsGeneratedInviteLinkCard({
+    super.key,
+    required this.inviteLink,
+    this.phone,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1249,12 +1255,22 @@ class ServantsGeneratedInviteLinkCard extends StatelessWidget {
               const SizedBox(width: 8),
               FilledButton.icon(
                 onPressed: () async {
-                  final text = Uri.encodeComponent(
-                    'مرحبًا، أدعوك للانضمام لخدمتنا على تطبيق LinkApp:\n$inviteLink',
+                  final opened = await launchWhatsAppChat(
+                    phone: phone,
+                    message:
+                        'مرحبًا، أدعوك للانضمام لخدمتنا على تطبيق LinkApp:\n$inviteLink',
                   );
-                  final waUri = Uri.parse('https://wa.me/?text=$text');
-                  if (await canLaunchUrl(waUri)) {
-                    await launchUrl(waUri);
+                  if (!opened) {
+                    await Clipboard.setData(ClipboardData(text: inviteLink));
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'تعذر فتح واتساب؛ تم نسخ رابط الدعوة لتشاركه يدويًا.',
+                          style: GoogleFonts.cairo(),
+                        ),
+                      ),
+                    );
                   }
                 },
                 style: FilledButton.styleFrom(

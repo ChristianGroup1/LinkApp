@@ -134,6 +134,7 @@ class SupportTicketEntity {
   final String? adminNote;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final List<SupportTicketMessageEntity> messages;
 
   const SupportTicketEntity({
     required this.id,
@@ -144,6 +145,7 @@ class SupportTicketEntity {
     required this.createdAt,
     required this.updatedAt,
     this.adminNote,
+    this.messages = const [],
   });
 
   factory SupportTicketEntity.fromJson(Map<String, dynamic> json) =>
@@ -156,6 +158,39 @@ class SupportTicketEntity {
         adminNote: json['admin_note'] as String?,
         createdAt: DateTime.parse(json['created_at'] as String),
         updatedAt: DateTime.parse(json['updated_at'] as String),
+        messages: (json['support_ticket_messages'] as List? ?? const [])
+            .whereType<Map>()
+            .map(
+              (message) => SupportTicketMessageEntity.fromJson(
+                Map<String, dynamic>.from(message),
+              ),
+            )
+            .toList(growable: false),
+      );
+}
+
+class SupportTicketMessageEntity {
+  final String id;
+  final String senderId;
+  final String senderRole;
+  final String message;
+  final DateTime createdAt;
+
+  const SupportTicketMessageEntity({
+    required this.id,
+    required this.senderId,
+    required this.senderRole,
+    required this.message,
+    required this.createdAt,
+  });
+
+  factory SupportTicketMessageEntity.fromJson(Map<String, dynamic> json) =>
+      SupportTicketMessageEntity(
+        id: json['id'] as String,
+        senderId: json['sender_id'] as String,
+        senderRole: json['sender_role'] as String,
+        message: json['message'] as String,
+        createdAt: DateTime.parse(json['created_at'] as String),
       );
 }
 

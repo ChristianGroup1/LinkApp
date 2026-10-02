@@ -367,7 +367,10 @@ class _InviteServantScreenState extends State<InviteServantScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          ServantsGeneratedInviteLinkCard(inviteLink: _generatedInviteLink!),
+          ServantsGeneratedInviteLinkCard(
+            inviteLink: _generatedInviteLink!,
+            phone: _phoneController.text.trim(),
+          ),
           if (_emailSent) ...[
             const SizedBox(height: 12),
             _InfoBanner(
