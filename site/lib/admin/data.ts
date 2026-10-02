@@ -214,6 +214,7 @@ type MeetingGroup = {
   church: string;
   meeting: string;
   servants: string[];
+  servantContacts: Array<{ name: string; phone: string | null }>;
   members: string[];
   memberCount: number;
 };
@@ -264,16 +265,19 @@ function buildMeetingGroups({
     const meetingId = String(member.meeting_id || classMeetingIds.get(String(member.sunday_school_class_id)) || '');
     if (meetingId && meetingChurchById.get(meetingId) === String(member.church_id)) addMeetingMember(meetingId, memberId);
   }
-  const servantsByMeeting = new Map<string, string[]>();
+  const servantsByMeeting = new Map<string, Map<string, { name: string; phone: string | null }>>();
   const profilesById = new Map(profiles.map((profile) => [String(profile.id), profile]));
   for (const assignment of meetingAssignments) {
     const profile = profilesById.get(String(assignment.user_id));
     if (!profile?.is_active) continue;
     const meetingKey = `${assignment.church_id}:${assignment.meeting_id}`;
-    const names = servantsByMeeting.get(meetingKey) ?? [];
+    const contacts = servantsByMeeting.get(meetingKey) ?? new Map<string, { name: string; phone: string | null }>();
     const name = String(profile.full_name || profile.email || 'خادم بلا اسم');
-    if (!names.includes(name)) names.push(name);
-    servantsByMeeting.set(meetingKey, names);
+    contacts.set(String(profile.id), {
+      name,
+      phone: typeof profile.phone === 'string' && profile.phone.trim() ? profile.phone.trim() : null,
+    });
+    servantsByMeeting.set(meetingKey, contacts);
   }
   return meetings.map((meeting) => {
     const meetingId = String(meeting.id);
@@ -287,7 +291,11 @@ function buildMeetingGroups({
       id: meetingId,
       church: churchNames.get(String(meeting.church_id)) ?? 'كنيسة بلا اسم',
       meeting: meetingNames.get(meetingId) ?? 'اجتماع بلا اسم',
-      servants: (servantsByMeeting.get(meetingKey) ?? []).sort((a, b) => a.localeCompare(b, 'ar')),
+      servants: Array.from(servantsByMeeting.get(meetingKey)?.values() ?? [])
+        .map((servant) => servant.name)
+        .sort((a, b) => a.localeCompare(b, 'ar')),
+      servantContacts: Array.from(servantsByMeeting.get(meetingKey)?.values() ?? [])
+        .sort((a, b) => a.name.localeCompare(b.name, 'ar')),
       members: memberNames,
       memberCount: memberNames.length,
     };
@@ -300,7 +308,7 @@ export async function getMeetingGroupsData(churchId?: string) {
   const admin = createSupabaseAdminClient();
   const [churchesResult, profilesResult, meetingsResult, classesResult, membersResult, memberAssignmentsResult, meetingAssignmentsResult] = await Promise.all([
     admin.from('churches').select('id, name_ar, name').order('name_ar').limit(5000),
-    admin.from('profiles').select('id, church_id, full_name, email, is_active').limit(20000),
+    admin.from('profiles').select('id, church_id, full_name, email, phone, is_active').limit(20000),
     admin.from('meetings').select('id, church_id, name_ar, name').limit(20000),
     admin.from('sunday_school_classes').select('id, church_id, meeting_id, name_ar, name').limit(20000),
     admin.from('members').select('id, church_id, meeting_id, sunday_school_class_id, full_name, is_active').limit(50000),
@@ -341,6 +349,7 @@ export async function getMeetingsByWeekdayData() {
     weekday: Number(meeting.weekday),
     isActive: meeting.is_active !== false,
     memberCount: groupByMeeting.get(String(meeting.id))?.memberCount ?? 0,
+    servants: groupByMeeting.get(String(meeting.id))?.servantContacts ?? [],
   })).filter((meeting) => Number.isInteger(meeting.weekday) && meeting.weekday >= 1 && meeting.weekday <= 7)
     .sort((a, b) => a.weekday - b.weekday || a.name.localeCompare(b.name, 'ar') || a.church.localeCompare(b.church, 'ar'));
   return meetings;
