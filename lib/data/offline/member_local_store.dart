@@ -1,4 +1,26 @@
 import '../../shared/data/app_models.dart';
+import 'offline_entity_json.dart';
+
+/// Combines a server roster with members that only exist locally (`offline_*`)
+/// so attendance sheets stay usable before the write queue syncs.
+List<MemberEntity> mergeRosterWithPendingOfflineMembers({
+  required List<MemberEntity> remote,
+  required List<MemberEntity> local,
+  Set<String> pendingDeletes = const {},
+}) {
+  final byId = <String, MemberEntity>{
+    for (final member in remote)
+      if (!pendingDeletes.contains(member.id)) member.id: member,
+  };
+  for (final member in local) {
+    if (!isOfflineId(member.id) || pendingDeletes.contains(member.id)) {
+      continue;
+    }
+    byId.putIfAbsent(member.id, () => member);
+  }
+  return byId.values.toList()
+    ..sort((a, b) => a.fullName.compareTo(b.fullName));
+}
 
 /// Indexed local store for members that have been opened on this device.
 abstract class MemberLocalStore {

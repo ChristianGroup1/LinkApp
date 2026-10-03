@@ -90,6 +90,10 @@ class AddCreatedMemberToSheet extends AttendanceEvent {
   AddCreatedMemberToSheet({required this.member, this.savedOffline = false});
 }
 
+/// Reloads the roster into an open sheet (e.g. after an offline create elsewhere)
+/// without wiping marks the user already made.
+class MergeSheetMembersFromCache extends AttendanceEvent {}
+
 class ClearJustSavedFlag extends AttendanceEvent {}
 
 class ClearFlashMessage extends AttendanceEvent {}
@@ -187,21 +191,33 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
       change,
     ) {
       final current = state;
-      if (!change.affectsAny({AppDataArea.attendance}) ||
-          current is! SessionsLoaded) {
+      if (current is SessionsLoaded &&
+          change.affectsAny({AppDataArea.attendance})) {
+        add(
+          LoadAttendanceSessions(
+            meetingId: current.meetingId,
+            classId: current.classId,
+          ),
+        );
         return;
       }
-      add(
-        LoadAttendanceSessions(
-          meetingId: current.meetingId,
-          classId: current.classId,
-        ),
-      );
+      if (current is AttendanceSheetLoaded &&
+          !current.isSaving &&
+          change.affectsAny({AppDataArea.members})) {
+        add(MergeSheetMembersFromCache());
+      }
     });
 
     on<LoadAttendanceSessions>((event, emit) async {
       emit(AttendanceLoading());
       try {
+        // Prefetch the roster while online so a later outage still has members.
+        unawaited(
+          repository.warmAttendanceScope(
+            meetingId: event.meetingId,
+            classId: event.classId,
+          ),
+        );
         final sessions = await repository.getSessions(
           event.meetingId,
           classId: event.classId,
@@ -281,6 +297,12 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
                 .firstOrNull ??
             event.session;
 
+        unawaited(
+          repository.warmAttendanceScope(
+            meetingId: event.session.meetingId,
+            classId: event.session.classId,
+          ),
+        );
         List<MemberEntity> members;
         if (event.session.classId != null) {
           members = await repository.getClassMembers(event.session.classId!);
@@ -431,6 +453,54 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
           ),
         ),
       );
+    });
+
+    on<MergeSheetMembersFromCache>((event, emit) async {
+      final currentState = state;
+      if (currentState is! AttendanceSheetLoaded ||
+          currentState.session.isLocked ||
+          currentState.isSaving) {
+        return;
+      }
+
+      try {
+        final members = currentState.session.classId != null
+            ? await repository.getClassMembers(currentState.session.classId!)
+            : await repository.getMeetingMembers(
+                currentState.session.meetingId,
+              );
+        members.sort((a, b) => a.fullName.compareTo(b.fullName));
+
+        // Re-read after the await so marks from AddCreatedMemberToSheet win.
+        final latest = state;
+        if (latest is! AttendanceSheetLoaded ||
+            latest.session.id != currentState.session.id ||
+            latest.session.isLocked ||
+            latest.isSaving) {
+          return;
+        }
+
+        final memberIds = members.map((member) => member.id).toSet();
+        final newMap = <String, AttendanceStatus>{
+          for (final member in members)
+            member.id: latest.statusMap[member.id] ?? AttendanceStatus.absent,
+        };
+
+        final rosterChanged =
+            members.length != latest.allMembers.length ||
+            !memberIds.containsAll(
+              latest.allMembers.map((member) => member.id),
+            );
+        if (!rosterChanged) return;
+
+        emit(
+          _applyFilters(
+            latest.copyWith(allMembers: members, statusMap: newMap),
+          ),
+        );
+      } catch (_) {
+        // Keep the open sheet as-is if the refresh fails.
+      }
     });
 
     on<ClearJustSavedFlag>((event, emit) {

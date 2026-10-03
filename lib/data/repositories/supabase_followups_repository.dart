@@ -4,6 +4,15 @@ mixin _SupabaseFollowUpsRepository on _SupabaseRepositoryBase {
   // Follow-ups
   @override
   Future<List<FollowUpEntity>> getMemberFollowUps(String memberId) async {
+    Future<List<FollowUpEntity>> fromCache() async {
+      final churchId = await _cachedChurchIdForCurrentUser();
+      if (churchId == null) return [];
+      final cached = await _offlineCache.readFollowUps(churchId) ?? [];
+      return cached.where((item) => item.memberId == memberId).toList();
+    }
+
+    if (isOfflineId(memberId)) return fromCache();
+
     return OfflineNetworkPolicy.run(
       online: () async {
         final rows = await _client
@@ -15,12 +24,8 @@ mixin _SupabaseFollowUpsRepository on _SupabaseRepositoryBase {
             .map((json) => FollowUpEntity.fromJson(json))
             .toList();
       },
-      offline: () async {
-        final churchId = await _cachedChurchIdForCurrentUser();
-        if (churchId == null) return [];
-        final cached = await _offlineCache.readFollowUps(churchId) ?? [];
-        return cached.where((item) => item.memberId == memberId).toList();
-      },
+      offline: fromCache,
+      fallbackOnTimeout: true,
     );
   }
 

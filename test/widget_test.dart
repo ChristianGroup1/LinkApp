@@ -1808,6 +1808,12 @@ class TestRepository implements DatabaseRepository {
 
   @override
   Future<void> warmOfflineCache() async {}
+
+  @override
+  Future<void> warmAttendanceScope({
+    required String meetingId,
+    String? classId,
+  }) async {}
 }
 
 class AssignmentPermissionRepository extends TestRepository {

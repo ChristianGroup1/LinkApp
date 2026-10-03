@@ -2,6 +2,31 @@ import '../../shared/data/app_models.dart';
 
 bool isOfflineId(String id) => id.startsWith('offline_');
 
+/// Keeps queued `offline_*` rows when an online refresh would otherwise replace
+/// the whole local list with server data.
+List<T> mergeRemoteWithPendingOffline<T>({
+  required List<T> remote,
+  required List<T> local,
+  required String Function(T) idOf,
+  Set<String> pendingDeletes = const {},
+  int Function(T a, T b)? compare,
+}) {
+  final byId = <String, T>{
+    for (final item in remote)
+      if (!pendingDeletes.contains(idOf(item))) idOf(item): item,
+  };
+  for (final item in local) {
+    final id = idOf(item);
+    if (!isOfflineId(id) || pendingDeletes.contains(id)) continue;
+    byId.putIfAbsent(id, () => item);
+  }
+  final merged = byId.values.toList();
+  if (compare != null) {
+    merged.sort(compare);
+  }
+  return merged;
+}
+
 Map<String, dynamic> profileToJson(AppProfile profile) => {
   'id': profile.id,
   'church_id': profile.churchId,

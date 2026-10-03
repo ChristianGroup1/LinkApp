@@ -154,8 +154,8 @@ mixin _OfflineClassWrites on _OfflineWriteHandlerBase {
   Future<bool> deleteSundaySchoolClass(String churchId, String id) async {
     final resolvedId = await queue.resolveId(id);
     if (isOfflineId(id) && resolvedId == id) {
-      await cache.removeClass(churchId, id);
-      await queue.removeByEntityId(id);
+      final removed = await cache.cascadeRemoveClass(churchId, id);
+      await queue.removeOperationsTouching(removed);
       return false;
     }
 
@@ -164,9 +164,9 @@ mixin _OfflineClassWrites on _OfflineWriteHandlerBase {
         type: OfflineOpType.classDelete,
         id: resolvedId,
         removeFromCache: () async {
-          await cache.removeClass(churchId, id);
+          await cache.cascadeRemoveClass(churchId, id);
           if (resolvedId != id) {
-            await cache.removeClass(churchId, resolvedId);
+            await cache.cascadeRemoveClass(churchId, resolvedId);
           }
         },
       );
@@ -178,13 +178,17 @@ mixin _OfflineClassWrites on _OfflineWriteHandlerBase {
         'delete_sunday_school_class_cascade',
         params: {'target_class_id': resolvedId},
       );
-      await cache.removeClass(churchId, id);
-      if (resolvedId != id) await cache.removeClass(churchId, resolvedId);
+      await cache.cascadeRemoveClass(churchId, id);
+      if (resolvedId != id) {
+        await cache.cascadeRemoveClass(churchId, resolvedId);
+      }
       return true;
     } catch (error) {
       if (!isRecoverableOfflineError(error)) rethrow;
-      await cache.removeClass(churchId, id);
-      if (resolvedId != id) await cache.removeClass(churchId, resolvedId);
+      await cache.cascadeRemoveClass(churchId, id);
+      if (resolvedId != id) {
+        await cache.cascadeRemoveClass(churchId, resolvedId);
+      }
       await queue.enqueue(
         QueuedOperation(
           id: await queue.generateId('op'),

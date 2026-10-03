@@ -357,13 +357,21 @@ class MemberEntity {
     );
   }
 
-  MemberEntity copyWith({List<String>? meetingIds}) => MemberEntity(
+  MemberEntity copyWith({
+    List<String>? meetingIds,
+    String? sundaySchoolClassId,
+    String? meetingId,
+    bool clearSundaySchoolClassId = false,
+    bool clearMeetingId = false,
+  }) => MemberEntity(
     id: id,
     churchId: churchId,
     fullName: fullName,
     scope: scope,
-    sundaySchoolClassId: sundaySchoolClassId,
-    meetingId: meetingId,
+    sundaySchoolClassId: clearSundaySchoolClassId
+        ? null
+        : (sundaySchoolClassId ?? this.sundaySchoolClassId),
+    meetingId: clearMeetingId ? null : (meetingId ?? this.meetingId),
     meetingIds: meetingIds ?? this.meetingIds,
     phone: phone,
     parentName: parentName,
@@ -569,7 +577,11 @@ class HelperInvitation {
 
   bool get isPending => !isUsed && declinedAt == null;
 
-  HelperInvitation copyWith({String? fullName, String? email}) {
+  HelperInvitation copyWith({
+    String? fullName,
+    String? email,
+    String? targetId,
+  }) {
     return HelperInvitation(
       id: id,
       churchId: churchId,
@@ -577,7 +589,7 @@ class HelperInvitation {
       email: email,
       phone: phone,
       role: role,
-      targetId: targetId,
+      targetId: targetId ?? this.targetId,
       assignmentScope: assignmentScope,
       canTakeAttendance: canTakeAttendance,
       canViewReports: canViewReports,

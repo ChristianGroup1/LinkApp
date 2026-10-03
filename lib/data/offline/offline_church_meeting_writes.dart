@@ -244,8 +244,8 @@ mixin _OfflineChurchMeetingWrites on _OfflineWriteHandlerBase {
   Future<bool> deleteMeeting(String churchId, String id) async {
     final resolvedId = await queue.resolveId(id);
     if (isOfflineId(id) && resolvedId == id) {
-      await cache.removeMeeting(churchId, id);
-      await queue.removeByEntityId(id);
+      final removed = await cache.cascadeRemoveMeeting(churchId, id);
+      await queue.removeOperationsTouching(removed);
       return false;
     }
 
@@ -254,9 +254,9 @@ mixin _OfflineChurchMeetingWrites on _OfflineWriteHandlerBase {
         type: OfflineOpType.meetingDelete,
         id: resolvedId,
         removeFromCache: () async {
-          await cache.removeMeeting(churchId, id);
+          await cache.cascadeRemoveMeeting(churchId, id);
           if (resolvedId != id) {
-            await cache.removeMeeting(churchId, resolvedId);
+            await cache.cascadeRemoveMeeting(churchId, resolvedId);
           }
         },
       );
@@ -268,13 +268,17 @@ mixin _OfflineChurchMeetingWrites on _OfflineWriteHandlerBase {
         'delete_meeting_cascade',
         params: {'target_meeting_id': resolvedId},
       );
-      await cache.removeMeeting(churchId, id);
-      if (resolvedId != id) await cache.removeMeeting(churchId, resolvedId);
+      await cache.cascadeRemoveMeeting(churchId, id);
+      if (resolvedId != id) {
+        await cache.cascadeRemoveMeeting(churchId, resolvedId);
+      }
       return true;
     } catch (error) {
       if (!isRecoverableOfflineError(error)) rethrow;
-      await cache.removeMeeting(churchId, id);
-      if (resolvedId != id) await cache.removeMeeting(churchId, resolvedId);
+      await cache.cascadeRemoveMeeting(churchId, id);
+      if (resolvedId != id) {
+        await cache.cascadeRemoveMeeting(churchId, resolvedId);
+      }
       await queue.enqueue(
         QueuedOperation(
           id: await queue.generateId('op'),

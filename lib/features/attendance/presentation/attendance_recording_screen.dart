@@ -641,11 +641,19 @@ class _AttendanceRecordingScreenState extends State<AttendanceRecordingScreen> {
                 ),
               ),
               if (filtered.isEmpty)
-                const SliverToBoxAdapter(
-                  child: AppEmptyState(
-                    icon: Icons.search_off,
-                    message: 'لا توجد نتائج مطابقة للبحث أو التصفية.',
-                  ),
+                SliverToBoxAdapter(
+                  child: state.allMembers.isEmpty && !state.session.isLocked
+                      ? AppEmptyState(
+                          icon: Icons.person_add_alt_1,
+                          message:
+                              'لا يوجد مخدومون في هذا الكشف بعد.\nسجّل مخدومًا جديدًا وابدأ أخذ الحضور — حتى بدون إنترنت.',
+                          actionLabel: 'إضافة مخدوم جديد',
+                          onAction: () => _openAddMemberScreen(context),
+                        )
+                      : const AppEmptyState(
+                          icon: Icons.search_off,
+                          message: 'لا توجد نتائج مطابقة للبحث أو التصفية.',
+                        ),
                 )
               else
                 SliverPadding(

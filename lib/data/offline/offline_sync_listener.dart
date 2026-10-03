@@ -66,16 +66,24 @@ class _OfflineSyncListenerState extends State<OfflineSyncListener> {
     _syncing = true;
     try {
       final repository = context.read<DatabaseRepository>();
-      if (!await repository.hasPendingOfflineData()) return;
-      await repository.syncPendingOfflineData();
-      if (!mounted) return;
-      final stillPending = await repository.hasPendingOfflineData();
-      if (!mounted) return;
-      if (stillPending) {
-        _scheduleRetry();
-        return;
+      final hadPending = await repository.hasPendingOfflineData();
+      if (hadPending) {
+        await repository.syncPendingOfflineData();
       }
-      context.read<AuthBloc>().add(AuthCheckRequested());
+      if (!mounted) return;
+      if (hadPending) {
+        final stillPending = await repository.hasPendingOfflineData();
+        if (!mounted) return;
+        if (stillPending) {
+          // Do not warm yet — an online refresh can still race with queued
+          // creates even when merges are in place.
+          _scheduleRetry();
+          return;
+        }
+        context.read<AuthBloc>().add(AuthCheckRequested());
+      }
+      // Warm only when the queue is clear so the next outage has fresh data.
+      unawaited(repository.warmOfflineCache());
     } catch (_) {
       // Pending operations stay queued for the next connectivity/resume retry.
       _scheduleRetry();

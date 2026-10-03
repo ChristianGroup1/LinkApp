@@ -75,6 +75,28 @@ class OfflineCache {
     return _readEntities('$_meetingsPrefix$churchId', MeetingEntity.fromJson);
   }
 
+  /// Persists a server meeting list without dropping unsynced `offline_*` rows.
+  Future<List<MeetingEntity>> mergeAndSaveMeetings(
+    String churchId,
+    List<MeetingEntity> remote, {
+    Set<String> pendingDeletes = const {},
+  }) async {
+    final local = await readMeetings(churchId) ?? [];
+    final merged = mergeRemoteWithPendingOffline(
+      remote: remote,
+      local: local,
+      idOf: (item) => item.id,
+      pendingDeletes: pendingDeletes,
+      compare: (a, b) {
+        final kind = a.kind.value.compareTo(b.kind.value);
+        if (kind != 0) return kind;
+        return a.nameAr.compareTo(b.nameAr);
+      },
+    );
+    await saveMeetings(churchId, merged.map(meetingToJson).toList());
+    return merged;
+  }
+
   Future<void> saveClasses(String churchId, List<dynamic> rows) async {
     await _writeList('$_classesPrefix$churchId', rows);
   }
@@ -84,6 +106,50 @@ class OfflineCache {
       '$_classesPrefix$churchId',
       SundaySchoolClassEntity.fromJson,
     );
+  }
+
+  /// Persists a full church class list without dropping unsynced `offline_*` rows.
+  Future<List<SundaySchoolClassEntity>> mergeAndSaveClasses(
+    String churchId,
+    List<SundaySchoolClassEntity> remote, {
+    Set<String> pendingDeletes = const {},
+  }) async {
+    final local = await readClasses(churchId) ?? [];
+    final merged = mergeRemoteWithPendingOffline(
+      remote: remote,
+      local: local,
+      idOf: (item) => item.id,
+      pendingDeletes: pendingDeletes,
+      compare: (a, b) => a.displayOrder.compareTo(b.displayOrder),
+    );
+    await saveClasses(churchId, merged.map(classToJson).toList());
+    return merged;
+  }
+
+  /// Updates one meeting's classes in cache without wiping other meetings.
+  Future<List<SundaySchoolClassEntity>> mergeAndSaveClassesForMeeting({
+    required String churchId,
+    required String meetingId,
+    required List<SundaySchoolClassEntity> remoteForMeeting,
+    Set<String> pendingDeletes = const {},
+  }) async {
+    final local = await readClasses(churchId) ?? [];
+    final others = local.where((item) => item.meetingId != meetingId).toList();
+    final localForMeeting = local
+        .where((item) => item.meetingId == meetingId)
+        .toList();
+    final forMeeting = mergeRemoteWithPendingOffline(
+      remote: remoteForMeeting,
+      local: localForMeeting,
+      idOf: (item) => item.id,
+      pendingDeletes: pendingDeletes,
+      compare: (a, b) => a.displayOrder.compareTo(b.displayOrder),
+    );
+    await saveClasses(
+      churchId,
+      [...others, ...forMeeting].map(classToJson).toList(),
+    );
+    return forMeeting;
   }
 
   Future<void> saveMembers(String churchId, List<dynamic> rows) async {
@@ -211,6 +277,543 @@ class OfflineCache {
       sessionsKey(meetingId, classId),
       AttendanceSessionEntity.fromJson,
     );
+  }
+
+  /// Persists a session scope without dropping unsynced `offline_*` sessions.
+  Future<List<AttendanceSessionEntity>> mergeAndSaveSessions(
+    String meetingId,
+    String? classId,
+    List<AttendanceSessionEntity> remote, {
+    Set<String> pendingDeletes = const {},
+  }) async {
+    final local = await readSessions(meetingId, classId) ?? [];
+    final merged = mergeRemoteWithPendingOffline(
+      remote: remote,
+      local: local,
+      idOf: (item) => item.id,
+      pendingDeletes: pendingDeletes,
+      compare: (a, b) => b.sessionDate.compareTo(a.sessionDate),
+    );
+    await saveSessions(
+      meetingId,
+      classId,
+      merged.map(sessionToJson).toList(),
+    );
+    return merged;
+  }
+
+  /// Moves session cache rows when a parent meeting/class id is remapped.
+  Future<void> renameSessionsScope({
+    required String oldMeetingId,
+    required String newMeetingId,
+    String? oldClassId,
+    String? newClassId,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (oldClassId != null || newClassId != null) {
+      await _moveSessionsKey(
+        prefs,
+        sessionsKey(oldMeetingId, oldClassId),
+        sessionsKey(newMeetingId, newClassId),
+      );
+      return;
+    }
+
+    final oldPrefix = '$_sessionsPrefix${oldMeetingId}_';
+    final keys = prefs.getKeys().where((key) => key.startsWith(oldPrefix));
+    for (final oldKey in keys.toList()) {
+      final suffix = oldKey.substring(oldPrefix.length);
+      final newKey = '$_sessionsPrefix${newMeetingId}_$suffix';
+      await _moveSessionsKey(prefs, oldKey, newKey);
+    }
+  }
+
+  Future<void> _moveSessionsKey(
+    SharedPreferences prefs,
+    String oldKey,
+    String newKey,
+  ) async {
+    if (oldKey == newKey) return;
+    final raw = prefs.getString(oldKey);
+    if (raw == null) return;
+
+    final newMeetingId = _meetingIdFromSessionsKey(newKey);
+    final newClassId = _classIdFromSessionsKey(newKey);
+
+    List<Map<String, dynamic>> rewrite(List<Map<String, dynamic>> rows) {
+      return [
+        for (final row in rows)
+          {
+            ...row,
+            if (newMeetingId != null) 'meeting_id': newMeetingId,
+            'class_id': newClassId,
+          },
+      ];
+    }
+
+    final existing = prefs.getString(newKey);
+    if (existing == null) {
+      try {
+        final rows = (jsonDecode(raw) as List)
+            .map((row) => Map<String, dynamic>.from(row as Map))
+            .toList();
+        await prefs.setString(newKey, jsonEncode(rewrite(rows)));
+      } on FormatException {
+        await prefs.setString(newKey, raw);
+      } on TypeError {
+        await prefs.setString(newKey, raw);
+      }
+    } else {
+      try {
+        final oldRows = rewrite(
+          (jsonDecode(raw) as List)
+              .map((row) => Map<String, dynamic>.from(row as Map))
+              .toList(),
+        );
+        final newRows = rewrite(
+          (jsonDecode(existing) as List)
+              .map((row) => Map<String, dynamic>.from(row as Map))
+              .toList(),
+        );
+        final byId = <String, Map<String, dynamic>>{
+          for (final row in newRows) row['id'] as String: row,
+        };
+        for (final row in oldRows) {
+          byId.putIfAbsent(row['id'] as String, () => row);
+        }
+        await prefs.setString(newKey, jsonEncode(byId.values.toList()));
+      } on FormatException {
+        await prefs.setString(newKey, raw);
+      } on TypeError {
+        await prefs.setString(newKey, raw);
+      }
+    }
+    await prefs.remove(oldKey);
+  }
+
+  String? _meetingIdFromSessionsKey(String key) {
+    if (!key.startsWith(_sessionsPrefix)) return null;
+    final rest = key.substring(_sessionsPrefix.length);
+    final split = rest.lastIndexOf('_');
+    if (split <= 0) return null;
+    return rest.substring(0, split);
+  }
+
+  String? _classIdFromSessionsKey(String key) {
+    if (!key.startsWith(_sessionsPrefix)) return null;
+    final rest = key.substring(_sessionsPrefix.length);
+    final split = rest.lastIndexOf('_');
+    if (split < 0 || split + 1 >= rest.length) return null;
+    final classPart = rest.substring(split + 1);
+    return classPart == 'none' ? null : classPart;
+  }
+
+  /// Rewrites class.meetingId after an offline meeting syncs to a server id.
+  Future<void> remapClassMeetingIds({
+    required String churchId,
+    required String oldMeetingId,
+    required String newMeetingId,
+  }) async {
+    if (oldMeetingId == newMeetingId) return;
+    final classes = await readClasses(churchId) ?? [];
+    var changed = false;
+    final updated = classes.map((cls) {
+      if (cls.meetingId != oldMeetingId) return cls;
+      changed = true;
+      return SundaySchoolClassEntity(
+        id: cls.id,
+        churchId: cls.churchId,
+        meetingId: newMeetingId,
+        name: cls.name,
+        nameAr: cls.nameAr,
+        displayOrder: cls.displayOrder,
+        isActive: cls.isActive,
+      );
+    }).toList();
+    if (changed) {
+      await saveClasses(churchId, updated.map(classToJson).toList());
+    }
+    await renameSessionsScope(
+      oldMeetingId: oldMeetingId,
+      newMeetingId: newMeetingId,
+    );
+  }
+
+  /// Rewrites member FKs after an offline meeting/class syncs to a server id.
+  Future<void> remapMemberParentIds({
+    required String churchId,
+    String? oldMeetingId,
+    String? newMeetingId,
+    String? oldClassId,
+    String? newClassId,
+  }) async {
+    await _ensureLegacyMembersMigrated(churchId);
+    final members = await _memberStore.readAll(churchId);
+    for (final member in members) {
+      var next = member;
+      var changed = false;
+
+      if (oldClassId != null &&
+          newClassId != null &&
+          member.sundaySchoolClassId == oldClassId) {
+        next = next.copyWith(sundaySchoolClassId: newClassId);
+        changed = true;
+      }
+
+      if (oldMeetingId != null && newMeetingId != null) {
+        final meetingIds = [
+          for (final id in member.meetingIds)
+            id == oldMeetingId ? newMeetingId : id,
+        ];
+        final meetingChanged =
+            member.meetingId == oldMeetingId ||
+            !_sameStringList(meetingIds, member.meetingIds);
+        if (meetingChanged) {
+          next = next.copyWith(
+            meetingId: member.meetingId == oldMeetingId
+                ? newMeetingId
+                : member.meetingId,
+            meetingIds: meetingIds,
+          );
+          changed = true;
+        }
+      }
+
+      if (changed) {
+        await _memberStore.upsert(churchId, next);
+      }
+    }
+
+    if (oldClassId != null &&
+        newClassId != null &&
+        oldMeetingId != null &&
+        newMeetingId != null) {
+      await renameSessionsScope(
+        oldMeetingId: oldMeetingId,
+        newMeetingId: newMeetingId,
+        oldClassId: oldClassId,
+        newClassId: newClassId,
+      );
+    } else if (oldClassId != null &&
+        newClassId != null &&
+        oldMeetingId == null) {
+      // Class remap alone: rewrite every sessions key ending with the old class.
+      final prefs = await SharedPreferences.getInstance();
+      final suffix = '_$oldClassId';
+      for (final key in prefs.getKeys().toList()) {
+        if (!key.startsWith(_sessionsPrefix) || !key.endsWith(suffix)) {
+          continue;
+        }
+        final meetingPart = key.substring(
+          _sessionsPrefix.length,
+          key.length - suffix.length,
+        );
+        await _moveSessionsKey(
+          prefs,
+          key,
+          sessionsKey(meetingPart, newClassId),
+        );
+      }
+    }
+  }
+
+  /// Rewrites cached servant assignments when a meeting/class id is remapped.
+  Future<void> remapAssignmentParentIds({
+    String? oldClassId,
+    String? newClassId,
+    String? oldMeetingId,
+    String? newMeetingId,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    if (oldClassId != null &&
+        newClassId != null &&
+        oldClassId != newClassId) {
+      await _moveListKey(
+        prefs,
+        '$_classAssignmentsByClassPrefix$oldClassId',
+        '$_classAssignmentsByClassPrefix$newClassId',
+      );
+      for (final key in prefs.getKeys().toList()) {
+        if (!key.startsWith(_classAssignmentsPrefix) ||
+            key.startsWith(_classAssignmentsByClassPrefix)) {
+          continue;
+        }
+        await _rewriteAssignmentField(
+          prefs,
+          key,
+          field: 'class_id',
+          oldValue: oldClassId,
+          newValue: newClassId,
+        );
+      }
+    }
+
+    if (oldMeetingId != null &&
+        newMeetingId != null &&
+        oldMeetingId != newMeetingId) {
+      await _moveListKey(
+        prefs,
+        '$_meetingAssignmentsByMeetingPrefix$oldMeetingId',
+        '$_meetingAssignmentsByMeetingPrefix$newMeetingId',
+      );
+      for (final key in prefs.getKeys().toList()) {
+        if (!key.startsWith(_meetingAssignmentsPrefix) ||
+            key.startsWith(_meetingAssignmentsByMeetingPrefix)) {
+          continue;
+        }
+        await _rewriteAssignmentField(
+          prefs,
+          key,
+          field: 'meeting_id',
+          oldValue: oldMeetingId,
+          newValue: newMeetingId,
+        );
+      }
+    }
+  }
+
+  Future<void> remapInvitationTargetIds({
+    required String churchId,
+    required String oldTargetId,
+    required String newTargetId,
+  }) async {
+    if (oldTargetId == newTargetId) return;
+    final invitations = await readInvitations(churchId) ?? [];
+    var changed = false;
+    final updated = invitations.map((invite) {
+      if (invite.targetId != oldTargetId) return invite;
+      changed = true;
+      return invite.copyWith(targetId: newTargetId);
+    }).toList();
+    if (changed) {
+      await saveInvitations(
+        churchId,
+        updated.map(invitationToJson).toList(),
+      );
+    }
+  }
+
+  /// Removes an unsynced class and every local dependent (members, sessions,
+  /// attendance, assignments, invitations). Returns removed entity ids.
+  Future<Set<String>> cascadeRemoveClass(
+    String churchId,
+    String classId,
+  ) async {
+    final removed = <String>{classId};
+    final members = await queryMembersAll(
+      churchId: churchId,
+      classId: classId,
+      activeOnly: false,
+    );
+    for (final member in members) {
+      await removeMember(churchId, member.id);
+      removed.add(member.id);
+      await _removeFollowUpsForMember(churchId, member.id);
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    final suffix = '_$classId';
+    for (final key in prefs.getKeys().toList()) {
+      if (!key.startsWith(_sessionsPrefix) || !key.endsWith(suffix)) continue;
+      final sessions = await _readEntities(
+        key,
+        AttendanceSessionEntity.fromJson,
+      );
+      for (final session in sessions ?? const <AttendanceSessionEntity>[]) {
+        await _clearAttendanceForSession(session.id);
+        removed.add(session.id);
+      }
+      await prefs.remove(key);
+    }
+
+    await prefs.remove('$_classAssignmentsByClassPrefix$classId');
+    for (final key in prefs.getKeys().toList()) {
+      if (!key.startsWith(_classAssignmentsPrefix) ||
+          key.startsWith(_classAssignmentsByClassPrefix)) {
+        continue;
+      }
+      await _removeAssignmentRows(
+        prefs,
+        key,
+        field: 'class_id',
+        value: classId,
+      );
+    }
+
+    await _removeInvitationsForTarget(churchId, classId);
+    await removeClass(churchId, classId);
+    return removed;
+  }
+
+  /// Removes an unsynced meeting and every local dependent.
+  Future<Set<String>> cascadeRemoveMeeting(
+    String churchId,
+    String meetingId,
+  ) async {
+    final removed = <String>{meetingId};
+    final classes = (await readClasses(churchId) ?? [])
+        .where((item) => item.meetingId == meetingId)
+        .toList();
+    for (final cls in classes) {
+      removed.addAll(await cascadeRemoveClass(churchId, cls.id));
+    }
+
+    final members = await queryMembersAll(
+      churchId: churchId,
+      meetingId: meetingId,
+      activeOnly: false,
+    );
+    for (final member in members) {
+      await removeMember(churchId, member.id);
+      removed.add(member.id);
+      await _removeFollowUpsForMember(churchId, member.id);
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    final prefix = '$_sessionsPrefix${meetingId}_';
+    for (final key in prefs.getKeys().toList()) {
+      if (!key.startsWith(prefix)) continue;
+      final sessions = await _readEntities(
+        key,
+        AttendanceSessionEntity.fromJson,
+      );
+      for (final session in sessions ?? const <AttendanceSessionEntity>[]) {
+        await _clearAttendanceForSession(session.id);
+        removed.add(session.id);
+      }
+      await prefs.remove(key);
+    }
+
+    await prefs.remove('$_meetingAssignmentsByMeetingPrefix$meetingId');
+    for (final key in prefs.getKeys().toList()) {
+      if (!key.startsWith(_meetingAssignmentsPrefix) ||
+          key.startsWith(_meetingAssignmentsByMeetingPrefix)) {
+        continue;
+      }
+      await _removeAssignmentRows(
+        prefs,
+        key,
+        field: 'meeting_id',
+        value: meetingId,
+      );
+    }
+
+    await _removeInvitationsForTarget(churchId, meetingId);
+    await removeMeeting(churchId, meetingId);
+    return removed;
+  }
+
+  Future<void> _clearAttendanceForSession(String sessionId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('$attendanceRecordsPrefix$sessionId');
+    final unsynced = prefs.getStringList(unsyncedSessionsKey) ?? [];
+    if (unsynced.remove(sessionId)) {
+      await prefs.setStringList(unsyncedSessionsKey, unsynced);
+    }
+  }
+
+  Future<void> _removeFollowUpsForMember(
+    String churchId,
+    String memberId,
+  ) async {
+    final followUps = await readFollowUps(churchId) ?? [];
+    final remaining = followUps
+        .where((item) => item.memberId != memberId)
+        .toList();
+    if (remaining.length != followUps.length) {
+      await saveFollowUps(
+        churchId,
+        remaining.map(followUpToJson).toList(),
+      );
+    }
+  }
+
+  Future<void> _removeInvitationsForTarget(
+    String churchId,
+    String targetId,
+  ) async {
+    final invitations = await readInvitations(churchId) ?? [];
+    final remaining = invitations
+        .where((item) => item.targetId != targetId)
+        .toList();
+    if (remaining.length != invitations.length) {
+      await saveInvitations(
+        churchId,
+        remaining.map(invitationToJson).toList(),
+      );
+    }
+  }
+
+  Future<void> _moveListKey(
+    SharedPreferences prefs,
+    String oldKey,
+    String newKey,
+  ) async {
+    if (oldKey == newKey) return;
+    final raw = prefs.getString(oldKey);
+    if (raw == null) return;
+    final existing = prefs.getString(newKey);
+    if (existing == null) {
+      await prefs.setString(newKey, raw);
+    } else {
+      try {
+        final oldRows = (jsonDecode(raw) as List)
+            .map((row) => Map<String, dynamic>.from(row as Map))
+            .toList();
+        final newRows = (jsonDecode(existing) as List)
+            .map((row) => Map<String, dynamic>.from(row as Map))
+            .toList();
+        final byId = <String, Map<String, dynamic>>{
+          for (final row in newRows) '${row['id']}': row,
+        };
+        for (final row in oldRows) {
+          byId.putIfAbsent('${row['id']}', () => row);
+        }
+        await prefs.setString(newKey, jsonEncode(byId.values.toList()));
+      } on FormatException {
+        await prefs.setString(newKey, raw);
+      } on TypeError {
+        await prefs.setString(newKey, raw);
+      }
+    }
+    await prefs.remove(oldKey);
+  }
+
+  Future<void> _rewriteAssignmentField(
+    SharedPreferences prefs,
+    String key, {
+    required String field,
+    required String oldValue,
+    required String newValue,
+  }) async {
+    final rows = await _readList(key);
+    if (rows == null) return;
+    var changed = false;
+    for (var i = 0; i < rows.length; i++) {
+      final row = Map<String, dynamic>.from(rows[i] as Map);
+      if (row[field]?.toString() == oldValue) {
+        row[field] = newValue;
+        rows[i] = row;
+        changed = true;
+      }
+    }
+    if (changed) await _writeList(key, rows);
+  }
+
+  Future<void> _removeAssignmentRows(
+    SharedPreferences prefs,
+    String key, {
+    required String field,
+    required String value,
+  }) async {
+    final rows = await _readList(key);
+    if (rows == null) return;
+    final before = rows.length;
+    rows.removeWhere(
+      (row) => (row as Map)[field]?.toString() == value,
+    );
+    if (rows.length != before) await _writeList(key, rows);
   }
 
   Future<void> saveFollowUps(String churchId, List<dynamic> rows) async {
@@ -539,6 +1142,22 @@ class OfflineCache {
     );
   }
 
+  Future<List<HelperInvitation>> mergeAndSaveInvitations(
+    String churchId,
+    List<HelperInvitation> remote, {
+    Set<String> pendingDeletes = const {},
+  }) async {
+    final local = await readInvitations(churchId) ?? [];
+    final merged = mergeRemoteWithPendingOffline(
+      remote: remote,
+      local: local.where((item) => item.isPending).toList(),
+      idOf: (item) => item.id,
+      pendingDeletes: pendingDeletes,
+    );
+    await saveInvitations(churchId, merged.map(invitationToJson).toList());
+    return merged;
+  }
+
   Future<void> upsertInvitation(
     String churchId,
     HelperInvitation invitation,
@@ -639,5 +1258,14 @@ class OfflineCache {
     return rows
         .map((row) => fromJson(Map<String, dynamic>.from(row as Map)))
         .toList();
+  }
+
+  bool _sameStringList(List<String> a, List<String> b) {
+    if (identical(a, b)) return true;
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
   }
 }

@@ -12,6 +12,19 @@ mixin _SupabaseMembersRepository on _SupabaseRepositoryBase {
 
   Future<List<MemberEntity>> _loadClassMembers(String classId) async {
     final pendingDeletes = await _pendingDeletedEntityIds();
+    if (isOfflineId(classId)) {
+      final churchId = await _cachedChurchIdForCurrentUser();
+      if (churchId == null) return [];
+      final members = await _offlineCache.queryMembersAll(
+        churchId: churchId,
+        classId: classId,
+      );
+      return _filterDeletedEntities(
+        members,
+        (item) => item.id,
+        pendingDeletes,
+      );
+    }
     return OfflineNetworkPolicy.run(
       online: () async {
         final rows = await _client
@@ -32,7 +45,12 @@ mixin _SupabaseMembersRepository on _SupabaseRepositoryBase {
             members.map(memberToJson).toList(),
           );
         }
-        return members;
+        // Keep members created on-device while offline (not on the server yet).
+        return _mergePendingOfflineMembers(
+          remote: members,
+          classId: classId,
+          pendingDeletes: pendingDeletes,
+        );
       },
       offline: () async {
         final churchId = await _cachedChurchIdForCurrentUser();
@@ -48,7 +66,8 @@ mixin _SupabaseMembersRepository on _SupabaseRepositoryBase {
         );
       },
       timeout: const Duration(seconds: 12),
-      fallbackOnTimeout: false,
+      // Prefer a stale local roster over a blank attendance sheet.
+      fallbackOnTimeout: true,
     );
   }
 
@@ -73,6 +92,19 @@ mixin _SupabaseMembersRepository on _SupabaseRepositoryBase {
 
   Future<List<MemberEntity>> _loadMeetingMembers(String meetingId) async {
     final pendingDeletes = await _pendingDeletedEntityIds();
+    if (isOfflineId(meetingId)) {
+      final churchId = await _cachedChurchIdForCurrentUser();
+      if (churchId == null) return [];
+      final members = await _offlineCache.queryMembersAll(
+        churchId: churchId,
+        meetingId: meetingId,
+      );
+      return _filterDeletedEntities(
+        members,
+        (item) => item.id,
+        pendingDeletes,
+      );
+    }
     return OfflineNetworkPolicy.run(
       online: () async {
         final rows = await _client
@@ -107,7 +139,12 @@ mixin _SupabaseMembersRepository on _SupabaseRepositoryBase {
             members.map(memberToJson).toList(),
           );
         }
-        return members;
+        // Keep members created on-device while offline (not on the server yet).
+        return _mergePendingOfflineMembers(
+          remote: members,
+          meetingId: meetingId,
+          pendingDeletes: pendingDeletes,
+        );
       },
       offline: () async {
         final churchId = await _cachedChurchIdForCurrentUser();
@@ -123,7 +160,31 @@ mixin _SupabaseMembersRepository on _SupabaseRepositoryBase {
         );
       },
       timeout: const Duration(seconds: 12),
-      fallbackOnTimeout: false,
+      // Prefer a stale local roster over a blank attendance sheet.
+      fallbackOnTimeout: true,
+    );
+  }
+
+  /// Server reads never include `offline_*` rows. Merge them so a cold device
+  /// can open a sheet, register someone, and take attendance before sync.
+  Future<List<MemberEntity>> _mergePendingOfflineMembers({
+    required List<MemberEntity> remote,
+    String? classId,
+    String? meetingId,
+    required Set<String> pendingDeletes,
+  }) async {
+    final churchId = await _cachedChurchIdForCurrentUser();
+    if (churchId == null) return remote;
+
+    final local = await _offlineCache.queryMembersAll(
+      churchId: churchId,
+      classId: classId,
+      meetingId: meetingId,
+    );
+    return mergeRosterWithPendingOfflineMembers(
+      remote: remote,
+      local: local,
+      pendingDeletes: pendingDeletes,
     );
   }
 
@@ -157,6 +218,41 @@ mixin _SupabaseMembersRepository on _SupabaseRepositoryBase {
 
     final churchId = profile!.churchId!;
     final pendingDeletes = await _pendingDeletedEntityIds();
+
+    Future<MembersPage> fromCache() async {
+      final pageResult = await _offlineCache.queryMembersPage(
+        churchId: churchId,
+        page: safePage,
+        pageSize: safeSize,
+        query: query,
+        meetingId: meetingId,
+        classId: classId,
+        scope: scope,
+        activeOnly: activeOnly,
+      );
+      final items = [
+        for (final member in pageResult.items)
+          if (!pendingDeletes.contains(member.id)) member,
+      ];
+      final counts = await _offlineCache.readMemberCounts(
+        churchId: churchId,
+        activeOnly: activeOnly,
+      );
+      return MembersPage(
+        items: items,
+        hasMore: pageResult.hasMore,
+        page: safePage,
+        pageSize: safeSize,
+        counts: counts,
+      );
+    }
+
+    // Offline-created parents are not valid server UUIDs.
+    if ((classId != null && isOfflineId(classId)) ||
+        (meetingId != null && isOfflineId(meetingId))) {
+      return fromCache();
+    }
+
     return _joinReadRequest(
       'members:page:$churchId:$safePage:$safeSize:$query:$meetingId:$classId:$scope:$activeOnly',
       () => OfflineNetworkPolicy.run(
@@ -201,7 +297,26 @@ mixin _SupabaseMembersRepository on _SupabaseRepositoryBase {
               items.map(memberToJson).toList(),
             );
           }
-          final counts = safePage == 0
+
+          // Page 0 also surfaces pending offline creates for the same filters.
+          var pageItems = items;
+          if (safePage == 0) {
+            final localMatches = await _offlineCache.queryMembersAll(
+              churchId: churchId,
+              query: query,
+              meetingId: meetingId,
+              classId: classId,
+              scope: scope,
+              activeOnly: activeOnly,
+            );
+            pageItems = mergeRosterWithPendingOfflineMembers(
+              remote: items,
+              local: localMatches,
+              pendingDeletes: pendingDeletes,
+            );
+          }
+
+          final serverCounts = safePage == 0
               ? await _loadMemberCounts(
                   churchId: churchId,
                   activeOnly: activeOnly,
@@ -210,42 +325,48 @@ mixin _SupabaseMembersRepository on _SupabaseRepositoryBase {
                   churchId: churchId,
                   activeOnly: activeOnly,
                 );
+          final counts = safePage == 0
+              ? await _countsIncludingPendingOffline(
+                  churchId: churchId,
+                  activeOnly: activeOnly,
+                  server: serverCounts,
+                )
+              : serverCounts;
           return MembersPage(
-            items: items,
+            items: pageItems,
             hasMore: hasMore,
             page: safePage,
             pageSize: safeSize,
             counts: counts,
           );
         },
-        offline: () async {
-          final pageResult = await _offlineCache.queryMembersPage(
-            churchId: churchId,
-            page: safePage,
-            pageSize: safeSize,
-            query: query,
-            meetingId: meetingId,
-            classId: classId,
-            scope: scope,
-            activeOnly: activeOnly,
-          );
-          final items = [
-            for (final member in pageResult.items)
-              if (!pendingDeletes.contains(member.id)) member,
-          ];
-          final counts = await _offlineCache.readMemberCounts(
-            churchId: churchId,
-            activeOnly: activeOnly,
-          );
-          return MembersPage(
-            items: items,
-            hasMore: pageResult.hasMore,
-            page: safePage,
-            pageSize: safeSize,
-            counts: counts,
-          );
-        },
+        offline: fromCache,
+        fallbackOnTimeout: true,
       ),
+    );
+  }
+
+  Future<MembersListCounts> _countsIncludingPendingOffline({
+    required String churchId,
+    required bool activeOnly,
+    required MembersListCounts server,
+  }) async {
+    final local = await _offlineCache.queryMembersAll(
+      churchId: churchId,
+      activeOnly: activeOnly,
+    );
+    final pending = local.where((member) => isOfflineId(member.id)).toList();
+    if (pending.isEmpty) return server;
+    return MembersListCounts(
+      total: server.total + pending.length,
+      sundaySchool:
+          server.sundaySchool +
+          pending
+              .where((m) => m.scope == MemberScope.sundaySchoolClass)
+              .length,
+      meetings:
+          server.meetings +
+          pending.where((m) => m.scope == MemberScope.meeting).length,
     );
   }
 
@@ -342,7 +463,12 @@ mixin _SupabaseMembersRepository on _SupabaseRepositoryBase {
           }
           page += 1;
         }
-        return all;
+        final local = await _offlineCache.readMembers(churchId) ?? [];
+        return mergeRosterWithPendingOfflineMembers(
+          remote: all,
+          local: local,
+          pendingDeletes: pendingDeletes,
+        );
       },
       offline: () async {
         final members = await _offlineCache.readMembers(churchId) ?? [];
@@ -352,6 +478,7 @@ mixin _SupabaseMembersRepository on _SupabaseRepositoryBase {
           pendingDeletes,
         );
       },
+      fallbackOnTimeout: true,
     );
   }
 
@@ -365,6 +492,14 @@ mixin _SupabaseMembersRepository on _SupabaseRepositoryBase {
     final pendingDeletes = await _pendingDeletedEntityIds();
     if (pendingDeletes.contains(memberId)) return null;
 
+    Future<MemberEntity?> fromCache() async {
+      final churchId = await _cachedChurchIdForCurrentUser();
+      if (churchId == null) return null;
+      return _offlineCache.readMemberById(churchId, memberId);
+    }
+
+    if (isOfflineId(memberId)) return fromCache();
+
     return OfflineNetworkPolicy.run(
       online: () async {
         final row = await _client
@@ -376,11 +511,8 @@ mixin _SupabaseMembersRepository on _SupabaseRepositoryBase {
             .maybeSingle();
         return row == null ? null : MemberEntity.fromJson(row);
       },
-      offline: () async {
-        final churchId = await _cachedChurchIdForCurrentUser();
-        if (churchId == null) return null;
-        return _offlineCache.readMemberById(churchId, memberId);
-      },
+      offline: fromCache,
+      fallbackOnTimeout: true,
     );
   }
 

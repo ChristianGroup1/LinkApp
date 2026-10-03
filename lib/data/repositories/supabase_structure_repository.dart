@@ -70,10 +70,14 @@ mixin _SupabaseStructureRepository on _SupabaseRepositoryBase {
             .order('kind')
             .order('name_ar');
         final filteredRows = _filterDeletedRows(rows as List, pendingDeletes);
-        await _offlineCache.saveMeetings(churchId, filteredRows);
-        return filteredRows
+        final remote = filteredRows
             .map((json) => MeetingEntity.fromJson(json))
             .toList();
+        return _offlineCache.mergeAndSaveMeetings(
+          churchId,
+          remote,
+          pendingDeletes: pendingDeletes,
+        );
       },
       offline: () async {
         final meetings = await _offlineCache.readMeetings(churchId) ?? [];
@@ -167,6 +171,15 @@ mixin _SupabaseStructureRepository on _SupabaseRepositoryBase {
   Future<List<SundaySchoolClassEntity>> _loadSundaySchoolClasses(
     String meetingId,
   ) async {
+    // Offline-created meetings are not server UUIDs — never query them online.
+    if (isOfflineId(meetingId)) {
+      final churchId = await _cachedChurchIdForCurrentUser();
+      if (churchId == null) return [];
+      final cached = await _offlineCache.readClasses(churchId) ?? [];
+      return cached.where((item) => item.meetingId == meetingId).toList();
+    }
+
+    final pendingDeletes = await _pendingDeletedEntityIds();
     return OfflineNetworkPolicy.run(
       online: () async {
         final rows = await _client
@@ -175,12 +188,16 @@ mixin _SupabaseStructureRepository on _SupabaseRepositoryBase {
             .eq('meeting_id', meetingId)
             .order('display_order');
         final churchId = await _cachedChurchIdForCurrentUser();
-        if (churchId != null) {
-          await _offlineCache.saveClasses(churchId, rows as List);
-        }
-        return (rows as List)
+        final remote = (rows as List)
             .map((json) => SundaySchoolClassEntity.fromJson(json))
             .toList();
+        if (churchId == null) return remote;
+        return _offlineCache.mergeAndSaveClassesForMeeting(
+          churchId: churchId,
+          meetingId: meetingId,
+          remoteForMeeting: remote,
+          pendingDeletes: pendingDeletes,
+        );
       },
       offline: () async {
         final churchId = await _cachedChurchIdForCurrentUser();
@@ -213,10 +230,14 @@ mixin _SupabaseStructureRepository on _SupabaseRepositoryBase {
             .eq('church_id', churchId)
             .order('display_order');
         final filteredRows = _filterDeletedRows(rows as List, pendingDeletes);
-        await _offlineCache.saveClasses(churchId, filteredRows);
-        return filteredRows
+        final remote = filteredRows
             .map((json) => SundaySchoolClassEntity.fromJson(json))
             .toList();
+        return _offlineCache.mergeAndSaveClasses(
+          churchId,
+          remote,
+          pendingDeletes: pendingDeletes,
+        );
       },
       offline: () async {
         final classes = await _offlineCache.readClasses(churchId) ?? [];

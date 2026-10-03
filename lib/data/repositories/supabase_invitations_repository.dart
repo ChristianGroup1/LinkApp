@@ -83,11 +83,11 @@ mixin _SupabaseInvitationsRepository on _SupabaseRepositoryBase {
             .map((json) => HelperInvitation.fromJson(json))
             .where((invite) => invite.isPending)
             .toList();
-        await _offlineCache.saveInvitations(
+        return _offlineCache.mergeAndSaveInvitations(
           churchId,
-          invitations.map(invitationToJson).toList(),
+          invitations,
+          pendingDeletes: pendingDeletes,
         );
-        return invitations;
       },
       offline: () async {
         final cached = await _offlineCache.readInvitations(churchId) ?? [];

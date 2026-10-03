@@ -16,6 +16,23 @@ mixin _SupabaseAttendanceRepository on _SupabaseRepositoryBase {
     String? classId,
   }) async {
     final pendingDeletes = await _pendingDeletedEntityIds();
+
+    Future<List<AttendanceSessionEntity>> fromCache() async {
+      final sessions =
+          await _offlineCache.readSessions(meetingId, classId) ?? [];
+      return _filterDeletedEntities(
+        sessions,
+        (item) => item.id,
+        pendingDeletes,
+      );
+    }
+
+    // Offline-created parents are not valid server UUIDs.
+    if (isOfflineId(meetingId) ||
+        (classId != null && isOfflineId(classId))) {
+      return fromCache();
+    }
+
     return OfflineNetworkPolicy.run(
       online: () async {
         var query = _client
@@ -44,20 +61,17 @@ mixin _SupabaseAttendanceRepository on _SupabaseRepositoryBase {
             }
           }
         }
-        await _offlineCache.saveSessions(meetingId, classId, filteredRows);
-        return filteredRows
+        final remote = filteredRows
             .map((json) => AttendanceSessionEntity.fromJson(json))
             .toList();
-      },
-      offline: () async {
-        final sessions =
-            await _offlineCache.readSessions(meetingId, classId) ?? [];
-        return _filterDeletedEntities(
-          sessions,
-          (item) => item.id,
-          pendingDeletes,
+        return _offlineCache.mergeAndSaveSessions(
+          meetingId,
+          classId,
+          remote,
+          pendingDeletes: pendingDeletes,
         );
       },
+      offline: fromCache,
     );
   }
 
@@ -242,6 +256,19 @@ mixin _SupabaseAttendanceRepository on _SupabaseRepositoryBase {
   Future<List<AttendanceRecordEntity>> _loadAttendanceRecords(
     String sessionId,
   ) async {
+    if (isOfflineId(sessionId)) {
+      return _readCachedAttendanceRecords(sessionId);
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    final unsynced =
+        prefs.getStringList(OfflineCache.unsyncedSessionsKey) ?? [];
+    // Never let a server read wipe marks that are still waiting to upload.
+    if (unsynced.contains(sessionId) ||
+        unsynced.contains(await _writeQueue.resolveId(sessionId))) {
+      return _readCachedAttendanceRecords(sessionId);
+    }
+
     return OfflineNetworkPolicy.run(
       online: () async {
         final rows = await _client
@@ -261,6 +288,7 @@ mixin _SupabaseAttendanceRepository on _SupabaseRepositoryBase {
         return records;
       },
       offline: () async => _readCachedAttendanceRecords(sessionId),
+      fallbackOnTimeout: true,
     );
   }
 
@@ -269,6 +297,27 @@ mixin _SupabaseAttendanceRepository on _SupabaseRepositoryBase {
     String memberId,
   ) async {
     final cacheKey = 'offline_member_attendance_history_$memberId';
+
+    if (isOfflineId(memberId)) {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(cacheKey);
+      if (raw == null) return [];
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is! List) return [];
+        return decoded
+            .map(
+              (row) => MemberAttendanceHistoryEntry.fromJson(
+                Map<String, dynamic>.from(row as Map),
+              ),
+            )
+            .toList();
+      } on FormatException {
+        return [];
+      } on TypeError {
+        return [];
+      }
+    }
 
     return OfflineNetworkPolicy.run(
       online: () async {
@@ -414,15 +463,34 @@ mixin _SupabaseAttendanceRepository on _SupabaseRepositoryBase {
     required String sessionId,
     required Map<String, AttendanceStatus> statusesByMemberId,
   }) async {
+    Future<bool> saveLocally() async {
+      final prefs = await SharedPreferences.getInstance();
+      await _writeOfflineAttendanceCache(sessionId, statusesByMemberId);
+      final unsynced =
+          prefs.getStringList(OfflineCache.unsyncedSessionsKey) ?? [];
+      if (!unsynced.contains(sessionId)) {
+        unsynced.add(sessionId);
+        await prefs.setStringList(OfflineCache.unsyncedSessionsKey, unsynced);
+      }
+      _notifyDataChanged({AppDataArea.attendance});
+      return false;
+    }
+
     try {
       await OfflineNetworkPolicy.ensureReady();
-      if (OfflineNetworkPolicy.isConnectivityOffline) {
-        throw TimeoutException('offline');
-      }
       final resolvedSessionId = await _writeQueue.resolveId(sessionId);
+      // Session (or its parent chain) is still local-only — don't hit Supabase.
+      if (OfflineNetworkPolicy.isConnectivityOffline ||
+          isOfflineId(resolvedSessionId)) {
+        return saveLocally();
+      }
       final remappedStatuses = <String, AttendanceStatus>{};
       for (final entry in statusesByMemberId.entries) {
         remappedStatuses[await _writeQueue.resolveId(entry.key)] = entry.value;
+      }
+      // Still-local member ids cannot be upserted until memberCreate syncs.
+      if (remappedStatuses.keys.any(isOfflineId)) {
+        return saveLocally();
       }
       return await _notifyAfter(
         _saveAttendanceRecordsOnline(
@@ -434,16 +502,7 @@ mixin _SupabaseAttendanceRepository on _SupabaseRepositoryBase {
     } catch (e) {
       if (!_isRecoverableOfflineError(e)) rethrow;
       try {
-        final prefs = await SharedPreferences.getInstance();
-        await _writeOfflineAttendanceCache(sessionId, statusesByMemberId);
-        final unsynced =
-            prefs.getStringList(OfflineCache.unsyncedSessionsKey) ?? [];
-        if (!unsynced.contains(sessionId)) {
-          unsynced.add(sessionId);
-          await prefs.setStringList(OfflineCache.unsyncedSessionsKey, unsynced);
-        }
-        _notifyDataChanged({AppDataArea.attendance});
-        return false;
+        return await saveLocally();
       } catch (_) {
         rethrow;
       }

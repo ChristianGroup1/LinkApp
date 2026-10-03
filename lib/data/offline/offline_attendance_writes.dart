@@ -26,7 +26,7 @@ mixin _OfflineAttendanceWrites on _OfflineWriteHandlerBase {
         },
       );
       final session = AttendanceSessionEntity.fromJson(row);
-      await cache.upsertSession(meetingId, classId, session);
+      await cache.upsertSession(resolvedMeetingId, resolvedClassId, session);
       return OfflineSaveResult(data: session, syncedToServer: true);
     } catch (error) {
       if (!isRecoverableOfflineError(error)) rethrow;

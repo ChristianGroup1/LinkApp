@@ -343,6 +343,12 @@ abstract class DatabaseRepository {
   Future<void> clearRejectedOfflineData();
 
   Future<void> warmOfflineCache();
+
+  /// Prefetches one attendance scope so the sheet stays usable offline.
+  Future<void> warmAttendanceScope({
+    required String meetingId,
+    String? classId,
+  });
 }
 
 abstract class _SupabaseRepositoryBase
@@ -447,12 +453,6 @@ abstract class _SupabaseRepositoryBase
       return cached.churchId;
     }
     return null;
-  }
-
-  Future<List<MemberEntity>> _readCachedMembers() async {
-    final churchId = await _cachedChurchIdForCurrentUser();
-    if (churchId == null) return [];
-    return await _offlineCache.readMembers(churchId) ?? [];
   }
 
   Future<AppProfile?> _readCachedProfileForCurrentUser() async {
@@ -566,6 +566,8 @@ abstract class _SupabaseRepositoryBase
         getAllSundaySchoolClasses(),
         getUserClassAssignments(profile.id),
         getUserMeetingAssignments(profile.id),
+        // Keep the members list usable offline without downloading the church.
+        getMembersPage(page: 0, pageSize: 50),
       ]);
       final meetings = results[0] as List<MeetingEntity>;
       final classes = results[1] as List<SundaySchoolClassEntity>;
@@ -573,59 +575,62 @@ abstract class _SupabaseRepositoryBase
       final meetingAssignments = results[3] as List<Map<String, dynamic>>;
       if (_client.auth.currentUser?.id != userId) return;
 
-      // Administrators never warm the whole church. Cache the first members
-      // page so the list opens offline, then stop — scopes warm on open.
-      if (profile.role == AppRole.superAdmin ||
-          profile.role == AppRole.churchAdmin) {
-        await getMembersPage(page: 0, pageSize: 50);
-        completed = true;
-        return;
+      final isAdmin =
+          profile.role == AppRole.superAdmin ||
+          profile.role == AppRole.churchAdmin;
+      final todayWeekday = DateTime.now().weekday;
+
+      final Set<String> classIdsToWarm;
+      final Set<String> meetingIdsToWarm;
+      if (isAdmin) {
+        // Admins never warm the whole church. Prefetch today's scopes so
+        // attendance still works if the network drops after login.
+        final todayMeetings = meetings.where(
+          (item) => item.isActive && item.weekday == todayWeekday,
+        );
+        classIdsToWarm = {
+          for (final meeting in todayMeetings)
+            if (meeting.kind == MeetingKind.sundaySchool)
+              ...classes
+                  .where((item) => item.isActive && item.meetingId == meeting.id)
+                  .map((item) => item.id),
+        };
+        meetingIdsToWarm = {
+          for (final meeting in todayMeetings)
+            if (meeting.kind != MeetingKind.sundaySchool) meeting.id,
+        };
+      } else {
+        classIdsToWarm = classAssignments
+            .map((row) => row['class_id'] as String?)
+            .whereType<String>()
+            .toSet();
+        meetingIdsToWarm = meetingAssignments
+            .map((row) => row['meeting_id'] as String?)
+            .whereType<String>()
+            .toSet();
       }
 
-      final assignedClassIds = classAssignments
-          .map((row) => row['class_id'] as String?)
-          .whereType<String>()
-          .toSet();
-      final assignedMeetingIds = meetingAssignments
-          .map((row) => row['meeting_id'] as String?)
-          .whereType<String>()
-          .toSet();
-      final assignedClasses = classes.where(
-        (item) => item.isActive && assignedClassIds.contains(item.id),
+      final classesToWarm = classes.where(
+        (item) => item.isActive && classIdsToWarm.contains(item.id),
       );
-      final assignedMeetings = meetings.where(
-        (item) => item.isActive && assignedMeetingIds.contains(item.id),
+      final meetingsToWarm = meetings.where(
+        (item) =>
+            item.isActive &&
+            item.kind != MeetingKind.sundaySchool &&
+            meetingIdsToWarm.contains(item.id),
       );
 
-      // These calls populate the existing offline member cache without
-      // loading unrelated church members.
       await Future.wait([
-        ...assignedClasses.map((item) => getClassMembers(item.id)),
-        ...assignedMeetings
-            .where((item) => item.kind != MeetingKind.sundaySchool)
-            .map((item) => getMeetingMembers(item.id)),
+        ...classesToWarm.map(
+          (item) => warmAttendanceScope(
+            meetingId: item.meetingId,
+            classId: item.id,
+          ),
+        ),
+        ...meetingsToWarm.map(
+          (item) => warmAttendanceScope(meetingId: item.id),
+        ),
       ]);
-
-      final sessionFetches = <Future<void>>[];
-      for (final cls in assignedClasses) {
-        sessionFetches.add(() async {
-          final sessions = await getSessions(cls.meetingId, classId: cls.id);
-          for (final session in sessions) {
-            await getAttendanceRecords(session.id);
-          }
-        }());
-      }
-      for (final meeting in assignedMeetings.where(
-        (item) => item.kind != MeetingKind.sundaySchool,
-      )) {
-        sessionFetches.add(() async {
-          final sessions = await getSessions(meeting.id);
-          for (final session in sessions) {
-            await getAttendanceRecords(session.id);
-          }
-        }());
-      }
-      await Future.wait(sessionFetches);
       completed = true;
     } catch (_) {
       // Cache warming is best-effort. A later explicit warm can retry failures.
@@ -633,6 +638,29 @@ abstract class _SupabaseRepositoryBase
       if (completed) {
         _offlineCacheWarmCompletedAt[userId] = DateTime.now();
       }
+    }
+  }
+
+  @override
+  Future<void> warmAttendanceScope({
+    required String meetingId,
+    String? classId,
+  }) async {
+    await OfflineNetworkPolicy.ensureReady();
+    if (OfflineNetworkPolicy.isConnectivityOffline) return;
+
+    try {
+      final membersFuture = classId != null
+          ? getClassMembers(classId)
+          : getMeetingMembers(meetingId);
+      final sessions = await getSessions(meetingId, classId: classId);
+      await membersFuture;
+      // Keep a few recent sheets ready offline; older history can refetch later.
+      for (final session in sessions.take(4)) {
+        await getAttendanceRecords(session.id);
+      }
+    } catch (_) {
+      // Scope warming must not block the screen that triggered it.
     }
   }
 

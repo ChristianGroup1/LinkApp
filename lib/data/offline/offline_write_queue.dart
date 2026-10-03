@@ -226,6 +226,9 @@ class OfflineWriteQueue {
     });
   }
 
+  /// Removes ops whose primary entity id is [entityId] (id / local_id only).
+  /// Does not drop child ops that merely reference this id as a parent FK —
+  /// use [removeOperationsTouching] for cascade deletes.
   Future<void> removeByEntityId(String entityId) async {
     await _serialize(() async {
       final operations = await all();
@@ -240,6 +243,53 @@ class OfflineWriteQueue {
         final memberIds = List<String>.from(
           operation.payload['member_ids'] as List? ?? const [],
         )..remove(entityId);
+        if (memberIds.length ==
+            (operation.payload['member_ids'] as List? ?? const []).length) {
+          continue;
+        }
+        if (memberIds.isEmpty) {
+          operations.removeAt(index);
+        } else {
+          operations[index] = QueuedOperation(
+            id: operation.id,
+            type: operation.type,
+            payload: {...operation.payload, 'member_ids': memberIds},
+            queuedAt: operation.queuedAt,
+          );
+        }
+      }
+      await _save(operations);
+    });
+  }
+
+  /// Drops queued ops that create/update/delete any of [entityIds], or that
+  /// reference them as a parent (meeting/class/member/session/target).
+  Future<void> removeOperationsTouching(Set<String> entityIds) async {
+    if (entityIds.isEmpty) return;
+    await _serialize(() async {
+      final operations = await all();
+      operations.removeWhere((op) {
+        for (final key in const [
+          'id',
+          'local_id',
+          'meeting_id',
+          'class_id',
+          'sunday_school_class_id',
+          'member_id',
+          'session_id',
+          'target_id',
+        ]) {
+          final value = op.payload[key];
+          if (value is String && entityIds.contains(value)) return true;
+        }
+        return false;
+      });
+      for (var index = operations.length - 1; index >= 0; index--) {
+        final operation = operations[index];
+        if (operation.type != OfflineOpType.memberMeetingCopy) continue;
+        final memberIds = List<String>.from(
+          operation.payload['member_ids'] as List? ?? const [],
+        )..removeWhere(entityIds.contains);
         if (memberIds.length ==
             (operation.payload['member_ids'] as List? ?? const []).length) {
           continue;

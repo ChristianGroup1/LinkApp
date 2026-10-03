@@ -13,6 +13,9 @@ mixin _SupabaseServantsRepository on _SupabaseRepositoryBase {
   Future<List<Map<String, dynamic>>> _loadClassAssignments(
     String classId,
   ) async {
+    if (isOfflineId(classId)) {
+      return await _offlineCache.readClassAssignmentsForClass(classId) ?? [];
+    }
     return OfflineNetworkPolicy.run(
       online: () async {
         final rows = await _client
@@ -28,6 +31,7 @@ mixin _SupabaseServantsRepository on _SupabaseRepositoryBase {
       offline: () async {
         return await _offlineCache.readClassAssignmentsForClass(classId) ?? [];
       },
+      fallbackOnTimeout: true,
     );
   }
 
@@ -42,6 +46,10 @@ mixin _SupabaseServantsRepository on _SupabaseRepositoryBase {
   Future<List<Map<String, dynamic>>> _loadMeetingAssignments(
     String meetingId,
   ) async {
+    if (isOfflineId(meetingId)) {
+      return await _offlineCache.readMeetingAssignmentsForMeeting(meetingId) ??
+          [];
+    }
     return OfflineNetworkPolicy.run(
       online: () async {
         final rows = await _client
@@ -63,6 +71,7 @@ mixin _SupabaseServantsRepository on _SupabaseRepositoryBase {
             ) ??
             [];
       },
+      fallbackOnTimeout: true,
     );
   }
 

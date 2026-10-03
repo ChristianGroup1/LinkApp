@@ -100,18 +100,31 @@ mixin _OfflineWriteSync on _OfflineWriteHandlerBase {
             })
             .select()
             .single();
-        await queue.mapId(
-          operation.payload['local_id'] as String,
-          row['id'] as String,
+        final localMeetingId = operation.payload['local_id'] as String;
+        final serverMeetingId = row['id'] as String;
+        final churchId = operation.payload['church_id'] as String;
+        await queue.mapId(localMeetingId, serverMeetingId);
+        await cache.remapClassMeetingIds(
+          churchId: churchId,
+          oldMeetingId: localMeetingId,
+          newMeetingId: serverMeetingId,
         );
-        await cache.removeMeeting(
-          operation.payload['church_id'] as String,
-          operation.payload['local_id'] as String,
+        await cache.remapMemberParentIds(
+          churchId: churchId,
+          oldMeetingId: localMeetingId,
+          newMeetingId: serverMeetingId,
         );
-        await cache.upsertMeeting(
-          operation.payload['church_id'] as String,
-          MeetingEntity.fromJson(row),
+        await cache.remapAssignmentParentIds(
+          oldMeetingId: localMeetingId,
+          newMeetingId: serverMeetingId,
         );
+        await cache.remapInvitationTargetIds(
+          churchId: churchId,
+          oldTargetId: localMeetingId,
+          newTargetId: serverMeetingId,
+        );
+        await cache.removeMeeting(churchId, localMeetingId);
+        await cache.upsertMeeting(churchId, MeetingEntity.fromJson(row));
         return true;
       case OfflineOpType.meetingUpdate:
         await client
@@ -149,18 +162,26 @@ mixin _OfflineWriteSync on _OfflineWriteHandlerBase {
             })
             .select()
             .single();
-        await queue.mapId(
-          operation.payload['local_id'] as String,
-          row['id'] as String,
+        final localClassId = operation.payload['local_id'] as String;
+        final serverClassId = row['id'] as String;
+        final churchId = operation.payload['church_id'] as String;
+        await queue.mapId(localClassId, serverClassId);
+        await cache.remapMemberParentIds(
+          churchId: churchId,
+          oldClassId: localClassId,
+          newClassId: serverClassId,
         );
-        await cache.removeClass(
-          operation.payload['church_id'] as String,
-          operation.payload['local_id'] as String,
+        await cache.remapAssignmentParentIds(
+          oldClassId: localClassId,
+          newClassId: serverClassId,
         );
-        await cache.upsertClass(
-          operation.payload['church_id'] as String,
-          SundaySchoolClassEntity.fromJson(row),
+        await cache.remapInvitationTargetIds(
+          churchId: churchId,
+          oldTargetId: localClassId,
+          newTargetId: serverClassId,
         );
+        await cache.removeClass(churchId, localClassId);
+        await cache.upsertClass(churchId, SundaySchoolClassEntity.fromJson(row));
         return true;
       case OfflineOpType.classUpdate:
         await client
@@ -306,16 +327,31 @@ mixin _OfflineWriteSync on _OfflineWriteHandlerBase {
         );
         final localId = operation.payload['local_id'] as String;
         final serverId = row['id'] as String;
+        final localMeetingId = operation.payload['meeting_id'] as String;
+        final resolvedMeetingId = await queue.resolveId(localMeetingId);
+        final resolvedClassId = classId == null
+            ? null
+            : await queue.resolveId(classId);
         await queue.mapId(localId, serverId);
         await _renameAttendanceCache(localId, serverId);
-        await cache.removeSession(
-          operation.payload['meeting_id'] as String,
-          classId,
-          localId,
-        );
+        await cache.removeSession(localMeetingId, classId, localId);
+        if (resolvedMeetingId != localMeetingId ||
+            resolvedClassId != classId) {
+          await cache.removeSession(
+            resolvedMeetingId,
+            resolvedClassId,
+            localId,
+          );
+          await cache.renameSessionsScope(
+            oldMeetingId: localMeetingId,
+            newMeetingId: resolvedMeetingId,
+            oldClassId: classId,
+            newClassId: resolvedClassId,
+          );
+        }
         await cache.upsertSession(
-          operation.payload['meeting_id'] as String,
-          classId,
+          resolvedMeetingId,
+          resolvedClassId,
           AttendanceSessionEntity.fromJson(row),
         );
         return true;

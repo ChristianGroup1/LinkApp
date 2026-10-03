@@ -294,6 +294,319 @@ void main() {
   );
 
   test(
+    'structure merge keeps offline meetings and classes across online refresh',
+    () async {
+      final cache = OfflineCache(memberStore: MemberMemoryStore());
+      await cache.upsertMeeting(
+        'church-1',
+        const MeetingEntity(
+          id: 'offline_meeting_1',
+          churchId: 'church-1',
+          name: 'Local',
+          nameAr: 'محلي',
+          kind: MeetingKind.normal,
+          weekday: 5,
+          isActive: true,
+        ),
+      );
+      await cache.upsertClass(
+        'church-1',
+        const SundaySchoolClassEntity(
+          id: 'offline_class_1',
+          churchId: 'church-1',
+          meetingId: 'offline_meeting_1',
+          name: 'Class',
+          nameAr: 'فصل',
+          displayOrder: 0,
+          isActive: true,
+        ),
+      );
+
+      final meetings = await cache.mergeAndSaveMeetings('church-1', [
+        const MeetingEntity(
+          id: 'server-meeting',
+          churchId: 'church-1',
+          name: 'Server',
+          nameAr: 'سيرفر',
+          kind: MeetingKind.normal,
+          weekday: 5,
+          isActive: true,
+        ),
+      ]);
+      expect(meetings.map((m) => m.id), containsAll(['offline_meeting_1', 'server-meeting']));
+
+      final classes = await cache.mergeAndSaveClassesForMeeting(
+        churchId: 'church-1',
+        meetingId: 'offline_meeting_1',
+        remoteForMeeting: const [],
+      );
+      expect(classes.map((c) => c.id), ['offline_class_1']);
+
+      await cache.upsertClass(
+        'church-1',
+        const SundaySchoolClassEntity(
+          id: 'other-class',
+          churchId: 'church-1',
+          meetingId: 'other-meeting',
+          name: 'Other',
+          nameAr: 'آخر',
+          displayOrder: 0,
+          isActive: true,
+        ),
+      );
+      await cache.mergeAndSaveClassesForMeeting(
+        churchId: 'church-1',
+        meetingId: 'server-meeting',
+        remoteForMeeting: [
+          const SundaySchoolClassEntity(
+            id: 'server-class',
+            churchId: 'church-1',
+            meetingId: 'server-meeting',
+            name: 'Srv',
+            nameAr: 'فصل سيرفر',
+            displayOrder: 0,
+            isActive: true,
+          ),
+        ],
+      );
+      final allClasses = await cache.readClasses('church-1');
+      expect(
+        allClasses!.map((c) => c.id),
+        containsAll(['offline_class_1', 'other-class', 'server-class']),
+      );
+    },
+  );
+
+  test('cascade remove meeting clears dependents and queue refs', () async {
+    final cache = OfflineCache(memberStore: MemberMemoryStore());
+    final queue = OfflineWriteQueue();
+
+    await cache.upsertMeeting(
+      'church-1',
+      const MeetingEntity(
+        id: 'offline_meeting_1',
+        churchId: 'church-1',
+        name: 'Local',
+        nameAr: 'محلي',
+        kind: MeetingKind.normal,
+        weekday: 5,
+        isActive: true,
+      ),
+    );
+    await cache.upsertClass(
+      'church-1',
+      const SundaySchoolClassEntity(
+        id: 'offline_class_1',
+        churchId: 'church-1',
+        meetingId: 'offline_meeting_1',
+        name: 'Class',
+        nameAr: 'فصل',
+        displayOrder: 0,
+        isActive: true,
+      ),
+    );
+    await cache.upsertMember(
+      'church-1',
+      const MemberEntity(
+        id: 'offline_member_1',
+        churchId: 'church-1',
+        fullName: 'مخدوم',
+        scope: MemberScope.sundaySchoolClass,
+        sundaySchoolClassId: 'offline_class_1',
+        isActive: true,
+      ),
+    );
+    await cache.upsertSession(
+      'offline_meeting_1',
+      'offline_class_1',
+      AttendanceSessionEntity(
+        id: 'offline_session_1',
+        churchId: 'church-1',
+        meetingId: 'offline_meeting_1',
+        classId: 'offline_class_1',
+        sessionDate: DateTime(2026, 10, 3),
+        weekNumber: 1,
+      ),
+    );
+    await queue.enqueue(
+      QueuedOperation(
+        id: 'op-class',
+        type: OfflineOpType.classCreate,
+        payload: {
+          'local_id': 'offline_class_1',
+          'meeting_id': 'offline_meeting_1',
+        },
+        queuedAt: DateTime.utc(2026, 1, 1),
+      ),
+    );
+
+    final removed = await cache.cascadeRemoveMeeting(
+      'church-1',
+      'offline_meeting_1',
+    );
+    await queue.removeOperationsTouching(removed);
+
+    expect(await cache.readMeetings('church-1'), isEmpty);
+    expect(await cache.readClasses('church-1'), isEmpty);
+    expect(await cache.readMembers('church-1'), isEmpty);
+    expect(
+      await cache.readSessions('offline_meeting_1', 'offline_class_1'),
+      isNull,
+    );
+    expect(await queue.all(), isEmpty);
+  });
+
+  test('assignment cache remaps class id after sync', () async {
+    final cache = OfflineCache(memberStore: MemberMemoryStore());
+    await cache.saveClassAssignmentsForClass('offline_class_1', [
+      {
+        'id': 'assign-1',
+        'user_id': 'user-1',
+        'can_take_attendance': true,
+        'can_view_reports': true,
+      },
+    ]);
+    await cache.saveClassAssignments('user-1', [
+      {
+        'id': 'assign-1',
+        'class_id': 'offline_class_1',
+        'can_take_attendance': true,
+        'can_view_reports': true,
+      },
+    ]);
+
+    await cache.remapAssignmentParentIds(
+      oldClassId: 'offline_class_1',
+      newClassId: 'server-class',
+    );
+
+    expect(await cache.readClassAssignmentsForClass('offline_class_1'), isNull);
+    expect(
+      await cache.readClassAssignmentsForClass('server-class'),
+      isNotEmpty,
+    );
+    final byUser = await cache.readClassAssignments('user-1');
+    expect(byUser!.single['class_id'], 'server-class');
+  });
+
+  test('session scope rename follows meeting id remap', () async {
+    final cache = OfflineCache(memberStore: MemberMemoryStore());
+    await cache.upsertSession(
+      'offline_meeting_1',
+      null,
+      AttendanceSessionEntity(
+        id: 'offline_session_1',
+        churchId: 'church-1',
+        meetingId: 'offline_meeting_1',
+        classId: null,
+        sessionDate: DateTime(2026, 10, 3),
+        weekNumber: 1,
+      ),
+    );
+
+    await cache.renameSessionsScope(
+      oldMeetingId: 'offline_meeting_1',
+      newMeetingId: 'server-meeting',
+    );
+
+    expect(
+      await cache.readSessions('offline_meeting_1', null),
+      isNull,
+    );
+    final renamed = await cache.readSessions('server-meeting', null);
+    expect(renamed, hasLength(1));
+    expect(renamed!.single.id, 'offline_session_1');
+    expect(renamed.single.meetingId, 'server-meeting');
+  });
+
+  test('removeByEntityId keeps child ops that only reference the parent', () async {
+    final queue = OfflineWriteQueue();
+    await queue.enqueue(
+      QueuedOperation(
+        id: 'op-meeting',
+        type: OfflineOpType.meetingCreate,
+        payload: {'local_id': 'offline_meeting_1'},
+        queuedAt: DateTime.utc(2026, 1, 1),
+      ),
+    );
+    await queue.enqueue(
+      QueuedOperation(
+        id: 'op-class',
+        type: OfflineOpType.classCreate,
+        payload: {
+          'local_id': 'offline_class_1',
+          'meeting_id': 'offline_meeting_1',
+        },
+        queuedAt: DateTime.utc(2026, 1, 2),
+      ),
+    );
+
+    await queue.removeByEntityId('offline_meeting_1');
+    final remaining = await queue.all();
+    expect(remaining, hasLength(1));
+    expect(remaining.single.id, 'op-class');
+  });
+
+  test(
+    'roster merge keeps offline-created members missing from the server',
+    () {
+      const remote = MemberEntity(
+        id: 'server-1',
+        churchId: 'church-1',
+        fullName: 'من السيرفر',
+        scope: MemberScope.sundaySchoolClass,
+        sundaySchoolClassId: 'cls-1',
+        isActive: true,
+      );
+      const pending = MemberEntity(
+        id: 'offline_member_1',
+        churchId: 'church-1',
+        fullName: 'مسجّل أوفلاين',
+        scope: MemberScope.sundaySchoolClass,
+        sundaySchoolClassId: 'cls-1',
+        isActive: true,
+      );
+      const syncedLocal = MemberEntity(
+        id: 'server-1',
+        churchId: 'church-1',
+        fullName: 'من السيرفر',
+        scope: MemberScope.sundaySchoolClass,
+        sundaySchoolClassId: 'cls-1',
+        isActive: true,
+      );
+
+      final merged = mergeRosterWithPendingOfflineMembers(
+        remote: const [remote],
+        local: const [pending, syncedLocal],
+      );
+
+      expect(merged.map((m) => m.id), ['offline_member_1', 'server-1']);
+      expect(
+        mergeRosterWithPendingOfflineMembers(
+          remote: const [remote],
+          local: const [pending],
+          pendingDeletes: {'offline_member_1'},
+        ),
+        [remote],
+      );
+    },
+  );
+
+  test(
+    'offline sync order creates members before sessions',
+    () {
+      final memberIndex = OfflineOpType.syncOrder.indexOf(
+        OfflineOpType.memberCreate,
+      );
+      final sessionIndex = OfflineOpType.syncOrder.indexOf(
+        OfflineOpType.sessionCreate,
+      );
+      expect(memberIndex, greaterThanOrEqualTo(0));
+      expect(sessionIndex, greaterThan(memberIndex));
+    },
+  );
+
+  test(
     'member store pages and filters without loading the whole church',
     () async {
       final store = MemberMemoryStore();
