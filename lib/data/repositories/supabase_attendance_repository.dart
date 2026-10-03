@@ -30,6 +30,20 @@ mixin _SupabaseAttendanceRepository on _SupabaseRepositoryBase {
 
         final rows = await query.order('session_date', ascending: false);
         final filteredRows = _filterDeletedRows(rows as List, pendingDeletes);
+        // Preserve the latest local lock decision until its RPC is synced.
+        final pendingLocks = (await _writeQueue.all()).where(
+          (op) => op.type == OfflineOpType.sessionLockState,
+        );
+        for (final op in pendingLocks) {
+          final id = await _writeQueue.resolveId(op.payload['id'] as String);
+          for (final row in filteredRows) {
+            if (row['id'] == id) {
+              row['is_locked'] = op.payload['is_locked'];
+              row['locked_at'] = op.payload['locked_at'];
+              row['locked_by'] = op.payload['locked_by'];
+            }
+          }
+        }
         await _offlineCache.saveSessions(meetingId, classId, filteredRows);
         return filteredRows
             .map((json) => AttendanceSessionEntity.fromJson(json))
@@ -110,9 +124,15 @@ mixin _SupabaseAttendanceRepository on _SupabaseRepositoryBase {
     final hasPendingAttendance =
         unsyncedSessions.contains(session.id) ||
         unsyncedSessions.contains(resolvedId);
+    final hasPendingLock = (await _writeQueue.all()).any(
+      (op) =>
+          op.type == OfflineOpType.sessionLockState &&
+          (op.payload['id'] == session.id || op.payload['id'] == resolvedId),
+    );
 
     if (OfflineNetworkPolicy.isConnectivityOffline ||
         hasPendingAttendance ||
+        hasPendingLock ||
         isOfflineId(session.id)) {
       final updated = _attendanceSessionWithLock(session, lock: lock);
       await _queueAttendanceSessionLock(session, updated);

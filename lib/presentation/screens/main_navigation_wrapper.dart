@@ -84,7 +84,7 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
     BubbleNavItem(
       icon: Icons.groups_outlined,
       activeIcon: Icons.groups_rounded,
-      label: 'الأعضاء',
+      label: 'المخدومين',
       bubbleColor: AppTheme.primary,
     ),
     BubbleNavItem(

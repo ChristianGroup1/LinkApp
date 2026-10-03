@@ -191,21 +191,19 @@ mixin _OfflineMemberWrites on _OfflineWriteHandlerBase {
     final churchId = profile.churchId!;
 
     Future<void> updateCachedMemberships(String targetMeetingId) async {
-      final cachedMembers = await cache.readMembers(churchId) ?? const [];
-      final selectedIds = uniqueMemberIds.toSet();
-      final updatedMembers = cachedMembers.map((member) {
-        if (!selectedIds.contains(member.id) ||
-            member.meetingIds.contains(targetMeetingId)) {
-          return member;
-        }
-        return member.copyWith(
-          meetingIds: [...member.meetingIds, targetMeetingId],
-        );
-      }).toList();
-      await cache.saveMembers(
+      final cachedMembers = await cache.readMembersByIds(
         churchId,
-        updatedMembers.map(memberToJson).toList(),
+        uniqueMemberIds,
       );
+      for (final member in cachedMembers) {
+        if (member.meetingIds.contains(targetMeetingId)) {
+          continue;
+        }
+        await cache.upsertMember(
+          churchId,
+          member.copyWith(meetingIds: [...member.meetingIds, targetMeetingId]),
+        );
+      }
     }
 
     Future<OfflineSaveResult<int>> queueCopy() async {
@@ -290,7 +288,10 @@ mixin _OfflineMemberWrites on _OfflineWriteHandlerBase {
     final resolvedMeetingId = meetingId == null
         ? null
         : await queue.resolveId(meetingId);
-    final cachedMembers = await cache.readMembers(churchId) ?? const [];
+    final cachedMembers = await cache.readMembersByIds(churchId, {
+      id,
+      resolvedId,
+    });
     final existingMember = cachedMembers
         .where((member) => member.id == resolvedId || member.id == id)
         .firstOrNull;

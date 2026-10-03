@@ -271,22 +271,19 @@ mixin _OfflineWriteSync on _OfflineWriteHandlerBase {
               ignoreDuplicates: true,
             );
         final churchId = operation.payload['church_id'] as String;
-        final localMemberIdSet = localMemberIds.toSet();
-        final cachedMembers = await cache.readMembers(churchId) ?? const [];
-        final updatedMembers = cachedMembers.map((member) {
-          if (!localMemberIdSet.contains(member.id) &&
-              !memberIds.contains(member.id)) {
-            return member;
-          }
+        final cachedMembers = await cache.readMembersByIds(churchId, [
+          ...localMemberIds,
+          ...memberIds,
+        ]);
+        for (final member in cachedMembers) {
           final meetingIds =
               member.meetingIds.where((id) => id != localMeetingId).toSet()
                 ..add(meetingId);
-          return member.copyWith(meetingIds: meetingIds.toList());
-        }).toList();
-        await cache.saveMembers(
-          churchId,
-          updatedMembers.map(memberToJson).toList(),
-        );
+          await cache.upsertMember(
+            churchId,
+            member.copyWith(meetingIds: meetingIds.toList()),
+          );
+        }
         return true;
       case OfflineOpType.memberDelete:
         await client.from('members').delete().eq('id', operation.payload['id']);
@@ -365,11 +362,39 @@ mixin _OfflineWriteSync on _OfflineWriteHandlerBase {
           FollowUpEntity.fromJson(row),
         );
         return true;
+      case OfflineOpType.followUpUpdate:
+        final update = Map<String, dynamic>.from(operation.payload)
+          ..remove('id');
+        final id = await queue.resolveId(operation.payload['id'] as String);
+        update['member_id'] = await queue.resolveId(
+          update['member_id'] as String,
+        );
+        if (update['session_id'] != null) {
+          update['session_id'] = await queue.resolveId(
+            update['session_id'] as String,
+          );
+        }
+        final row = await client
+            .from('follow_ups')
+            .update(update)
+            .eq('id', id)
+            .eq('church_id', update['church_id'])
+            .select()
+            .single();
+        await cache.removeFollowUp(
+          update['church_id'] as String,
+          operation.payload['id'] as String,
+        );
+        await cache.upsertFollowUp(
+          update['church_id'] as String,
+          FollowUpEntity.fromJson(row),
+        );
+        return true;
       case OfflineOpType.followUpDelete:
         await client
             .from('follow_ups')
             .delete()
-            .eq('id', operation.payload['id']);
+            .eq('id', await queue.resolveId(operation.payload['id'] as String));
         return true;
       case OfflineOpType.invitationCreate:
         final targetId = operation.payload['target_id'] as String?;
@@ -607,11 +632,12 @@ mixin _OfflineWriteSync on _OfflineWriteHandlerBase {
         final localSessionId = operation.payload['id'] as String;
         final sessionId = await queue.resolveId(localSessionId);
         // Push locally saved attendance before freezing this session.
-        if (unsyncedSessions.contains(localSessionId) ||
-            unsyncedSessions.contains(sessionId)) {
+        final locked = operation.payload['is_locked'] as bool;
+        if (locked &&
+            (unsyncedSessions.contains(localSessionId) ||
+                unsyncedSessions.contains(sessionId))) {
           continue;
         }
-        final locked = operation.payload['is_locked'] as bool;
         final row = await client.rpc(
           locked ? 'lock_attendance_session' : 'unlock_attendance_session',
           params: {'target_session_id': sessionId},
@@ -619,13 +645,39 @@ mixin _OfflineWriteSync on _OfflineWriteHandlerBase {
         final session = AttendanceSessionEntity.fromJson(
           Map<String, dynamic>.from(row as Map),
         );
-        await cache.upsertSession(session.meetingId, session.classId, session);
         await queue.remove(operation.id);
+        final newer = (await queue.all())
+            .where(
+              (op) =>
+                  op.type == OfflineOpType.sessionLockState &&
+                  op.payload['id'] == localSessionId,
+            )
+            .firstOrNull;
+        final visibleSession = newer == null
+            ? session
+            : AttendanceSessionEntity.fromJson({
+                ...sessionToJson(session),
+                'is_locked': newer.payload['is_locked'],
+                'locked_at': newer.payload['locked_at'],
+                'locked_by': newer.payload['locked_by'],
+              });
+        await cache.upsertSession(
+          session.meetingId,
+          session.classId,
+          visibleSession,
+        );
       } catch (error) {
         if (!isPermanentServerRejection(error)) break;
 
         await queue.reject(operation, error.toString());
         await queue.remove(operation.id);
+        if ((await queue.all()).any(
+          (op) =>
+              op.type == OfflineOpType.sessionLockState &&
+              op.payload['id'] == operation.payload['id'],
+        )) {
+          continue;
+        }
         final previousRow = Map<String, dynamic>.from(
           operation.payload['previous_session'] as Map,
         );

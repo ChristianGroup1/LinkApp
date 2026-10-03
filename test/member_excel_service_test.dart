@@ -501,54 +501,57 @@ void main() {
     expect(repository.created.single.fullName, 'عضو ثان');
   });
 
-  test('undoImport deletes created members and restores updated ones', () async {
-    const existing = MemberEntity(
-      id: 'existing-member',
-      churchId: 'church-1',
-      fullName: 'الاسم القديم',
-      scope: MemberScope.sundaySchoolClass,
-      sundaySchoolClassId: 'class-1',
-      code: 'DUP-1',
-      isActive: true,
-    );
-    const csv = '''الاسم الكامل *;نوع التبعية *;الاجتماع *;الفصل
+  test(
+    'undoImport deletes created members and restores updated ones',
+    () async {
+      const existing = MemberEntity(
+        id: 'existing-member',
+        churchId: 'church-1',
+        fullName: 'الاسم القديم',
+        scope: MemberScope.sundaySchoolClass,
+        sundaySchoolClassId: 'class-1',
+        code: 'DUP-1',
+        isActive: true,
+      );
+      const csv = '''الاسم الكامل *;نوع التبعية *;الاجتماع *;الفصل
 عضو جديد;فصل;اجتماع جديد;فصل جديد
 ''';
-    final parsed = MemberExcelService().parseCsvImport(
-      bytes: Uint8List.fromList(utf8.encode(csv)),
-      meetings: const [],
-      classes: const [],
-      existingMembers: const [],
-    );
-    final repository = _RecordingRepository();
-    final writer = MemberImportWriter();
-    final saved = await writer.save(
-      rows: parsed.validRows,
-      repository: repository,
-      meetingWeekdays: const {'اجتماع جديد': 7},
-    );
-    expect(saved.createdMemberIds, hasLength(1));
-    expect(saved.createdMeetingIds, hasLength(1));
-    expect(saved.createdClassIds, hasLength(1));
+      final parsed = MemberExcelService().parseCsvImport(
+        bytes: Uint8List.fromList(utf8.encode(csv)),
+        meetings: const [],
+        classes: const [],
+        existingMembers: const [],
+      );
+      final repository = _RecordingRepository();
+      final writer = MemberImportWriter();
+      final saved = await writer.save(
+        rows: parsed.validRows,
+        repository: repository,
+        meetingWeekdays: const {'اجتماع جديد': 7},
+      );
+      expect(saved.createdMemberIds, hasLength(1));
+      expect(saved.createdMeetingIds, hasLength(1));
+      expect(saved.createdClassIds, hasLength(1));
 
-    final undo = await writer.undoImport(
-      repository: repository,
-      createdMemberIds: saved.createdMemberIds,
-      updatedMemberPreviousVersions: const [existing],
-      createdClassIds: saved.createdClassIds,
-      createdMeetingIds: saved.createdMeetingIds,
-    );
+      final undo = await writer.undoImport(
+        repository: repository,
+        createdMemberIds: saved.createdMemberIds,
+        updatedMemberPreviousVersions: const [existing],
+        createdClassIds: saved.createdClassIds,
+        createdMeetingIds: saved.createdMeetingIds,
+      );
 
-    expect(undo.removedMembers, 1);
-    expect(undo.restoredMembers, 1);
-    expect(undo.removedClasses, 1);
-    expect(undo.removedMeetings, 1);
-    expect(undo.issues, isEmpty);
-    expect(repository.deletedMemberIds, saved.createdMemberIds);
-    expect(repository.updated.single.fullName, 'الاسم القديم');
-    expect(repository.createdMeetings, isEmpty);
-    expect(repository.createdClasses, isEmpty);
-  });
+      expect(undo.removedMembers, 1);
+      expect(undo.restoredMembers, 1);
+      expect(undo.removedClasses, 1);
+      expect(undo.removedMeetings, 1);
+      expect(undo.issues, isEmpty);
+      expect(repository.deletedMemberIds, saved.createdMemberIds);
+      expect(repository.updated.single.fullName, 'الاسم القديم');
+      expect(repository.createdMeetings, isEmpty);
+      expect(repository.createdClasses, isEmpty);
+    },
+  );
 
   test('warns about suspicious or repeated phones without blocking', () {
     const csv = '''الاسم الكامل *;نوع التبعية *;الاجتماع *;الفصل;رقم هاتف العضو
@@ -650,6 +653,7 @@ class _RecordingRepository implements DatabaseRepository {
     String? code,
     DateTime? birthDate,
     String? notes,
+    String? schoolYear,
   }) async {
     if (memberCreateFailures > 0) {
       memberCreateFailures--;
@@ -717,6 +721,7 @@ class _RecordingRepository implements DatabaseRepository {
     DateTime? birthDate,
     required bool isActive,
     String? notes,
+    String? schoolYear,
   }) async {
     if (!isActive) deactivatedIds.add(id);
     final member = MemberEntity(

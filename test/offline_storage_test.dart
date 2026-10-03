@@ -1,5 +1,8 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:link/data/models/models.dart';
+import 'package:link/data/offline/member_local_store.dart';
 import 'package:link/data/offline/offline_cache.dart';
 import 'package:link/data/offline/offline_entity_json.dart';
 import 'package:link/data/offline/offline_write_queue.dart';
@@ -191,22 +194,25 @@ void main() {
     );
   });
 
-  test('rejected operations are counted and cleared on acknowledgement', () async {
-    final queue = OfflineWriteQueue();
-    final operation = QueuedOperation(
-      id: 'op-refused',
-      type: OfflineOpType.memberUpdate,
-      payload: {'id': 'member-1'},
-      queuedAt: DateTime.utc(2026, 1, 1),
-    );
+  test(
+    'rejected operations are counted and cleared on acknowledgement',
+    () async {
+      final queue = OfflineWriteQueue();
+      final operation = QueuedOperation(
+        id: 'op-refused',
+        type: OfflineOpType.memberUpdate,
+        payload: {'id': 'member-1'},
+        queuedAt: DateTime.utc(2026, 1, 1),
+      );
 
-    expect(await queue.rejectedCount(), 0);
-    await queue.reject(operation, 'row-level security');
-    expect(await queue.rejectedCount(), 1);
+      expect(await queue.rejectedCount(), 0);
+      await queue.reject(operation, 'row-level security');
+      expect(await queue.rejectedCount(), 1);
 
-    await queue.clearRejected();
-    expect(await queue.rejectedCount(), 0);
-  });
+      await queue.clearRejected();
+      expect(await queue.rejectedCount(), 0);
+    },
+  );
 
   test('only unfixable server refusals count as permanent rejections', () {
     expect(
@@ -239,11 +245,105 @@ void main() {
         'offline_cache_members_church-1': '{incomplete-json',
       });
 
-      final cache = OfflineCache();
-      expect(await cache.readMembers('church-1'), isNull);
+      final cache = OfflineCache(memberStore: MemberMemoryStore());
+      expect(await cache.readMembers('church-1'), isEmpty);
 
       final prefs = await SharedPreferences.getInstance();
       expect(prefs.containsKey('offline_cache_members_church-1'), isFalse);
+    },
+  );
+
+  test(
+    'legacy SharedPreferences members migrate into the local store',
+    () async {
+      SharedPreferences.setMockInitialValues({
+        'offline_cache_members_church-1': jsonEncode([
+          memberToJson(
+            const MemberEntity(
+              id: 'mem-1',
+              churchId: 'church-1',
+              fullName: 'مريم جرجس',
+              scope: MemberScope.sundaySchoolClass,
+              sundaySchoolClassId: 'cls-1',
+              phone: '0122',
+              isActive: true,
+            ),
+          ),
+        ]),
+      });
+
+      final store = MemberMemoryStore();
+      final cache = OfflineCache(memberStore: store);
+
+      final members = await cache.readMembers('church-1');
+      expect(members, hasLength(1));
+      expect(members!.single.fullName, 'مريم جرجس');
+
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.containsKey('offline_cache_members_church-1'), isFalse);
+
+      final page = await cache.queryMembersPage(
+        churchId: 'church-1',
+        page: 0,
+        pageSize: 50,
+        query: 'مريم',
+      );
+      expect(page.items, hasLength(1));
+      expect(page.hasMore, isFalse);
+    },
+  );
+
+  test(
+    'member store pages and filters without loading the whole church',
+    () async {
+      final store = MemberMemoryStore();
+      final members = [
+        for (var index = 0; index < 120; index++)
+          MemberEntity(
+            id: 'mem-$index',
+            churchId: 'church-1',
+            fullName: 'عضو ${index.toString().padLeft(3, '0')}',
+            scope: index.isEven
+                ? MemberScope.sundaySchoolClass
+                : MemberScope.meeting,
+            sundaySchoolClassId: index.isEven ? 'cls-1' : null,
+            meetingId: index.isEven ? null : 'mtg-1',
+            meetingIds: index.isEven ? const [] : const ['mtg-1'],
+            phone: '010${index.toString().padLeft(8, '0')}',
+            isActive: true,
+          ),
+      ];
+      await store.upsertMany('church-1', members);
+
+      final first = await store.queryPage(
+        churchId: 'church-1',
+        page: 0,
+        pageSize: 50,
+      );
+      expect(first.items, hasLength(50));
+      expect(first.hasMore, isTrue);
+
+      final second = await store.queryPage(
+        churchId: 'church-1',
+        page: 1,
+        pageSize: 50,
+      );
+      expect(second.items, hasLength(50));
+      expect(second.items.first.id, isNot(first.items.first.id));
+
+      final searched = await store.queryPage(
+        churchId: 'church-1',
+        page: 0,
+        pageSize: 50,
+        query: '01000000010',
+      );
+      expect(searched.items, hasLength(1));
+      expect(searched.items.single.id, 'mem-10');
+
+      final counts = await store.counts(churchId: 'church-1');
+      expect(counts.total, 120);
+      expect(counts.sundaySchool, 60);
+      expect(counts.meetings, 60);
     },
   );
 }

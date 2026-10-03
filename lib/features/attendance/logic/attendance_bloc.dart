@@ -271,6 +271,15 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
       emit(AttendanceLoading());
       try {
         unawaited(_recordsSubscription?.cancel());
+        final latestSessions = await repository.getSessions(
+          event.session.meetingId,
+          classId: event.session.classId,
+        );
+        final currentSession =
+            latestSessions
+                .where((item) => item.id == event.session.id)
+                .firstOrNull ??
+            event.session;
 
         List<MemberEntity> members;
         if (event.session.classId != null) {
@@ -328,7 +337,7 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
 
         emit(
           AttendanceSheetLoaded(
-            session: event.session,
+            session: currentSession,
             allMembers: members,
             statusMap: statusMap,
             filteredMembers: members,

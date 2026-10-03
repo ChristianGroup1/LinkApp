@@ -187,10 +187,16 @@ class AttendanceBody extends StatelessWidget {
                     ..sort((a, b) => b.sessionDate.compareTo(a.sessionDate));
                   visibleSessions = sessions;
                   final currentIds = currentScopeSessions
-                      .map((session) => session.id)
+                      .map(
+                        (session) =>
+                            '${session.id}:${session.isLocked}:${session.lockedAt}:${session.lockedBy}:${session.title}',
+                      )
                       .join(',');
                   final nextIds = sessions
-                      .map((session) => session.id)
+                      .map(
+                        (session) =>
+                            '${session.id}:${session.isLocked}:${session.lockedAt}:${session.lockedBy}:${session.title}',
+                      )
                       .join(',');
                   if (currentIds != nextIds) {
                     WidgetsBinding.instance.addPostFrameCallback((_) {

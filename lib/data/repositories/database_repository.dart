@@ -16,6 +16,7 @@ import '../../shared/data/app_data_changes.dart';
 import '../models/models.dart';
 import '../offline/invitation_create_result.dart';
 import '../offline/member_create_draft.dart';
+import '../offline/member_local_store.dart';
 import '../offline/offline_cache.dart';
 import '../offline/offline_entity_json.dart';
 import '../offline/offline_network_policy.dart';
@@ -35,6 +36,22 @@ abstract interface class MemberMeetingCopyRepository {
   Future<OfflineSaveResult<int>> copyMembersToMeeting({
     required List<String> memberIds,
     required String meetingId,
+  });
+}
+
+class MembersPage {
+  final List<MemberEntity> items;
+  final bool hasMore;
+  final int page;
+  final int pageSize;
+  final MembersListCounts counts;
+
+  const MembersPage({
+    required this.items,
+    required this.hasMore,
+    required this.page,
+    required this.pageSize,
+    this.counts = const MembersListCounts(),
   });
 }
 
@@ -158,6 +175,15 @@ abstract class DatabaseRepository {
   Future<List<MemberEntity>> getClassMembers(String classId);
   Future<List<MemberEntity>> getMeetingMembers(String meetingId);
   Future<List<MemberEntity>> getAllMembers();
+  Future<MembersPage> getMembersPage({
+    int page = 0,
+    int pageSize = 50,
+    String query = '',
+    String? meetingId,
+    String? classId,
+    String? scope,
+    bool activeOnly = true,
+  });
   Future<MemberEntity?> getMemberDetails(String memberId);
   Future<OfflineSaveResult<MemberEntity>> createMember({
     required String fullName,
@@ -268,6 +294,8 @@ abstract class DatabaseRepository {
     required DateTime followUpDate,
     String activityType = 'absence_follow_up',
   });
+  Future<bool> updateFollowUp(FollowUpEntity followUp);
+  Future<Set<String>> getPendingFollowUpIds();
   Future<bool> deleteFollowUp(String id);
 
   // Reports Views
@@ -299,7 +327,7 @@ abstract class DatabaseRepository {
   Stream<List<AttendanceRecordEntity>> subscribeToAttendanceRecords(
     String sessionId,
   );
-  Stream<List<MemberEntity>> subscribeToMembers();
+  Stream<MemberRealtimeDelta> subscribeToMembers();
   Stream<List<FollowUpEntity>> subscribeToFollowUps();
 
   // Offline sync
@@ -534,36 +562,52 @@ abstract class _SupabaseRepositoryBase
       }
 
       final results = await Future.wait([
-        getAllMembers(),
         getMeetings(),
         getAllSundaySchoolClasses(),
-        getAllFollowUps(),
-        getProfiles(),
         getUserClassAssignments(profile.id),
         getUserMeetingAssignments(profile.id),
-        getAttendanceReportStats(),
-        getInvitations(),
       ]);
-      final meetings = results[1] as List<MeetingEntity>;
-      final classes = results[2] as List<SundaySchoolClassEntity>;
-      final profiles = results[4] as List<AppProfile>;
+      final meetings = results[0] as List<MeetingEntity>;
+      final classes = results[1] as List<SundaySchoolClassEntity>;
+      final classAssignments = results[2] as List<Map<String, dynamic>>;
+      final meetingAssignments = results[3] as List<Map<String, dynamic>>;
       if (_client.auth.currentUser?.id != userId) return;
 
+      // Administrators never warm the whole church. Cache the first members
+      // page so the list opens offline, then stop — scopes warm on open.
+      if (profile.role == AppRole.superAdmin ||
+          profile.role == AppRole.churchAdmin) {
+        await getMembersPage(page: 0, pageSize: 50);
+        completed = true;
+        return;
+      }
+
+      final assignedClassIds = classAssignments
+          .map((row) => row['class_id'] as String?)
+          .whereType<String>()
+          .toSet();
+      final assignedMeetingIds = meetingAssignments
+          .map((row) => row['meeting_id'] as String?)
+          .whereType<String>()
+          .toSet();
+      final assignedClasses = classes.where(
+        (item) => item.isActive && assignedClassIds.contains(item.id),
+      );
+      final assignedMeetings = meetings.where(
+        (item) => item.isActive && assignedMeetingIds.contains(item.id),
+      );
+
+      // These calls populate the existing offline member cache without
+      // loading unrelated church members.
       await Future.wait([
-        ...classes.map((cls) => getClassAssignments(cls.id)),
-        ...meetings
-            .where((meeting) => meeting.kind != MeetingKind.sundaySchool)
-            .map((meeting) => getMeetingAssignments(meeting.id)),
-        ...profiles.expand(
-          (servant) => [
-            getUserClassAssignments(servant.id),
-            getUserMeetingAssignments(servant.id),
-          ],
-        ),
+        ...assignedClasses.map((item) => getClassMembers(item.id)),
+        ...assignedMeetings
+            .where((item) => item.kind != MeetingKind.sundaySchool)
+            .map((item) => getMeetingMembers(item.id)),
       ]);
 
       final sessionFetches = <Future<void>>[];
-      for (final cls in classes.where((item) => item.isActive)) {
+      for (final cls in assignedClasses) {
         sessionFetches.add(() async {
           final sessions = await getSessions(cls.meetingId, classId: cls.id);
           for (final session in sessions) {
@@ -571,8 +615,8 @@ abstract class _SupabaseRepositoryBase
           }
         }());
       }
-      for (final meeting in meetings.where(
-        (item) => item.isActive && item.kind != MeetingKind.sundaySchool,
+      for (final meeting in assignedMeetings.where(
+        (item) => item.kind != MeetingKind.sundaySchool,
       )) {
         sessionFetches.add(() async {
           final sessions = await getSessions(meeting.id);

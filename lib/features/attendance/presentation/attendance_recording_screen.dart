@@ -454,15 +454,7 @@ class _AttendanceRecordingScreenState extends State<AttendanceRecordingScreen> {
                   ),
                 ],
               ),
-              body: Column(
-                children: [
-                  const OfflineEditingNotice(),
-                  Expanded(child: _buildBody(context, state)),
-                ],
-              ),
-              bottomNavigationBar: sheet == null
-                  ? null
-                  : _buildStickySaveBar(context, sheet),
+              body: _buildBody(context, state),
             ),
           ),
         );
@@ -511,65 +503,8 @@ class _AttendanceRecordingScreenState extends State<AttendanceRecordingScreen> {
             excused: excused,
           ),
         ),
-        if (state.session.isLocked)
-          Container(
-            width: double.infinity,
-            margin: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: AppTheme.accentOrange.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: AppTheme.accentOrange.withValues(alpha: 0.35),
-              ),
-            ),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.lock_rounded,
-                  color: AppTheme.accentOrange,
-                  size: 18,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'هذا السجل مقفول ولا يمكن تعديله. مسؤول الكنيسة فقط يمكنه إعادة فتحه.',
-                    style: GoogleFonts.cairo(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: AppTheme.textDark,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        if (_qrInputMode != QrAttendanceInputMode.unsupported)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-            child: FilledButton.icon(
-              onPressed:
-                  state.session.isLocked ||
-                      state.isSaving ||
-                      state.allMembers.isEmpty
-                  ? null
-                  : () => _scanAttendanceQr(context, state),
-              style: FilledButton.styleFrom(
-                minimumSize: const Size.fromHeight(48),
-                backgroundColor: AppTheme.primary,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-              icon: const Icon(Icons.qr_code_scanner_rounded),
-              label: Text(
-                'أخذ الحضور والغياب بالـ QR',
-                style: GoogleFonts.cairo(fontWeight: FontWeight.w900),
-              ),
-            ),
-          ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
           child: Container(
             decoration: BoxDecoration(
               color: AppTheme.cardBackground,
@@ -598,46 +533,141 @@ class _AttendanceRecordingScreenState extends State<AttendanceRecordingScreen> {
             ),
           ),
         ),
-        const SizedBox(height: 10),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
-            children: [
-              _buildSheetFilterChip(context, state, 'الكل', 'all'),
-              const SizedBox(width: 8),
-              _buildSheetFilterChip(context, state, 'حاضر', 'present'),
-              const SizedBox(width: 8),
-              _buildSheetFilterChip(context, state, 'غائب', 'absent'),
-              const SizedBox(width: 8),
-              _buildSheetFilterChip(context, state, 'مستأذن', 'excused'),
+        Expanded(
+          child: CustomScrollView(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            slivers: [
+              SliverToBoxAdapter(
+                child: Column(
+                  children: [
+                    const OfflineEditingNotice(),
+                    if (state.session.isLocked)
+                      Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppTheme.accentOrange.withValues(alpha: 0.10),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: AppTheme.accentOrange.withValues(
+                              alpha: 0.35,
+                            ),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.lock_rounded,
+                              color: AppTheme.accentOrange,
+                              size: 18,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'هذا السجل مقفول ولا يمكن تعديله. مسؤول الكنيسة فقط يمكنه إعادة فتحه.',
+                                style: GoogleFonts.cairo(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppTheme.textDark,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    if (_qrInputMode != QrAttendanceInputMode.unsupported)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                        child: FilledButton.icon(
+                          onPressed:
+                              state.session.isLocked ||
+                                  state.isSaving ||
+                                  state.allMembers.isEmpty
+                              ? null
+                              : () => _scanAttendanceQr(context, state),
+                          style: FilledButton.styleFrom(
+                            minimumSize: const Size.fromHeight(48),
+                            backgroundColor: AppTheme.primary,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                          icon: const Icon(Icons.qr_code_scanner_rounded),
+                          label: Text(
+                            'أخذ الحضور والغياب بالـ QR',
+                            style: GoogleFonts.cairo(
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                      ),
+                    const SizedBox(height: 10),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Row(
+                        children: [
+                          _buildSheetFilterChip(context, state, 'الكل', 'all'),
+                          const SizedBox(width: 8),
+                          _buildSheetFilterChip(
+                            context,
+                            state,
+                            'حاضر',
+                            'present',
+                          ),
+                          const SizedBox(width: 8),
+                          _buildSheetFilterChip(
+                            context,
+                            state,
+                            'غائب',
+                            'absent',
+                          ),
+                          const SizedBox(width: 8),
+                          _buildSheetFilterChip(
+                            context,
+                            state,
+                            'مستأذن',
+                            'excused',
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                ),
+              ),
+              if (filtered.isEmpty)
+                const SliverToBoxAdapter(
+                  child: AppEmptyState(
+                    icon: Icons.search_off,
+                    message: 'لا توجد نتائج مطابقة للبحث أو التصفية.',
+                  ),
+                )
+              else
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate((context, index) {
+                      final member = filtered[index];
+                      final currentStatus =
+                          state.statusMap[member.id] ?? AttendanceStatus.absent;
+                      return _buildMemberCard(
+                        context: context,
+                        member: member,
+                        currentStatus: currentStatus,
+                        enabled: !state.session.isLocked,
+                      );
+                    }, childCount: filtered.length),
+                  ),
+                ),
             ],
           ),
         ),
-        const SizedBox(height: 8),
-        Expanded(
-          child: filtered.isEmpty
-              ? const AppEmptyState(
-                  icon: Icons.search_off,
-                  message: 'لا توجد نتائج مطابقة للبحث أو التصفية.',
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-                  itemCount: filtered.length,
-                  itemBuilder: (context, index) {
-                    final member = filtered[index];
-                    final currentStatus =
-                        state.statusMap[member.id] ?? AttendanceStatus.absent;
-
-                    return _buildMemberCard(
-                      context: context,
-                      member: member,
-                      currentStatus: currentStatus,
-                      enabled: !state.session.isLocked,
-                    );
-                  },
-                ),
-        ),
+        _buildSaveBar(context, state),
       ],
     );
   }
@@ -894,10 +924,7 @@ class _AttendanceRecordingScreenState extends State<AttendanceRecordingScreen> {
     }
   }
 
-  Widget _buildStickySaveBar(
-    BuildContext context,
-    AttendanceSheetLoaded state,
-  ) {
+  Widget _buildSaveBar(BuildContext context, AttendanceSheetLoaded state) {
     return Material(
       elevation: 0,
       color: AppTheme.cardBackground,

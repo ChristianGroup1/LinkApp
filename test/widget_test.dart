@@ -9,6 +9,7 @@ import 'package:link/core/theme/theme_controller.dart';
 import 'package:link/data/models/models.dart';
 import 'package:link/data/offline/invitation_create_result.dart';
 import 'package:link/data/offline/member_create_draft.dart';
+import 'package:link/data/offline/member_local_store.dart';
 import 'package:link/data/offline/offline_save_result.dart';
 import 'package:link/data/repositories/database_repository.dart';
 import 'package:link/features/attendance/logic/attendance_bloc.dart'
@@ -510,17 +511,20 @@ void main() {
     bloc.add(LoadMembers());
     await bloc.stream.firstWhere((state) => state is MembersLoaded);
 
-    repository.membersRealtime.add([
-      ...repository._members,
-      const MemberEntity(
-        id: 'mem-live',
-        churchId: 'ch-1',
-        fullName: 'يوسف حنا',
-        scope: MemberScope.sundaySchoolClass,
-        sundaySchoolClassId: 'cls-1',
-        isActive: true,
+    repository.membersRealtime.add(
+      const MemberRealtimeDelta(
+        upserts: [
+          MemberEntity(
+            id: 'mem-live',
+            churchId: 'ch-1',
+            fullName: 'يوسف حنا',
+            scope: MemberScope.sundaySchoolClass,
+            sundaySchoolClassId: 'cls-1',
+            isActive: true,
+          ),
+        ],
       ),
-    ]);
+    );
 
     final updated =
         await bloc.stream.firstWhere(
@@ -1025,6 +1029,14 @@ class TestRepository implements DatabaseRepository {
     ),
   ];
 
+  void replaceMembers(List<MemberEntity> members) {
+    _members
+      ..clear()
+      ..addAll(members);
+  }
+
+  void addSeedMember(MemberEntity member) => _members.add(member);
+
   final List<MemberEntity> _members = [
     MemberEntity(
       id: 'mem-1',
@@ -1048,7 +1060,7 @@ class TestRepository implements DatabaseRepository {
   final List<FollowUpEntity> _followUps = [];
   final attendanceRealtime =
       StreamController<List<AttendanceRecordEntity>>.broadcast();
-  final membersRealtime = StreamController<List<MemberEntity>>.broadcast();
+  final membersRealtime = StreamController<MemberRealtimeDelta>.broadcast();
   final followUpsRealtime = StreamController<List<FollowUpEntity>>.broadcast();
 
   @override
@@ -1155,6 +1167,15 @@ class TestRepository implements DatabaseRepository {
     lastSupportSubject = subject;
     lastSupportDescription = description;
   }
+
+  @override
+  Future<List<SupportTicketEntity>> getMySupportTickets() async => const [];
+
+  @override
+  Future<void> replyToSupportTicket({
+    required String ticketId,
+    required String message,
+  }) async {}
 
   @override
   Future<AppProfile?> getCurrentProfile() async => _profile;
@@ -1351,6 +1372,54 @@ class TestRepository implements DatabaseRepository {
   Future<List<MemberEntity>> getAllMembers() async => _members;
 
   @override
+  Future<MembersPage> getMembersPage({
+    int page = 0,
+    int pageSize = 50,
+    String query = '',
+    String? meetingId,
+    String? classId,
+    String? scope,
+    bool activeOnly = true,
+  }) async {
+    final filtered = _members.where((member) {
+      return memberMatchesLocalQuery(
+        member,
+        query: query,
+        meetingId: meetingId,
+        classId: classId,
+        scope: scope,
+        activeOnly: activeOnly,
+      );
+    }).toList()..sort((a, b) => a.fullName.compareTo(b.fullName));
+    final start = page * pageSize;
+    final items = start >= filtered.length
+        ? <MemberEntity>[]
+        : filtered.sublist(start, (start + pageSize).clamp(0, filtered.length));
+    return MembersPage(
+      items: items,
+      hasMore: start + items.length < filtered.length,
+      page: page,
+      pageSize: pageSize,
+      counts: MembersListCounts(
+        total: _members.where((member) => member.isActive).length,
+        sundaySchool: _members
+            .where(
+              (member) =>
+                  member.isActive &&
+                  member.scope == MemberScope.sundaySchoolClass,
+            )
+            .length,
+        meetings: _members
+            .where(
+              (member) =>
+                  member.isActive && member.scope == MemberScope.meeting,
+            )
+            .length,
+      ),
+    );
+  }
+
+  @override
   Future<List<MemberEntity>> getClassMembers(String classId) async =>
       _members.where((m) => m.sundaySchoolClassId == classId).toList();
 
@@ -1376,6 +1445,7 @@ class TestRepository implements DatabaseRepository {
     required MemberScope scope,
     String? sundaySchoolClassId,
     String? notes,
+    String? schoolYear,
   }) async {
     final m = MemberEntity(
       id: 'mem-${_members.length + 1}',
@@ -1430,6 +1500,7 @@ class TestRepository implements DatabaseRepository {
     String? sundaySchoolClassId,
     required bool isActive,
     String? notes,
+    String? schoolYear,
   }) async {
     final m = MemberEntity(
       id: id,
@@ -1551,6 +1622,23 @@ class TestRepository implements DatabaseRepository {
   }
 
   @override
+  Future<OfflineSaveResult<AttendanceSessionEntity>> lockAttendanceSession(
+    AttendanceSessionEntity session,
+  ) async {
+    return OfflineSaveResult(data: session, syncedToServer: true);
+  }
+
+  @override
+  Future<OfflineSaveResult<AttendanceSessionEntity>> unlockAttendanceSession(
+    AttendanceSessionEntity session,
+  ) async {
+    return OfflineSaveResult(data: session, syncedToServer: true);
+  }
+
+  @override
+  Future<Set<String>> getPendingFollowUpIds() async => {};
+
+  @override
   Future<List<FollowUpEntity>> getMemberFollowUps(String memberId) async =>
       _followUps.where((f) => f.memberId == memberId).toList();
 
@@ -1566,6 +1654,7 @@ class TestRepository implements DatabaseRepository {
     String? result,
     String? responsibleUserId,
     required DateTime followUpDate,
+    String activityType = 'absence_follow_up',
   }) async {
     final f = FollowUpEntity(
       id: 'f-${_followUps.length + 1}',
@@ -1579,6 +1668,17 @@ class TestRepository implements DatabaseRepository {
       followUpDate: followUpDate,
     );
     _followUps.add(f);
+    return true;
+  }
+
+  @override
+  Future<bool> updateFollowUp(FollowUpEntity followUp) async {
+    final index = _followUps.indexWhere((item) => item.id == followUp.id);
+    if (index >= 0) {
+      _followUps[index] = followUp;
+    } else {
+      _followUps.add(followUp);
+    }
     return true;
   }
 
@@ -1685,7 +1785,7 @@ class TestRepository implements DatabaseRepository {
   }
 
   @override
-  Stream<List<MemberEntity>> subscribeToMembers() {
+  Stream<MemberRealtimeDelta> subscribeToMembers() {
     return membersRealtime.stream;
   }
 
@@ -1829,6 +1929,7 @@ class SaveFailureRepository extends TestRepository {
     required MemberScope scope,
     String? sundaySchoolClassId,
     String? notes,
+    String? schoolYear,
   }) async {
     throw StateError('تعذر الحفظ');
   }
@@ -1847,6 +1948,7 @@ class MemberPermissionFailureRepository extends TestRepository {
     required MemberScope scope,
     String? sundaySchoolClassId,
     String? notes,
+    String? schoolYear,
   }) async {
     throw StateError(
       'PostgrestException: new row violates row-level security policy, code: 42501, details: Forbidden',
@@ -1881,6 +1983,7 @@ class MemberEditPermissionFailureRepository extends TestRepository {
     DateTime? birthDate,
     required bool isActive,
     String? notes,
+    String? schoolYear,
   }) async {
     throw StateError(
       'PostgrestException: new row violates row-level security policy, code: 42501, details: Forbidden',

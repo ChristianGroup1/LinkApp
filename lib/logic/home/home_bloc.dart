@@ -84,15 +84,14 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
           return;
         }
 
-        // 2. Fetch base dashboard data in parallel.
-        final baseData = await Future.wait([
-          repository.getAllMembers(),
+        // Load structure and permissions first. Regular servants only read
+        // members from their assigned scopes.
+        final structure = await Future.wait([
           repository.getMeetings(),
           repository.getAllSundaySchoolClasses(),
         ]);
-        final allMembers = baseData[0] as List<MemberEntity>;
-        final allMeetings = baseData[1] as List<MeetingEntity>;
-        final allClasses = baseData[2] as List<SundaySchoolClassEntity>;
+        final allMeetings = structure[0] as List<MeetingEntity>;
+        final allClasses = structure[1] as List<SundaySchoolClassEntity>;
         final isAdmin =
             profile!.role == AppRole.superAdmin ||
             profile.role == AppRole.churchAdmin;
@@ -100,13 +99,15 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         final viewMeetingIds = <String>{};
         final takeClassIds = <String>{};
         final takeMeetingIds = <String>{};
+        List<Map<String, dynamic>> classAssignments = const [];
+        List<Map<String, dynamic>> meetingAssignments = const [];
         if (!isAdmin) {
           final assignments = await Future.wait([
             repository.getUserClassAssignments(profile.id),
             repository.getUserMeetingAssignments(profile.id),
           ]);
-          final classAssignments = assignments[0];
-          final meetingAssignments = assignments[1];
+          classAssignments = assignments[0];
+          meetingAssignments = assignments[1];
           viewClassIds.addAll(
             classAssignments
                 .where((a) => a['can_view_reports'] as bool? ?? true)
@@ -132,25 +133,11 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
             isAdmin || takeClassIds.isNotEmpty || takeMeetingIds.isNotEmpty;
         final canViewReports =
             isAdmin || viewClassIds.isNotEmpty || viewMeetingIds.isNotEmpty;
-        final visibleMembers = allMembers
-            .where(
-              (member) =>
-                  member.isActive &&
-                  (isAdmin ||
-                      member.meetingIds.any(viewMeetingIds.contains) ||
-                      viewMeetingIds.contains(member.meetingId) ||
-                      viewClassIds.contains(member.sundaySchoolClassId) ||
-                      member.meetingIds.any(takeMeetingIds.contains) ||
-                      takeMeetingIds.contains(member.meetingId) ||
-                      takeClassIds.contains(member.sundaySchoolClassId)),
-            )
-            .toList();
 
         // 3. Today's stats
         final now = DateTime.now();
         final today = DateTime(now.year, now.month, now.day);
         final todayWeekday = today.weekday; // Monday = 1, Sunday = 7
-        final upcomingBirthdays = findUpcomingBirthdays(visibleMembers, today);
         // In our DB weekday constraint, Monday = 1 ... Sunday = 7
         final meetingsToday = allMeetings
             .where(
@@ -198,6 +185,63 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         for (final entry in sessionsResults) {
           sessionsByScope[entry.key] = entry.value;
         }
+
+        // Load members only for scopes that the dashboard will inspect.
+        // Admins never download the whole church on home open.
+        final scopesNeedingMembers = [
+          for (final scope in scopes)
+            if ((sessionsByScope[scope.key] ?? const []).length >= 2) scope,
+        ];
+        final memberFetches = <Future<List<MemberEntity>>>[
+          for (final scope in scopesNeedingMembers)
+            if (scope.classEntity != null)
+              repository.getClassMembers(scope.classEntity!.id)
+            else
+              repository.getMeetingMembers(scope.meeting.id),
+        ];
+        if (!isAdmin) {
+          final loadedClassIds = scopesNeedingMembers
+              .map((scope) => scope.classEntity?.id)
+              .whereType<String>()
+              .toSet();
+          final loadedMeetingIds = scopesNeedingMembers
+              .where((scope) => scope.classEntity == null)
+              .map((scope) => scope.meeting.id)
+              .toSet();
+          for (final classId
+              in classAssignments
+                  .map((a) => a['class_id'] as String?)
+                  .whereType<String>()
+                  .where((id) => !loadedClassIds.contains(id))) {
+            memberFetches.add(repository.getClassMembers(classId));
+          }
+          for (final meetingId
+              in meetingAssignments
+                  .map((a) => a['meeting_id'] as String?)
+                  .whereType<String>()
+                  .where((id) => !loadedMeetingIds.contains(id))) {
+            memberFetches.add(repository.getMeetingMembers(meetingId));
+          }
+        }
+        final birthdayPage = await repository.getMembersPage(pageSize: 100);
+        final allMembers =
+            [
+                  ...(await Future.wait(
+                    memberFetches,
+                  )).expand((members) => members),
+                  ...birthdayPage.items,
+                ]
+                .fold<Map<String, MemberEntity>>(
+                  <String, MemberEntity>{},
+                  (byId, member) => byId..[member.id] = member,
+                )
+                .values
+                .toList();
+        final visibleMembers = allMembers
+            .where((member) => member.isActive)
+            .toList();
+        final upcomingBirthdays = findUpcomingBirthdays(visibleMembers, today);
+        final memberCounts = birthdayPage;
 
         final neededSessionIds = sessionsByScope.values
             .expand((sessions) => sessions)
@@ -303,15 +347,8 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
             absentCount: absentCount,
             presentCount: presentCount,
             totalMembersCount: isAdmin
-                ? allMembers.length
-                : allMembers
-                      .where(
-                        (member) =>
-                            member.meetingIds.any(viewMeetingIds.contains) ||
-                            viewMeetingIds.contains(member.meetingId) ||
-                            viewClassIds.contains(member.sundaySchoolClassId),
-                      )
-                      .length,
+                ? memberCounts.counts.total
+                : visibleMembers.length,
             repeatedAbsences: repeatedAbsences,
             upcomingMeetings: upcomingMeetings,
             upcomingBirthdays: upcomingBirthdays,

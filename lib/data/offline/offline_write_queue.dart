@@ -72,6 +72,7 @@ abstract class OfflineOpType {
   static const sessionDelete = 'session.delete';
   static const sessionLockState = 'session.lock_state';
   static const followUpCreate = 'follow_up.create';
+  static const followUpUpdate = 'follow_up.update';
   static const followUpDelete = 'follow_up.delete';
   static const invitationCreate = 'invitation.create';
   static const invitationUpdate = 'invitation.update';
@@ -99,6 +100,7 @@ abstract class OfflineOpType {
     sessionCreate,
     sessionDelete,
     followUpCreate,
+    followUpUpdate,
     followUpDelete,
     invitationCreate,
     invitationUpdate,
@@ -199,20 +201,18 @@ class OfflineWriteQueue {
       } else {
         final existing = operations[existingIndex];
         final originalLock = existing.payload['previous_is_locked'] as bool;
-        if (desiredLock == originalLock) {
-          operations.removeAt(existingIndex);
-        } else {
-          operations[existingIndex] = QueuedOperation(
-            id: existing.id,
-            type: operation.type,
-            payload: {
-              ...operation.payload,
-              'previous_is_locked': originalLock,
-              'previous_session': existing.payload['previous_session'],
-            },
-            queuedAt: existing.queuedAt,
-          );
-        }
+        // Keep a new operation even when returning to the original state:
+        // the previous RPC may already be in flight.
+        operations[existingIndex] = QueuedOperation(
+          id: operation.id,
+          type: operation.type,
+          payload: {
+            ...operation.payload,
+            'previous_is_locked': originalLock,
+            'previous_session': existing.payload['previous_session'],
+          },
+          queuedAt: existing.queuedAt,
+        );
       }
       await _save(operations);
     });

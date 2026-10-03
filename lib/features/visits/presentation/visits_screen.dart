@@ -43,8 +43,10 @@ class _VisitsScreenState extends State<VisitsScreen> {
       repository.getAllMembers(),
       repository.getAllFollowUps(),
       repository.getProfiles(),
+      repository.getPendingFollowUpIds(),
     ]);
     return _VisitData(
+      pendingIds: values[3] as Set<String>,
       members: values[0] as List<MemberEntity>,
       visits: (values[1] as List<FollowUpEntity>)
           .where((item) => item.activityType == 'visit')
@@ -54,9 +56,14 @@ class _VisitsScreenState extends State<VisitsScreen> {
   }
 
   Future<void> _reload() async {
+    if (!mounted) return;
     final request = _load();
     setState(() => _data = request);
-    await request;
+    try {
+      await request;
+    } catch (_) {
+      /* FutureBuilder displays load errors. */
+    }
   }
 
   @override
@@ -123,7 +130,7 @@ class _VisitsScreenState extends State<VisitsScreen> {
                 )
                 .length;
             final pendingSync = visits
-                .where((item) => item.id.startsWith('offline_'))
+                .where((item) => data.pendingIds.contains(item.id))
                 .length;
             return RefreshIndicator(
               onRefresh: () async => _reload(),
@@ -140,6 +147,7 @@ class _VisitsScreenState extends State<VisitsScreen> {
                         visit,
                         membersById[visit.memberId],
                         servantsById[visit.responsibleUserId],
+                        data.pendingIds.contains(visit.id),
                       ),
                     ),
                 ],
@@ -227,9 +235,9 @@ class _VisitsScreenState extends State<VisitsScreen> {
     FollowUpEntity visit,
     MemberEntity? member,
     AppProfile? servant,
+    bool isPendingSync,
   ) {
     final isPlanned = visit.contactStatus == 'pending';
-    final isPendingSync = visit.id.startsWith('offline_');
     final date = intl.DateFormat('yyyy/MM/dd').format(visit.followUpDate);
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -287,6 +295,21 @@ class _VisitsScreenState extends State<VisitsScreen> {
               _detail(Icons.person_outline, servant?.fullName ?? 'غير محدد'),
             ],
           ),
+          Align(
+            alignment: AlignmentDirectional.centerEnd,
+            child: TextButton.icon(
+              onPressed: _saving
+                  ? null
+                  : () => _showVisitDetails(
+                      visit,
+                      member,
+                      servant,
+                      isPendingSync,
+                    ),
+              icon: const Icon(Icons.open_in_new_rounded, size: 17),
+              label: const Text('التفاصيل والتعديل'),
+            ),
+          ),
           if (visit.result?.isNotEmpty == true) ...[
             const Divider(height: 20),
             Text(
@@ -338,21 +361,44 @@ class _VisitsScreenState extends State<VisitsScreen> {
     ),
   );
 
-  Future<void> _showAddVisit() async {
-    final data = await _data;
+  Future<void> _showAddVisit({FollowUpEntity? existing}) async {
+    if (_saving) return;
+    late _VisitData data;
+    try {
+      data = await _data;
+    } catch (_) {
+      if (mounted) {
+        _message('تعذر تحميل بيانات الزيارة. حاول مرة أخرى', error: true);
+      }
+      return;
+    }
     if (!mounted || data.members.isEmpty) {
       if (mounted) _message('أضف مخدومًا أولًا لتسجيل الزيارة');
       return;
     }
-    String memberId = data.members.first.id;
+    final availableMembers = [...data.members];
+    if (existing != null &&
+        !availableMembers.any((m) => m.id == existing.memberId)) {
+      _message(
+        'بيانات المخدوم غير متاحة. حدّث القائمة قبل تعديل الزيارة',
+        error: true,
+      );
+      return;
+    }
+    String memberId = existing?.memberId ?? data.members.first.id;
     final activeServants = data.servants
         .where((servant) => servant.isActive)
         .toList();
-    String? servantId = activeServants.isEmpty ? null : activeServants.first.id;
-    String status = 'pending';
-    String type = 'زيارة منزلية';
-    DateTime date = DateTime.now();
-    final notes = TextEditingController();
+    String? servantId = existing != null
+        ? existing.responsibleUserId
+        : activeServants.isEmpty
+        ? null
+        : activeServants.first.id;
+    String status = existing?.contactStatus ?? 'pending';
+    String type = existing?.reason ?? 'زيارة منزلية';
+    DateTime date = existing?.followUpDate ?? DateTime.now();
+    final notes = TextEditingController(text: existing?.result);
+    final types = {'زيارة منزلية', 'اتصال هاتفي', 'رسالة', type};
     final saved = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
@@ -361,7 +407,7 @@ class _VisitsScreenState extends State<VisitsScreen> {
             textDirection: TextDirection.rtl,
             child: AlertDialog(
               title: Text(
-                'تسجيل زيارة أو افتقاد',
+                existing == null ? 'تسجيل زيارة أو افتقاد' : 'تعديل الزيارة',
                 style: GoogleFonts.cairo(fontWeight: FontWeight.w900),
               ),
               content: SingleChildScrollView(
@@ -395,17 +441,14 @@ class _VisitsScreenState extends State<VisitsScreen> {
                       decoration: const InputDecoration(
                         labelText: 'نوع الافتقاد',
                       ),
-                      items: const [
-                        DropdownMenuItem(
-                          value: 'زيارة منزلية',
-                          child: Text('زيارة منزلية'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'اتصال هاتفي',
-                          child: Text('اتصال هاتفي'),
-                        ),
-                        DropdownMenuItem(value: 'رسالة', child: Text('رسالة')),
-                      ],
+                      items: types
+                          .map(
+                            (value) => DropdownMenuItem(
+                              value: value,
+                              child: Text(value),
+                            ),
+                          )
+                          .toList(),
                       onChanged: (value) {
                         if (value != null) setDialogState(() => type = value);
                       },
@@ -414,8 +457,10 @@ class _VisitsScreenState extends State<VisitsScreen> {
                     DropdownButtonFormField<String>(
                       initialValue: status,
                       decoration: const InputDecoration(labelText: 'الحالة'),
-                      items: const [
-                        DropdownMenuItem(
+                      items: [
+                        if (status != 'pending' && status != 'contacted')
+                          DropdownMenuItem(value: status, child: Text(status)),
+                        const DropdownMenuItem(
                           value: 'pending',
                           child: Text('موعد قادم / لم تتم بعد'),
                         ),
@@ -440,6 +485,12 @@ class _VisitsScreenState extends State<VisitsScreen> {
                           value: null,
                           child: Text('غير محدد'),
                         ),
+                        if (servantId != null &&
+                            !activeServants.any((s) => s.id == servantId))
+                          DropdownMenuItem<String?>(
+                            value: servantId,
+                            child: const Text('الخادم المسجل سابقًا (غير نشط)'),
+                          ),
                         ...activeServants.map(
                           (s) => DropdownMenuItem<String?>(
                             value: s.id,
@@ -509,15 +560,31 @@ class _VisitsScreenState extends State<VisitsScreen> {
     notes.dispose();
     setState(() => _saving = true);
     try {
-      final synced = await context.read<DatabaseRepository>().addFollowUp(
-        memberId: memberId,
-        reason: type,
-        contactStatus: status,
-        result: visitNotes,
-        responsibleUserId: servantId,
-        followUpDate: date,
-        activityType: 'visit',
-      );
+      final repository = context.read<DatabaseRepository>();
+      final synced = existing != null
+          ? await repository.updateFollowUp(
+              FollowUpEntity(
+                id: existing.id,
+                churchId: existing.churchId,
+                memberId: memberId,
+                sessionId: existing.sessionId,
+                reason: type,
+                contactStatus: status,
+                result: visitNotes,
+                responsibleUserId: servantId,
+                followUpDate: date,
+                activityType: 'visit',
+              ),
+            )
+          : await repository.addFollowUp(
+              memberId: memberId,
+              reason: type,
+              contactStatus: status,
+              result: visitNotes,
+              responsibleUserId: servantId,
+              followUpDate: date,
+              activityType: 'visit',
+            );
       if (!mounted) return;
       _message(
         synced
@@ -526,7 +593,151 @@ class _VisitsScreenState extends State<VisitsScreen> {
       );
       unawaited(_reload());
     } catch (error) {
-      if (mounted) _message('تعذر حفظ الزيارة: $error', error: true);
+      if (mounted) {
+        _message(
+          'تعذر حفظ الزيارة. تحقق من صلاحياتك وحاول مرة أخرى',
+          error: true,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _showVisitDetails(
+    FollowUpEntity visit,
+    MemberEntity? member,
+    AppProfile? servant,
+    bool pendingSync,
+  ) async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (context) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'تفاصيل الزيارة',
+                  style: GoogleFonts.cairo(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _visitDetail('المخدوم', member?.fullName ?? 'غير متاح'),
+                _visitDetail('الخادم المسؤول', servant?.fullName ?? 'غير محدد'),
+                _visitDetail(
+                  'التاريخ',
+                  intl.DateFormat('yyyy/MM/dd').format(visit.followUpDate),
+                ),
+                _visitDetail('نوع الافتقاد', visit.reason ?? 'زيارة'),
+                _visitDetail(
+                  'الحالة',
+                  visit.contactStatus == 'pending'
+                      ? 'لم تتم بعد'
+                      : 'تمت الزيارة أو التواصل',
+                ),
+                if (pendingSync)
+                  _visitDetail(
+                    'المزامنة',
+                    'محفوظة على الجهاز وبانتظار المزامنة',
+                  ),
+                _visitDetail(
+                  'الملاحظات والنتيجة',
+                  visit.result?.isNotEmpty == true
+                      ? visit.result!
+                      : 'لا توجد ملاحظات',
+                ),
+                const SizedBox(height: 16),
+                FilledButton.icon(
+                  onPressed: () => Navigator.pop(context, 'edit'),
+                  icon: const Icon(Icons.edit_outlined),
+                  label: const Text('تعديل الزيارة'),
+                ),
+                TextButton.icon(
+                  onPressed: () => Navigator.pop(context, 'delete'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppTheme.accentRed,
+                  ),
+                  icon: const Icon(Icons.delete_outline),
+                  label: const Text('حذف الزيارة'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    if (!mounted || _saving) return;
+    if (action == 'edit') await _showAddVisit(existing: visit);
+    if (action == 'delete') await _deleteVisit(visit);
+  }
+
+  Widget _visitDetail(String label, String value) => Padding(
+    padding: const EdgeInsets.only(bottom: 12),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.cairo(fontSize: 12, color: AppTheme.textLight),
+        ),
+        Text(value, style: GoogleFonts.cairo(fontWeight: FontWeight.w700)),
+      ],
+    ),
+  );
+
+  Future<void> _deleteVisit(FollowUpEntity visit) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          title: const Text('حذف الزيارة؟'),
+          content: const Text(
+            'سيتم حذف سجل هذه الزيارة وملاحظاتها. لا يمكن التراجع عن الحذف.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('إلغاء'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: TextButton.styleFrom(foregroundColor: AppTheme.accentRed),
+              child: const Text('حذف'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true || !mounted || _saving) return;
+    setState(() => _saving = true);
+    try {
+      final synced = await context.read<DatabaseRepository>().deleteFollowUp(
+        visit.id,
+      );
+      if (!mounted) return;
+      _message(
+        synced
+            ? 'تم حذف الزيارة'
+            : 'تم حذف الزيارة من الجهاز وستتم مزامنة الحذف عند الاتصال',
+      );
+      await _reload();
+    } catch (_) {
+      if (mounted) {
+        _message(
+          'تعذر حذف الزيارة. تحقق من صلاحياتك وحاول مرة أخرى',
+          error: true,
+        );
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -551,10 +762,12 @@ class _VisitsScreenState extends State<VisitsScreen> {
 }
 
 class _VisitData {
+  final Set<String> pendingIds;
   final List<MemberEntity> members;
   final List<FollowUpEntity> visits;
   final List<AppProfile> servants;
   const _VisitData({
+    required this.pendingIds,
     required this.members,
     required this.visits,
     required this.servants,

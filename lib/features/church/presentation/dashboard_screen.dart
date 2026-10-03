@@ -121,6 +121,10 @@ class DashboardScreen extends StatelessWidget {
                     );
                   }
 
+                  final nearBirthdays = homeState.upcomingBirthdays
+                      .where((birthday) => birthday.daysUntil <= 7)
+                      .toList();
+
                   return RefreshIndicator(
                     color: AppTheme.primary,
                     onRefresh: () async {
@@ -144,12 +148,10 @@ class DashboardScreen extends StatelessWidget {
                         _buildUpcomingMeetingsCard(homeState.upcomingMeetings),
                         const SizedBox(height: 18),
 
-                        // Birthdays preview and full date-range view.
-                        _buildBirthdaysCard(
-                          context,
-                          homeState.upcomingBirthdays,
-                        ),
-                        const SizedBox(height: 18),
+                        if (nearBirthdays.isNotEmpty) ...[
+                          _buildBirthdaysCard(context, nearBirthdays),
+                          const SizedBox(height: 18),
+                        ],
 
                         if (homeState.canTakeAttendance) ...[
                           _buildQuickActionCard(context),
@@ -188,6 +190,9 @@ class DashboardScreen extends StatelessWidget {
                           ),
                           const SizedBox(height: 18),
                         ],
+
+                        _buildBirthdaysEntryCard(context),
+                        const SizedBox(height: 18),
 
                         if (homeState.canManageMembers) ...[
                           _buildVisitsEntryCard(context),
@@ -295,12 +300,18 @@ class DashboardScreen extends StatelessWidget {
     List<BirthdayReminder> birthdays,
   ) {
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
+        gradient: LinearGradient(
           begin: Alignment.topRight,
           end: Alignment.bottomLeft,
-          colors: [Color(0xFFFFF7E6), Colors.white],
+          colors: [
+            Color.alphaBlend(
+              AppTheme.accentOrange.withValues(alpha: 0.13),
+              AppTheme.cardBackground,
+            ),
+            AppTheme.cardBackground,
+          ],
         ),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
@@ -340,7 +351,7 @@ class DashboardScreen extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      'خلال الثلاثين يومًا القادمة',
+                      'اليوم وخلال الـ٧ أيام القادمة',
                       style: GoogleFonts.cairo(
                         fontSize: 11,
                         color: AppTheme.textLight,
@@ -370,19 +381,7 @@ class DashboardScreen extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
-          if (birthdays.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              child: Text(
-                'لا توجد أعياد ميلاد خلال الثلاثين يومًا القادمة',
-                style: GoogleFonts.cairo(
-                  fontSize: 12,
-                  color: AppTheme.textLight,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ...birthdays.take(4).map((birthday) {
+          ...birthdays.take(2).map((birthday) {
             final dateLabel = intl.DateFormat(
               'd MMMM',
               'ar',
@@ -397,7 +396,7 @@ class DashboardScreen extends StatelessWidget {
               margin: const EdgeInsets.only(bottom: 8),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.82),
+                color: AppTheme.cardBackground.withValues(alpha: 0.75),
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
                   color: AppTheme.accentOrange.withValues(alpha: 0.12),
@@ -468,12 +467,12 @@ class DashboardScreen extends StatelessWidget {
               ),
             );
           }),
-          if (birthdays.length > 4)
+          if (birthdays.length > 2)
             Padding(
               padding: const EdgeInsets.only(top: 2),
               child: Center(
                 child: Text(
-                  'و${birthdays.length - 4} أعياد ميلاد أخرى قريبًا',
+                  'و${birthdays.length - 2} أعياد ميلاد أخرى قريبًا',
                   style: GoogleFonts.cairo(
                     fontSize: 11,
                     color: AppTheme.textLight,
@@ -482,28 +481,20 @@ class DashboardScreen extends StatelessWidget {
                 ),
               ),
             ),
-          const SizedBox(height: 4),
-          Align(
-            alignment: AlignmentDirectional.centerStart,
-            child: TextButton.icon(
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => const BirthdaysScreen(),
-                ),
-              ),
-              icon: const Icon(Icons.arrow_back_rounded, size: 18),
-              label: Text(
-                'عرض أعياد الميلاد حسب الفترة',
-                style: GoogleFonts.cairo(fontWeight: FontWeight.w800),
-              ),
-              style: TextButton.styleFrom(
-                foregroundColor: AppTheme.primary,
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-              ),
-            ),
-          ),
         ],
       ),
+    );
+  }
+
+  Widget _buildBirthdaysEntryCard(BuildContext context) {
+    return AppActionTile(
+      icon: Icons.cake_rounded,
+      iconColor: AppTheme.accentOrange,
+      title: 'أعياد الميلاد حسب الفترة',
+      subtitle: 'اعرض أعياد الميلاد لشهر أو شهرين أو فترة تختارها.',
+      onTap: () => Navigator.of(
+        context,
+      ).push(MaterialPageRoute<void>(builder: (_) => const BirthdaysScreen())),
     );
   }
 

@@ -6,19 +6,13 @@ import 'package:intl/intl.dart' as intl;
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/models.dart';
 import '../../../data/repositories/database_repository.dart';
-import '../logic/members_bloc.dart';
 
 class BirthdaysScreen extends StatelessWidget {
   const BirthdaysScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (context) =>
-          MembersBloc(repository: context.read<DatabaseRepository>())
-            ..add(LoadMembers()),
-      child: const _BirthdaysView(),
-    );
+    return const _BirthdaysView();
   }
 }
 
@@ -33,11 +27,18 @@ class _BirthdaysViewState extends State<_BirthdaysView> {
   late DateTime _from;
   late DateTime _to;
   int? _quickMonths = 3;
+  Future<List<MemberEntity>>? _members;
 
   @override
   void initState() {
     super.initState();
     _setQuickRange(3, rebuild: false);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _members ??= context.read<DatabaseRepository>().getAllMembers();
   }
 
   void _setQuickRange(int months, {bool rebuild = true}) {
@@ -89,14 +90,15 @@ class _BirthdaysViewState extends State<_BirthdaysView> {
           ),
           centerTitle: true,
         ),
-        body: BlocBuilder<MembersBloc, MembersState>(
-          builder: (context, state) {
-            if (state is MembersLoading || state is MembersInitial) {
+        body: FutureBuilder<List<MemberEntity>>(
+          future: _members,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState != ConnectionState.done) {
               return const Center(
                 child: CircularProgressIndicator(color: AppTheme.primary),
               );
             }
-            if (state is MembersError) {
+            if (snapshot.hasError) {
               return Center(
                 child: Padding(
                   padding: const EdgeInsets.all(24),
@@ -104,14 +106,19 @@ class _BirthdaysViewState extends State<_BirthdaysView> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        state.message,
+                        'تعذر تحميل أعياد الميلاد',
                         textAlign: TextAlign.center,
                         style: GoogleFonts.cairo(color: AppTheme.accentRed),
                       ),
                       const SizedBox(height: 12),
                       FilledButton.icon(
-                        onPressed: () =>
-                            context.read<MembersBloc>().add(LoadMembers()),
+                        onPressed: () {
+                          setState(() {
+                            _members = context
+                                .read<DatabaseRepository>()
+                                .getAllMembers();
+                          });
+                        },
                         icon: const Icon(Icons.refresh),
                         label: Text(
                           'إعادة المحاولة',
@@ -123,9 +130,8 @@ class _BirthdaysViewState extends State<_BirthdaysView> {
                 ),
               );
             }
-            if (state is! MembersLoaded) return const SizedBox.shrink();
 
-            final occurrences = _birthdaysInRange(state.allMembers);
+            final occurrences = _birthdaysInRange(snapshot.data ?? const []);
             return Column(
               children: [
                 _buildFilters(),

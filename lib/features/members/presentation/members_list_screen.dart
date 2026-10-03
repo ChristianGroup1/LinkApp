@@ -17,7 +17,6 @@ import '../data/member_excel_service.dart';
 import '../data/member_qr_pdf_service.dart';
 import '../logic/members_bloc.dart';
 import 'add_edit_member_screen.dart';
-import 'birthdays_screen.dart';
 import 'member_details_screen.dart';
 import 'widgets/member_import_widgets.dart';
 import 'widgets/member_tile.dart';
@@ -31,6 +30,7 @@ class MembersListScreen extends StatefulWidget {
 
 class _MembersListScreenState extends State<MembersListScreen> {
   final _searchController = TextEditingController();
+  Timer? _searchDebounce;
   MembersBloc? _membersBloc;
   String _selectedScope = 'all'; // 'all' | 'sunday_school_class' | 'meeting'
   String? _selectedClassId;
@@ -77,24 +77,35 @@ class _MembersListScreenState extends State<MembersListScreen> {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchController.dispose();
     _membersBloc?.close();
     super.dispose();
   }
 
-  void _applyFilter(BuildContext context) {
-    context.read<MembersBloc>().add(
-      SearchAndFilterMembers(
-        query: _searchController.text.trim(),
-        scopeFilter: _selectedScope,
-        classIdFilter: _selectedScope == 'sunday_school_class'
-            ? _selectedClassId
-            : null,
-        meetingIdFilter: _selectedScope == 'sunday_school_class'
-            ? null
-            : _selectedMeetingId,
-      ),
-    );
+  void _applyFilter(BuildContext context, {bool immediate = false}) {
+    void send() {
+      if (!context.mounted) return;
+      context.read<MembersBloc>().add(
+        SearchAndFilterMembers(
+          query: _searchController.text.trim(),
+          scopeFilter: _selectedScope,
+          classIdFilter: _selectedScope == 'sunday_school_class'
+              ? _selectedClassId
+              : null,
+          meetingIdFilter: _selectedScope == 'sunday_school_class'
+              ? null
+              : _selectedMeetingId,
+        ),
+      );
+    }
+
+    _searchDebounce?.cancel();
+    if (immediate) {
+      send();
+      return;
+    }
+    _searchDebounce = Timer(const Duration(milliseconds: 300), send);
   }
 
   @override
@@ -146,15 +157,6 @@ class _MembersListScreenState extends State<MembersListScreen> {
                     ),
                     centerTitle: true,
                     actions: [
-                      IconButton(
-                        tooltip: 'أعياد الميلاد حسب الفترة',
-                        onPressed: () => Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (_) => const BirthdaysScreen(),
-                          ),
-                        ),
-                        icon: const Icon(Icons.cake_outlined),
-                      ),
                       if (canManage)
                         IconButton(
                           tooltip: 'نسخ مخدومين من اجتماع لاجتماع',
@@ -247,7 +249,9 @@ class _MembersListScreenState extends State<MembersListScreen> {
                                   ),
                                 ),
                               );
-                              if (context.mounted) _applyFilter(context);
+                              if (context.mounted) {
+                                _applyFilter(context, immediate: true);
+                              }
                             },
                             backgroundColor: Colors.transparent,
                             elevation: 0,
@@ -287,413 +291,485 @@ class _MembersListScreenState extends State<MembersListScreen> {
                         );
                       }
 
-                      final allMembers = state is MembersLoaded
-                          ? state.allMembers
-                          : <MemberEntity>[];
-                      final filteredMembers = state is MembersLoaded
-                          ? state.filteredMembers
-                          : <MemberEntity>[];
-
-                      final totalCount = allMembers.length;
-                      final sundaySchoolCount = allMembers
-                          .where(
-                            (m) => m.scope == MemberScope.sundaySchoolClass,
-                          )
-                          .length;
-                      final meetingsCount = allMembers
-                          .where((m) => m.scope == MemberScope.meeting)
-                          .length;
+                      final loaded = state is MembersLoaded ? state : null;
+                      final filteredMembers =
+                          loaded?.filteredMembers ?? const <MemberEntity>[];
+                      final totalCount = loaded?.totalCount ?? 0;
+                      final sundaySchoolCount = loaded?.sundaySchoolCount ?? 0;
+                      final meetingsCount = loaded?.meetingsCount ?? 0;
 
                       return RefreshIndicator(
                         color: AppTheme.primary,
                         onRefresh: () async {
                           context.read<MembersBloc>().add(LoadMembers());
                         },
-                        child: CustomScrollView(
-                          physics: const AlwaysScrollableScrollPhysics(),
-                          slivers: [
-                            // Stats Summary & Search/Filter Section
-                            SliverToBoxAdapter(
-                              child: Padding(
-                                padding: const EdgeInsets.fromLTRB(
-                                  16,
-                                  14,
-                                  16,
-                                  12,
-                                ),
-                                child: Column(
-                                  children: [
-                                    // Modern Stats Header Banner
-                                    Container(
-                                      padding: const EdgeInsets.all(16),
-                                      decoration: BoxDecoration(
-                                        gradient: const LinearGradient(
-                                          colors: [
-                                            Color(0xFF4338CA), // Deep Indigo
-                                            AppTheme.primary,
-                                            Color(0xFF6366F1), // Indigo Accent
+                        child: NotificationListener<ScrollNotification>(
+                          onNotification: (notification) {
+                            if (notification.metrics.extentAfter < 480 &&
+                                loaded?.hasMore == true &&
+                                loaded?.isLoadingMore != true) {
+                              context.read<MembersBloc>().add(
+                                LoadMoreMembers(),
+                              );
+                            }
+                            return false;
+                          },
+                          child: CustomScrollView(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            slivers: [
+                              // Stats Summary & Search/Filter Section
+                              SliverToBoxAdapter(
+                                child: Padding(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    16,
+                                    14,
+                                    16,
+                                    12,
+                                  ),
+                                  child: Column(
+                                    children: [
+                                      // Modern Stats Header Banner
+                                      Container(
+                                        padding: const EdgeInsets.all(16),
+                                        decoration: BoxDecoration(
+                                          gradient: const LinearGradient(
+                                            colors: [
+                                              Color(0xFF4338CA), // Deep Indigo
+                                              AppTheme.primary,
+                                              Color(
+                                                0xFF6366F1,
+                                              ), // Indigo Accent
+                                            ],
+                                            begin: Alignment.topLeft,
+                                            end: Alignment.bottomRight,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            22,
+                                          ),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: AppTheme.primary
+                                                  .withValues(alpha: 0.28),
+                                              blurRadius: 20,
+                                              offset: const Offset(0, 8),
+                                            ),
                                           ],
-                                          begin: Alignment.topLeft,
-                                          end: Alignment.bottomRight,
                                         ),
-                                        borderRadius: BorderRadius.circular(22),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: AppTheme.primary.withValues(
-                                              alpha: 0.28,
+                                        child: Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceAround,
+                                          children: [
+                                            _StatItem(
+                                              icon: Icons.groups_rounded,
+                                              label: 'إجمالي الأعضاء',
+                                              value: '$totalCount',
                                             ),
-                                            blurRadius: 20,
-                                            offset: const Offset(0, 8),
-                                          ),
-                                        ],
+                                            Container(
+                                              height: 38,
+                                              width: 1,
+                                              color: Colors.white.withValues(
+                                                alpha: 0.25,
+                                              ),
+                                            ),
+                                            _StatItem(
+                                              icon: Icons.groups_3_rounded,
+                                              label: 'اجتماعات',
+                                              value: '$meetingsCount',
+                                            ),
+                                            Container(
+                                              height: 38,
+                                              width: 1,
+                                              color: Colors.white.withValues(
+                                                alpha: 0.25,
+                                              ),
+                                            ),
+                                            _StatItem(
+                                              icon: Icons.class_rounded,
+                                              label: 'اجتماعات بفصول',
+                                              value: '$sundaySchoolCount',
+                                            ),
+                                          ],
+                                        ),
                                       ),
-                                      child: Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.spaceAround,
-                                        children: [
-                                          _StatItem(
-                                            icon: Icons.groups_rounded,
-                                            label: 'إجمالي الأعضاء',
-                                            value: '$totalCount',
+                                      const SizedBox(height: 14),
+                                      // Search Bar Input
+                                      TextField(
+                                        controller: _searchController,
+                                        style: GoogleFonts.cairo(fontSize: 14),
+                                        decoration: InputDecoration(
+                                          hintText:
+                                              'ابحث بالاسم، الكود، أو رقم الهاتف...',
+                                          hintStyle: GoogleFonts.cairo(
+                                            color: AppTheme.textLight
+                                                .withValues(alpha: 0.7),
+                                            fontSize: 13,
                                           ),
-                                          Container(
-                                            height: 38,
-                                            width: 1,
-                                            color: Colors.white.withValues(
-                                              alpha: 0.25,
-                                            ),
-                                          ),
-                                          _StatItem(
-                                            icon: Icons.groups_3_rounded,
-                                            label: 'اجتماعات',
-                                            value: '$meetingsCount',
-                                          ),
-                                          Container(
-                                            height: 38,
-                                            width: 1,
-                                            color: Colors.white.withValues(
-                                              alpha: 0.25,
-                                            ),
-                                          ),
-                                          _StatItem(
-                                            icon: Icons.class_rounded,
-                                            label: 'اجتماعات بفصول',
-                                            value: '$sundaySchoolCount',
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(height: 14),
-                                    // Search Bar Input
-                                    TextField(
-                                      controller: _searchController,
-                                      style: GoogleFonts.cairo(fontSize: 14),
-                                      decoration: InputDecoration(
-                                        hintText:
-                                            'ابحث بالاسم، الكود، أو رقم الهاتف...',
-                                        hintStyle: GoogleFonts.cairo(
-                                          color: AppTheme.textLight.withValues(
-                                            alpha: 0.7,
-                                          ),
-                                          fontSize: 13,
-                                        ),
-                                        prefixIcon: const Icon(
-                                          Icons.search_rounded,
-                                          color: AppTheme.primary,
-                                          size: 22,
-                                        ),
-                                        suffixIcon:
-                                            _searchController.text.isNotEmpty
-                                            ? IconButton(
-                                                onPressed: () {
-                                                  _searchController.clear();
-                                                  _applyFilter(context);
-                                                },
-                                                icon: Icon(
-                                                  Icons.clear_rounded,
-                                                  size: 18,
-                                                  color: AppTheme.textLight,
-                                                ),
-                                              )
-                                            : null,
-                                        filled: true,
-                                        fillColor: AppTheme.cardBackground,
-                                        contentPadding:
-                                            const EdgeInsets.symmetric(
-                                              horizontal: 16,
-                                              vertical: 12,
-                                            ),
-                                        border: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            16,
-                                          ),
-                                          borderSide: BorderSide(
-                                            color: AppTheme.border.withValues(
-                                              alpha: 0.8,
-                                            ),
-                                          ),
-                                        ),
-                                        enabledBorder: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            16,
-                                          ),
-                                          borderSide: BorderSide(
-                                            color: AppTheme.border.withValues(
-                                              alpha: 0.8,
-                                            ),
-                                          ),
-                                        ),
-                                        focusedBorder: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            16,
-                                          ),
-                                          borderSide: const BorderSide(
+                                          prefixIcon: const Icon(
+                                            Icons.search_rounded,
                                             color: AppTheme.primary,
-                                            width: 1.5,
+                                            size: 22,
                                           ),
-                                        ),
-                                      ),
-                                      onChanged: (_) {
-                                        setState(() {});
-                                        _applyFilter(context);
-                                      },
-                                    ),
-                                    const SizedBox(height: 12),
-                                    // Filter Chips Row
-                                    SingleChildScrollView(
-                                      scrollDirection: Axis.horizontal,
-                                      child: Row(
-                                        children: [
-                                          _buildFilterChip(
-                                            context,
-                                            'كل الأعضاء',
-                                            'all',
-                                            count: totalCount,
-                                          ),
-                                          const SizedBox(width: 8),
-                                          _buildFilterChip(
-                                            context,
-                                            'اجتماعات',
-                                            'meeting',
-                                            count: meetingsCount,
-                                          ),
-                                          const SizedBox(width: 8),
-                                          _buildFilterChip(
-                                            context,
-                                            'اجتماعات بفصول',
-                                            'sunday_school_class',
-                                            count: sundaySchoolCount,
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    // Dropdown Filters for specific class or meeting
-                                    if (_selectedScope ==
-                                            'sunday_school_class' &&
-                                        _classes.isNotEmpty) ...[
-                                      const SizedBox(height: 10),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 12,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: AppTheme.cardBackground,
-                                          borderRadius: BorderRadius.circular(
-                                            14,
-                                          ),
-                                          border: Border.all(
-                                            color: AppTheme.border.withValues(
-                                              alpha: 0.8,
+                                          suffixIcon:
+                                              _searchController.text.isNotEmpty
+                                              ? IconButton(
+                                                  onPressed: () {
+                                                    _searchController.clear();
+                                                    _applyFilter(
+                                                      context,
+                                                      immediate: true,
+                                                    );
+                                                  },
+                                                  icon: Icon(
+                                                    Icons.clear_rounded,
+                                                    size: 18,
+                                                    color: AppTheme.textLight,
+                                                  ),
+                                                )
+                                              : null,
+                                          filled: true,
+                                          fillColor: AppTheme.cardBackground,
+                                          contentPadding:
+                                              const EdgeInsets.symmetric(
+                                                horizontal: 16,
+                                                vertical: 12,
+                                              ),
+                                          border: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              16,
                                             ),
-                                          ),
-                                        ),
-                                        child: DropdownButtonFormField<String?>(
-                                          key: ValueKey(_selectedClassId),
-                                          initialValue: _selectedClassId,
-                                          decoration: const InputDecoration(
-                                            labelText: 'تصفية حسب الفصل',
-                                            border: InputBorder.none,
-                                            isDense: true,
-                                            contentPadding:
-                                                EdgeInsets.symmetric(
-                                                  vertical: 8,
-                                                ),
-                                          ),
-                                          style: GoogleFonts.cairo(
-                                            color: AppTheme.textDark,
-                                            fontSize: 13,
-                                          ),
-                                          items: [
-                                            const DropdownMenuItem<String?>(
-                                              value: null,
-                                              child: Text('كل الفصول'),
-                                            ),
-                                            ..._classes.map(
-                                              (c) => DropdownMenuItem<String?>(
-                                                value: c.id,
-                                                child: Text(c.nameAr),
+                                            borderSide: BorderSide(
+                                              color: AppTheme.border.withValues(
+                                                alpha: 0.8,
                                               ),
                                             ),
-                                          ],
-                                          onChanged: (val) {
-                                            setState(
-                                              () => _selectedClassId = val,
-                                            );
-                                            _applyFilter(context);
-                                          },
-                                        ),
-                                      ),
-                                    ],
-                                    if (_selectedScope !=
-                                            'sunday_school_class' &&
-                                        _allMeetings.isNotEmpty) ...[
-                                      const SizedBox(height: 10),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 12,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: AppTheme.cardBackground,
-                                          borderRadius: BorderRadius.circular(
-                                            14,
                                           ),
-                                          border: Border.all(
-                                            color: AppTheme.border.withValues(
-                                              alpha: 0.8,
+                                          enabledBorder: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              16,
                                             ),
-                                          ),
-                                        ),
-                                        child: DropdownButtonFormField<String?>(
-                                          key: ValueKey(_selectedMeetingId),
-                                          initialValue: _selectedMeetingId,
-                                          decoration: const InputDecoration(
-                                            labelText: 'تصفية حسب الاجتماع',
-                                            border: InputBorder.none,
-                                            isDense: true,
-                                            contentPadding:
-                                                EdgeInsets.symmetric(
-                                                  vertical: 8,
-                                                ),
-                                          ),
-                                          style: GoogleFonts.cairo(
-                                            color: AppTheme.textDark,
-                                            fontSize: 13,
-                                          ),
-                                          items: [
-                                            const DropdownMenuItem<String?>(
-                                              value: null,
-                                              child: Text('كل الاجتماعات'),
-                                            ),
-                                            ..._allMeetings.map(
-                                              (m) => DropdownMenuItem<String?>(
-                                                value: m.id,
-                                                child: Text(m.nameAr),
+                                            borderSide: BorderSide(
+                                              color: AppTheme.border.withValues(
+                                                alpha: 0.8,
                                               ),
                                             ),
-                                          ],
-                                          onChanged: (val) {
-                                            setState(
-                                              () => _selectedMeetingId = val,
-                                            );
-                                            _applyFilter(context);
-                                          },
+                                          ),
+                                          focusedBorder: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              16,
+                                            ),
+                                            borderSide: const BorderSide(
+                                              color: AppTheme.primary,
+                                              width: 1.5,
+                                            ),
+                                          ),
+                                        ),
+                                        onChanged: (_) {
+                                          setState(() {});
+                                          _applyFilter(context);
+                                        },
+                                        onSubmitted: (_) => _applyFilter(
+                                          context,
+                                          immediate: true,
                                         ),
                                       ),
+                                      const SizedBox(height: 12),
+                                      // Filter Chips Row
+                                      SingleChildScrollView(
+                                        scrollDirection: Axis.horizontal,
+                                        child: Row(
+                                          children: [
+                                            _buildFilterChip(
+                                              context,
+                                              'كل الأعضاء',
+                                              'all',
+                                              count: totalCount,
+                                            ),
+                                            const SizedBox(width: 8),
+                                            _buildFilterChip(
+                                              context,
+                                              'اجتماعات',
+                                              'meeting',
+                                              count: meetingsCount,
+                                            ),
+                                            const SizedBox(width: 8),
+                                            _buildFilterChip(
+                                              context,
+                                              'اجتماعات بفصول',
+                                              'sunday_school_class',
+                                              count: sundaySchoolCount,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      // Dropdown Filters for specific class or meeting
+                                      if (_selectedScope ==
+                                              'sunday_school_class' &&
+                                          _classes.isNotEmpty) ...[
+                                        const SizedBox(height: 10),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 12,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: AppTheme.cardBackground,
+                                            borderRadius: BorderRadius.circular(
+                                              14,
+                                            ),
+                                            border: Border.all(
+                                              color: AppTheme.border.withValues(
+                                                alpha: 0.8,
+                                              ),
+                                            ),
+                                          ),
+                                          child:
+                                              DropdownButtonFormField<String?>(
+                                                key: ValueKey(_selectedClassId),
+                                                initialValue: _selectedClassId,
+                                                decoration:
+                                                    const InputDecoration(
+                                                      labelText:
+                                                          'تصفية حسب الفصل',
+                                                      border: InputBorder.none,
+                                                      isDense: true,
+                                                      contentPadding:
+                                                          EdgeInsets.symmetric(
+                                                            vertical: 8,
+                                                          ),
+                                                    ),
+                                                style: GoogleFonts.cairo(
+                                                  color: AppTheme.textDark,
+                                                  fontSize: 13,
+                                                ),
+                                                items: [
+                                                  const DropdownMenuItem<
+                                                    String?
+                                                  >(
+                                                    value: null,
+                                                    child: Text('كل الفصول'),
+                                                  ),
+                                                  ..._classes.map(
+                                                    (c) =>
+                                                        DropdownMenuItem<
+                                                          String?
+                                                        >(
+                                                          value: c.id,
+                                                          child: Text(c.nameAr),
+                                                        ),
+                                                  ),
+                                                ],
+                                                onChanged: (val) {
+                                                  setState(
+                                                    () =>
+                                                        _selectedClassId = val,
+                                                  );
+                                                  _applyFilter(
+                                                    context,
+                                                    immediate: true,
+                                                  );
+                                                },
+                                              ),
+                                        ),
+                                      ],
+                                      if (_selectedScope !=
+                                              'sunday_school_class' &&
+                                          _allMeetings.isNotEmpty) ...[
+                                        const SizedBox(height: 10),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 12,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: AppTheme.cardBackground,
+                                            borderRadius: BorderRadius.circular(
+                                              14,
+                                            ),
+                                            border: Border.all(
+                                              color: AppTheme.border.withValues(
+                                                alpha: 0.8,
+                                              ),
+                                            ),
+                                          ),
+                                          child:
+                                              DropdownButtonFormField<String?>(
+                                                key: ValueKey(
+                                                  _selectedMeetingId,
+                                                ),
+                                                initialValue:
+                                                    _selectedMeetingId,
+                                                decoration:
+                                                    const InputDecoration(
+                                                      labelText:
+                                                          'تصفية حسب الاجتماع',
+                                                      border: InputBorder.none,
+                                                      isDense: true,
+                                                      contentPadding:
+                                                          EdgeInsets.symmetric(
+                                                            vertical: 8,
+                                                          ),
+                                                    ),
+                                                style: GoogleFonts.cairo(
+                                                  color: AppTheme.textDark,
+                                                  fontSize: 13,
+                                                ),
+                                                items: [
+                                                  const DropdownMenuItem<
+                                                    String?
+                                                  >(
+                                                    value: null,
+                                                    child: Text(
+                                                      'كل الاجتماعات',
+                                                    ),
+                                                  ),
+                                                  ..._allMeetings.map(
+                                                    (m) =>
+                                                        DropdownMenuItem<
+                                                          String?
+                                                        >(
+                                                          value: m.id,
+                                                          child: Text(m.nameAr),
+                                                        ),
+                                                  ),
+                                                ],
+                                                onChanged: (val) {
+                                                  setState(
+                                                    () => _selectedMeetingId =
+                                                        val,
+                                                  );
+                                                  _applyFilter(
+                                                    context,
+                                                    immediate: true,
+                                                  );
+                                                },
+                                              ),
+                                        ),
+                                      ],
                                     ],
-                                  ],
+                                  ),
                                 ),
                               ),
-                            ),
 
-                            // Members List or Empty State
-                            if (filteredMembers.isEmpty)
-                              SliverFillRemaining(
-                                hasScrollBody: false,
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
+                              // Members List or Empty State
+                              if (filteredMembers.isEmpty)
+                                SliverFillRemaining(
+                                  hasScrollBody: false,
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                    ),
+                                    child: AppEmptyState(
+                                      icon: Icons.person_search_outlined,
+                                      message:
+                                          'لم يتم العثور على أعضاء مطابقين للبحث',
+                                      actionLabel:
+                                          canManage &&
+                                              _searchController.text.isEmpty
+                                          ? 'إضافة مخدوم جديد'
+                                          : null,
+                                      onAction: canManage
+                                          ? () async {
+                                              await Navigator.push(
+                                                context,
+                                                MaterialPageRoute(
+                                                  builder: (_) =>
+                                                      BlocProvider.value(
+                                                        value: context
+                                                            .read<
+                                                              MembersBloc
+                                                            >(),
+                                                        child:
+                                                            const AddEditMemberScreen(),
+                                                      ),
+                                                ),
+                                              );
+                                              if (context.mounted) {
+                                                _applyFilter(
+                                                  context,
+                                                  immediate: true,
+                                                );
+                                              }
+                                            }
+                                          : null,
+                                    ),
                                   ),
-                                  child: AppEmptyState(
-                                    icon: Icons.person_search_outlined,
-                                    message:
-                                        'لم يتم العثور على أعضاء مطابقين للبحث',
-                                    actionLabel:
-                                        canManage &&
-                                            _searchController.text.isEmpty
-                                        ? 'إضافة مخدوم جديد'
-                                        : null,
-                                    onAction: canManage
-                                        ? () async {
-                                            await Navigator.push(
+                                )
+                              else
+                                SliverPadding(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    16,
+                                    0,
+                                    16,
+                                    96,
+                                  ),
+                                  sliver: SliverList(
+                                    delegate: SliverChildBuilderDelegate(
+                                      (context, index) {
+                                        if (index >= filteredMembers.length) {
+                                          return const Padding(
+                                            padding: EdgeInsets.symmetric(
+                                              vertical: 18,
+                                            ),
+                                            child: Center(
+                                              child: CircularProgressIndicator(
+                                                color: AppTheme.primary,
+                                              ),
+                                            ),
+                                          );
+                                        }
+                                        final member = filteredMembers[index];
+                                        final canManageMember =
+                                            _membersBloc?.canManageMember(
+                                              member,
+                                            ) ??
+                                            canManage;
+                                        return MemberTile(
+                                          member: member,
+                                          classes: _classes,
+                                          meetings: _meetings,
+                                          canManage: canManageMember,
+                                          onOpen: () async {
+                                            await Navigator.push<bool>(
                                               context,
                                               MaterialPageRoute(
-                                                builder: (_) => BlocProvider.value(
-                                                  value: context
-                                                      .read<MembersBloc>(),
-                                                  child:
-                                                      const AddEditMemberScreen(),
-                                                ),
+                                                builder: (_) =>
+                                                    BlocProvider.value(
+                                                      value: context
+                                                          .read<MembersBloc>(),
+                                                      child:
+                                                          MemberDetailsScreen(
+                                                            member: member,
+                                                            classes: _classes,
+                                                            meetings: _meetings,
+                                                            canManage:
+                                                                canManageMember,
+                                                          ),
+                                                    ),
                                               ),
                                             );
                                             if (context.mounted) {
-                                              _applyFilter(context);
+                                              _applyFilter(
+                                                context,
+                                                immediate: true,
+                                              );
                                             }
-                                          }
-                                        : null,
-                                  ),
-                                ),
-                              )
-                            else
-                              SliverPadding(
-                                padding: const EdgeInsets.fromLTRB(
-                                  16,
-                                  0,
-                                  16,
-                                  96,
-                                ),
-                                sliver: SliverList(
-                                  delegate: SliverChildBuilderDelegate((
-                                    context,
-                                    index,
-                                  ) {
-                                    final member = filteredMembers[index];
-                                    final canManageMember =
-                                        _membersBloc?.canManageMember(member) ??
-                                        canManage;
-                                    return MemberTile(
-                                      member: member,
-                                      classes: _classes,
-                                      meetings: _meetings,
-                                      canManage: canManageMember,
-                                      onOpen: () async {
-                                        await Navigator.push<bool>(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (_) => BlocProvider.value(
-                                              value: context
-                                                  .read<MembersBloc>(),
-                                              child: MemberDetailsScreen(
-                                                member: member,
-                                                classes: _classes,
-                                                meetings: _meetings,
-                                                canManage: canManageMember,
-                                              ),
-                                            ),
+                                          },
+                                          onEdit: () =>
+                                              _openEditMember(context, member),
+                                          onDelete: () => _confirmDeleteMember(
+                                            context,
+                                            member,
                                           ),
                                         );
-                                        if (context.mounted) {
-                                          _applyFilter(context);
-                                        }
                                       },
-                                      onEdit: () =>
-                                          _openEditMember(context, member),
-                                      onDelete: () =>
-                                          _confirmDeleteMember(context, member),
-                                    );
-                                  }, childCount: filteredMembers.length),
+                                      childCount:
+                                          filteredMembers.length +
+                                          (loaded?.isLoadingMore == true
+                                              ? 1
+                                              : 0),
+                                    ),
+                                  ),
                                 ),
-                              ),
-                          ],
+                            ],
+                          ),
                         ),
                       );
                     },
@@ -766,7 +842,7 @@ class _MembersListScreenState extends State<MembersListScreen> {
           _selectedClassId = null;
           _selectedMeetingId = null;
         });
-        _applyFilter(context);
+        _applyFilter(context, immediate: true);
       },
       selectedColor: AppTheme.primary,
       backgroundColor: AppTheme.cardBackground,
@@ -793,7 +869,7 @@ class _MembersListScreenState extends State<MembersListScreen> {
         ),
       ),
     );
-    if (context.mounted) _applyFilter(context);
+    if (context.mounted) _applyFilter(context, immediate: true);
   }
 
   PopupMenuItem<_MemberExcelAction> _excelMenuItem(
@@ -881,12 +957,11 @@ class _MembersListScreenState extends State<MembersListScreen> {
   }
 
   Future<void> _exportMemberQrPdf(BuildContext context) async {
-    final state = _membersBloc?.state;
-    final members = state is MembersLoaded
-        ? state.allMembers.where((member) => member.isActive).toList()
-        : <MemberEntity>[];
-
     await _runExcelTask(context, () async {
+      final members = (await _membersForExport(
+        context,
+      )).where((member) => member.isActive).toList();
+      if (!context.mounted) return;
       final bytes = await _qrPdfService.build(members: members);
       final date = DateTime.now().toIso8601String().split('T').first;
       final savedPath = await FilePicker.saveFile(
@@ -905,12 +980,14 @@ class _MembersListScreenState extends State<MembersListScreen> {
     });
   }
 
+  Future<List<MemberEntity>> _membersForExport(BuildContext context) {
+    return context.read<DatabaseRepository>().getAllMembers();
+  }
+
   Future<void> _exportMembers(BuildContext context) async {
-    final state = _membersBloc?.state;
-    final members = state is MembersLoaded
-        ? state.allMembers
-        : <MemberEntity>[];
     await _runExcelTask(context, () async {
+      final members = await _membersForExport(context);
+      if (!context.mounted) return;
       final bytes = _excelService.exportMembers(
         members: members,
         meetings: _allMeetings,
@@ -965,10 +1042,9 @@ class _MembersListScreenState extends State<MembersListScreen> {
       return;
     }
 
-    final currentState = _membersBloc?.state;
-    final existing = currentState is MembersLoaded
-        ? currentState.allMembers
-        : <MemberEntity>[];
+    if (!context.mounted) return;
+    final existing = await _membersForExport(context);
+    if (!context.mounted) return;
     final extension = picked.files.single.extension?.toLowerCase();
     final parsed = await MemberExcelService.parseAsync(
       MemberImportParseRequest(

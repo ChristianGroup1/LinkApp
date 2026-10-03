@@ -4,10 +4,24 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../shared/data/app_models.dart';
 import 'member_import_history.dart';
+import 'member_local_store.dart';
+import 'member_sqlite_cache.dart';
 import 'offline_entity_json.dart';
 
 /// Persists Supabase row JSON locally for offline reads.
 class OfflineCache {
+  static MemberLocalStore? _sharedMemberStore;
+
+  static MemberLocalStore get _defaultMemberStore =>
+      _sharedMemberStore ??= MemberSqliteCache();
+
+  final MemberLocalStore? _injectedMemberStore;
+
+  MemberLocalStore get _memberStore =>
+      _injectedMemberStore ?? _defaultMemberStore;
+
+  OfflineCache({MemberLocalStore? memberStore})
+    : _injectedMemberStore = memberStore;
   static const _profileKey = 'offline_cache_profile';
   static const _churchPrefix = 'offline_cache_church_';
   static const _meetingsPrefix = 'offline_cache_meetings_';
@@ -73,11 +87,108 @@ class OfflineCache {
   }
 
   Future<void> saveMembers(String churchId, List<dynamic> rows) async {
-    await _writeList('$_membersPrefix$churchId', rows);
+    await _ensureLegacyMembersMigrated(churchId);
+    await _memberStore.upsertMany(
+      churchId,
+      rows.map(
+        (row) => MemberEntity.fromJson(Map<String, dynamic>.from(row as Map)),
+      ),
+    );
   }
 
   Future<List<MemberEntity>?> readMembers(String churchId) async {
-    return _readEntities('$_membersPrefix$churchId', MemberEntity.fromJson);
+    await _ensureLegacyMembersMigrated(churchId);
+    final members = await _memberStore.readAll(churchId);
+    return members;
+  }
+
+  Future<List<MemberEntity>> readMembersByIds(
+    String churchId,
+    Iterable<String> ids,
+  ) async {
+    await _ensureLegacyMembersMigrated(churchId);
+    return _memberStore.readByIds(churchId, ids);
+  }
+
+  Future<MemberEntity?> readMemberById(String churchId, String id) async {
+    await _ensureLegacyMembersMigrated(churchId);
+    return _memberStore.readById(churchId, id);
+  }
+
+  Future<MemberQueryPage> queryMembersPage({
+    required String churchId,
+    required int page,
+    required int pageSize,
+    String query = '',
+    String? meetingId,
+    String? classId,
+    String? scope,
+    bool activeOnly = true,
+  }) async {
+    await _ensureLegacyMembersMigrated(churchId);
+    return _memberStore.queryPage(
+      churchId: churchId,
+      page: page,
+      pageSize: pageSize,
+      query: query,
+      meetingId: meetingId,
+      classId: classId,
+      scope: scope,
+      activeOnly: activeOnly,
+    );
+  }
+
+  Future<List<MemberEntity>> queryMembersAll({
+    required String churchId,
+    String query = '',
+    String? meetingId,
+    String? classId,
+    String? scope,
+    bool activeOnly = true,
+  }) async {
+    await _ensureLegacyMembersMigrated(churchId);
+    return _memberStore.queryAll(
+      churchId: churchId,
+      query: query,
+      meetingId: meetingId,
+      classId: classId,
+      scope: scope,
+      activeOnly: activeOnly,
+    );
+  }
+
+  Future<MembersListCounts> readMemberCounts({
+    required String churchId,
+    bool activeOnly = true,
+  }) async {
+    await _ensureLegacyMembersMigrated(churchId);
+    return _memberStore.counts(churchId: churchId, activeOnly: activeOnly);
+  }
+
+  Future<void> _ensureLegacyMembersMigrated(String churchId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final key = '$_membersPrefix$churchId';
+    final raw = prefs.getString(key);
+    if (raw == null) return;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) {
+        await prefs.remove(key);
+        return;
+      }
+      await _memberStore.upsertMany(
+        churchId,
+        decoded.map(
+          (row) => MemberEntity.fromJson(Map<String, dynamic>.from(row as Map)),
+        ),
+      );
+      // Remove the old blob only after every row has reached the store.
+      await prefs.remove(key);
+    } on FormatException {
+      await prefs.remove(key);
+    } on TypeError {
+      await prefs.remove(key);
+    }
   }
 
   String sessionsKey(String meetingId, String? classId) {
@@ -145,20 +256,13 @@ class OfflineCache {
   }
 
   Future<void> upsertMember(String churchId, MemberEntity member) async {
-    final members = await readMembers(churchId) ?? [];
-    final index = members.indexWhere((item) => item.id == member.id);
-    if (index >= 0) {
-      members[index] = member;
-    } else {
-      members.add(member);
-    }
-    await saveMembers(churchId, members.map(memberToJson).toList());
+    await _ensureLegacyMembersMigrated(churchId);
+    await _memberStore.upsert(churchId, member);
   }
 
   Future<void> removeMember(String churchId, String memberId) async {
-    final members = await readMembers(churchId) ?? [];
-    members.removeWhere((item) => item.id == memberId);
-    await saveMembers(churchId, members.map(memberToJson).toList());
+    await _ensureLegacyMembersMigrated(churchId);
+    await _memberStore.deleteMember(churchId, memberId);
   }
 
   Future<void> upsertSession(
@@ -458,6 +562,7 @@ class OfflineCache {
   /// Removes every church-scoped value this device keeps, so the next account
   /// that signs in never reads the previous church's data.
   Future<void> clearAll() async {
+    await _memberStore.clear();
     final prefs = await SharedPreferences.getInstance();
     final keys = prefs
         .getKeys()

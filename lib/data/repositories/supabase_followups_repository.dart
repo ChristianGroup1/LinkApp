@@ -44,10 +44,24 @@ mixin _SupabaseFollowUpsRepository on _SupabaseRepositoryBase {
             .eq('church_id', churchId)
             .order('follow_up_date', ascending: false);
         final filteredRows = _filterDeletedRows(rows as List, pendingDeletes);
+        final merged = {
+          for (final row in filteredRows)
+            row['id'] as String: FollowUpEntity.fromJson(row),
+        };
+        // Keep queued edits visible when connectivity returns before sync finishes.
+        final pendingIds = await getPendingFollowUpIds();
+        final cached = await _offlineCache.readFollowUps(churchId) ?? [];
         await _offlineCache.saveFollowUps(churchId, filteredRows);
-        return filteredRows
-            .map((json) => FollowUpEntity.fromJson(json))
-            .toList();
+        for (final item in cached) {
+          if (pendingIds.contains(item.id) &&
+              !pendingDeletes.contains(item.id)) {
+            final resolvedId = await _writeQueue.resolveId(item.id);
+            merged.remove(resolvedId);
+            merged[item.id] = item;
+            await _offlineCache.upsertFollowUp(churchId, item);
+          }
+        }
+        return merged.values.toList();
       },
       offline: () async {
         final followUps = await _offlineCache.readFollowUps(churchId) ?? [];
@@ -90,6 +104,33 @@ mixin _SupabaseFollowUpsRepository on _SupabaseRepositoryBase {
       ),
       {AppDataArea.followUps},
     );
+  }
+
+  @override
+  Future<Set<String>> getPendingFollowUpIds() async {
+    final operations = await _writeQueue.all();
+    final ids = <String>{};
+    for (final op in operations) {
+      if (op.type != OfflineOpType.followUpCreate &&
+          op.type != OfflineOpType.followUpUpdate) {
+        continue;
+      }
+      final id = (op.payload['local_id'] ?? op.payload['id']) as String;
+      ids.add(id);
+      ids.add(await _writeQueue.resolveId(id));
+    }
+    return ids;
+  }
+
+  @override
+  Future<bool> updateFollowUp(FollowUpEntity followUp) async {
+    final profile = await getCurrentProfile();
+    if (profile?.churchId != followUp.churchId) {
+      throw StateError('الزيارة غير مرتبطة بالكنيسة الحالية');
+    }
+    return _notifyAfter(_offlineWriter.updateFollowUp(followUp), {
+      AppDataArea.followUps,
+    });
   }
 
   @override
