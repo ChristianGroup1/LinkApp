@@ -11,7 +11,6 @@ import '../../../presentation/widgets/in_app_spotlight_overlay.dart';
 import '../../../shared/ui/app_states.dart';
 import '../../../shared/ui/app_widgets.dart';
 import '../../attendance/presentation/attendance_records_screen.dart';
-import '../../follow_up/presentation/follow_up_screen.dart';
 import '../../meetings/presentation/meetings_list_screen.dart';
 import '../../members/presentation/birthdays_screen.dart';
 import '../../members/presentation/members_list_screen.dart';
@@ -24,7 +23,7 @@ class DashboardScreen extends StatelessWidget {
   final VoidCallback onStartAttendance;
   final GlobalKey? meetingsKey;
   final GlobalKey? recordsKey;
-  final GlobalKey? followUpKey;
+  final GlobalKey? visitsKey;
   final GlobalKey? reportsKey;
   final GlobalKey? servantsKey;
 
@@ -33,7 +32,7 @@ class DashboardScreen extends StatelessWidget {
     required this.onStartAttendance,
     this.meetingsKey,
     this.recordsKey,
-    this.followUpKey,
+    this.visitsKey,
     this.reportsKey,
     this.servantsKey,
   });
@@ -182,22 +181,16 @@ class DashboardScreen extends StatelessWidget {
                           const SizedBox(height: 18),
                         ],
 
-                        // 3. متابعة الغياب
-                        if (homeState.canViewReports) ...[
+                        if (homeState.canManageMembers) ...[
                           KeyedSubtree(
-                            key: followUpKey,
-                            child: _buildFollowUpEntryCard(context),
+                            key: visitsKey,
+                            child: _buildVisitsEntryCard(context),
                           ),
                           const SizedBox(height: 18),
                         ],
 
                         _buildBirthdaysEntryCard(context),
                         const SizedBox(height: 18),
-
-                        if (homeState.canManageMembers) ...[
-                          _buildVisitsEntryCard(context),
-                          const SizedBox(height: 18),
-                        ],
 
                         // 4. التقارير والإحصائيات
                         if (homeState.canViewReports) ...[
@@ -708,22 +701,12 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildFollowUpEntryCard(BuildContext context) {
-    return AppActionTile(
-      icon: Icons.support_agent_rounded,
-      iconColor: AppTheme.accentOrange,
-      title: 'متابعة الغياب',
-      subtitle: 'سجل تواصل ومتابعة حتى بعد غياب مرة واحدة.',
-      onTap: () => _openAndRefreshHome(context, const FollowUpScreen()),
-    );
-  }
-
   Widget _buildVisitsEntryCard(BuildContext context) {
     return AppActionTile(
       icon: Icons.volunteer_activism_rounded,
       iconColor: AppTheme.secondary,
-      title: 'الزيارات والافتقاد',
-      subtitle: 'خطط زيارة أو افتقادًا وسجّل المسؤول والنتيجة.',
+      title: 'الزيارات والتقارير',
+      subtitle: 'سجّل الزيارات وراجع نتائجها في التقارير.',
       onTap: () => _openAndRefreshHome(context, const VisitsScreen()),
     );
   }

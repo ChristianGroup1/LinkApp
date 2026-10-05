@@ -9,6 +9,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../data/models/models.dart';
 import '../../../data/repositories/database_repository.dart';
 import '../../../shared/data/app_data_changes.dart';
+import 'visit_edit_screen.dart';
 
 class VisitsScreen extends StatefulWidget {
   const VisitsScreen({super.key});
@@ -74,7 +75,7 @@ class _VisitsScreenState extends State<VisitsScreen> {
         backgroundColor: AppTheme.background,
         appBar: AppBar(
           title: Text(
-            'الزيارات والافتقاد',
+            'الزيارات',
             style: GoogleFonts.cairo(fontWeight: FontWeight.w900),
           ),
           centerTitle: true,
@@ -224,7 +225,7 @@ class _VisitsScreenState extends State<VisitsScreen> {
           ),
         ),
         Text(
-          'سجّل زيارة أو موعد افتقاد ليظهر هنا.',
+          'سجّل زيارة أو موعدًا قادمًا ليظهر هنا.',
           style: GoogleFonts.cairo(color: AppTheme.textLight, fontSize: 12),
         ),
       ],
@@ -363,245 +364,12 @@ class _VisitsScreenState extends State<VisitsScreen> {
 
   Future<void> _showAddVisit({FollowUpEntity? existing}) async {
     if (_saving) return;
-    late _VisitData data;
-    try {
-      data = await _data;
-    } catch (_) {
-      if (mounted) {
-        _message('تعذر تحميل بيانات الزيارة. حاول مرة أخرى', error: true);
-      }
-      return;
-    }
-    if (!mounted || data.members.isEmpty) {
-      if (mounted) _message('أضف مخدومًا أولًا لتسجيل الزيارة');
-      return;
-    }
-    final availableMembers = [...data.members];
-    if (existing != null &&
-        !availableMembers.any((m) => m.id == existing.memberId)) {
-      _message(
-        'بيانات المخدوم غير متاحة. حدّث القائمة قبل تعديل الزيارة',
-        error: true,
-      );
-      return;
-    }
-    String memberId = existing?.memberId ?? data.members.first.id;
-    final activeServants = data.servants
-        .where((servant) => servant.isActive)
-        .toList();
-    String? servantId = existing != null
-        ? existing.responsibleUserId
-        : activeServants.isEmpty
-        ? null
-        : activeServants.first.id;
-    String status = existing?.contactStatus ?? 'pending';
-    String type = existing?.reason ?? 'زيارة منزلية';
-    DateTime date = existing?.followUpDate ?? DateTime.now();
-    final notes = TextEditingController(text: existing?.result);
-    final types = {'زيارة منزلية', 'اتصال هاتفي', 'رسالة', type};
-    final saved = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDialogState) {
-          return Directionality(
-            textDirection: TextDirection.rtl,
-            child: AlertDialog(
-              title: Text(
-                existing == null ? 'تسجيل زيارة أو افتقاد' : 'تعديل الزيارة',
-                style: GoogleFonts.cairo(fontWeight: FontWeight.w900),
-              ),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    DropdownButtonFormField<String>(
-                      initialValue: memberId,
-                      decoration: const InputDecoration(labelText: 'المخدوم'),
-                      isExpanded: true,
-                      items: data.members
-                          .map(
-                            (m) => DropdownMenuItem(
-                              value: m.id,
-                              child: Text(
-                                m.fullName,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (value) {
-                        if (value != null) {
-                          setDialogState(() => memberId = value);
-                        }
-                      },
-                    ),
-                    const SizedBox(height: 10),
-                    DropdownButtonFormField<String>(
-                      initialValue: type,
-                      decoration: const InputDecoration(
-                        labelText: 'نوع الافتقاد',
-                      ),
-                      items: types
-                          .map(
-                            (value) => DropdownMenuItem(
-                              value: value,
-                              child: Text(value),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (value) {
-                        if (value != null) setDialogState(() => type = value);
-                      },
-                    ),
-                    const SizedBox(height: 10),
-                    DropdownButtonFormField<String>(
-                      initialValue: status,
-                      decoration: const InputDecoration(labelText: 'الحالة'),
-                      items: [
-                        if (status != 'pending' && status != 'contacted')
-                          DropdownMenuItem(value: status, child: Text(status)),
-                        const DropdownMenuItem(
-                          value: 'pending',
-                          child: Text('موعد قادم / لم تتم بعد'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'contacted',
-                          child: Text('تمت الزيارة أو التواصل'),
-                        ),
-                      ],
-                      onChanged: (value) {
-                        if (value != null) setDialogState(() => status = value);
-                      },
-                    ),
-                    const SizedBox(height: 10),
-                    DropdownButtonFormField<String?>(
-                      initialValue: servantId,
-                      decoration: const InputDecoration(
-                        labelText: 'الخادم المسؤول',
-                      ),
-                      isExpanded: true,
-                      items: [
-                        const DropdownMenuItem<String?>(
-                          value: null,
-                          child: Text('غير محدد'),
-                        ),
-                        if (servantId != null &&
-                            !activeServants.any((s) => s.id == servantId))
-                          DropdownMenuItem<String?>(
-                            value: servantId,
-                            child: const Text('الخادم المسجل سابقًا (غير نشط)'),
-                          ),
-                        ...activeServants.map(
-                          (s) => DropdownMenuItem<String?>(
-                            value: s.id,
-                            child: Text(
-                              s.fullName,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ),
-                      ],
-                      onChanged: (value) =>
-                          setDialogState(() => servantId = value),
-                    ),
-                    const SizedBox(height: 8),
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(
-                        'التاريخ: ${intl.DateFormat('yyyy/MM/dd').format(date)}',
-                        style: GoogleFonts.cairo(fontSize: 13),
-                      ),
-                      trailing: const Icon(Icons.calendar_month),
-                      onTap: () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: date,
-                          firstDate: DateTime(2020),
-                          lastDate: DateTime(2100),
-                          builder: (context, child) => Directionality(
-                            textDirection: TextDirection.rtl,
-                            child: child!,
-                          ),
-                        );
-                        if (picked != null) setDialogState(() => date = picked);
-                      },
-                    ),
-                    TextField(
-                      controller: notes,
-                      maxLines: 3,
-                      decoration: const InputDecoration(
-                        labelText: 'ملاحظات أو نتيجة الزيارة',
-                      ),
-                      style: GoogleFonts.cairo(),
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(dialogContext, false),
-                  child: Text('إلغاء', style: GoogleFonts.cairo()),
-                ),
-                FilledButton(
-                  onPressed: () => Navigator.pop(dialogContext, true),
-                  child: Text('حفظ', style: GoogleFonts.cairo()),
-                ),
-              ],
-            ),
-          );
-        },
+    final saved = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => VisitEditScreen(visit: existing),
       ),
     );
-    if (saved != true || !mounted) {
-      notes.dispose();
-      return;
-    }
-    final visitNotes = notes.text.trim();
-    notes.dispose();
-    setState(() => _saving = true);
-    try {
-      final repository = context.read<DatabaseRepository>();
-      final synced = existing != null
-          ? await repository.updateFollowUp(
-              FollowUpEntity(
-                id: existing.id,
-                churchId: existing.churchId,
-                memberId: memberId,
-                sessionId: existing.sessionId,
-                reason: type,
-                contactStatus: status,
-                result: visitNotes,
-                responsibleUserId: servantId,
-                followUpDate: date,
-                activityType: 'visit',
-              ),
-            )
-          : await repository.addFollowUp(
-              memberId: memberId,
-              reason: type,
-              contactStatus: status,
-              result: visitNotes,
-              responsibleUserId: servantId,
-              followUpDate: date,
-              activityType: 'visit',
-            );
-      if (!mounted) return;
-      _message(
-        synced
-            ? 'تم حفظ الزيارة'
-            : 'تم حفظ الزيارة على الجهاز وستتزامن عند عودة الإنترنت',
-      );
-      unawaited(_reload());
-    } catch (error) {
-      if (mounted) {
-        _message(
-          'تعذر حفظ الزيارة. تحقق من صلاحياتك وحاول مرة أخرى',
-          error: true,
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _saving = false);
-    }
+    if (saved == true && mounted) await _reload();
   }
 
   Future<void> _showVisitDetails(
@@ -637,7 +405,7 @@ class _VisitsScreenState extends State<VisitsScreen> {
                   'التاريخ',
                   intl.DateFormat('yyyy/MM/dd').format(visit.followUpDate),
                 ),
-                _visitDetail('نوع الافتقاد', visit.reason ?? 'زيارة'),
+                _visitDetail('نوع الزيارة', visit.reason ?? 'زيارة'),
                 _visitDetail(
                   'الحالة',
                   visit.contactStatus == 'pending'

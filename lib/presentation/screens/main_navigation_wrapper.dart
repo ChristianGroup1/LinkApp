@@ -47,7 +47,7 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
 
   final GlobalKey _meetingsKey = GlobalKey();
   final GlobalKey _recordsKey = GlobalKey();
-  final GlobalKey _followUpKey = GlobalKey();
+  final GlobalKey _visitsKey = GlobalKey();
   final GlobalKey _reportsKey = GlobalKey();
   final GlobalKey _servantsKey = GlobalKey();
   final List<int> _refreshTokens = [0, 0, 0, 0];
@@ -519,11 +519,11 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
       icon: Icons.history_rounded,
     ),
     SpotlightTargetData(
-      title: '٣. متابعة الغياب 📞',
+      title: '٣. الزيارات والتقارير 📊',
       description:
-          'سجل متابعة وافتقاد الأعضاء الغائبين واحتفظ بتفاصيل التواصل أولاً بأول.',
-      key: _followUpKey,
-      icon: Icons.support_agent_rounded,
+          'سجّل زيارات المخدومين وراجع نتائجها مع تقارير الحضور والمتابعة.',
+      key: _visitsKey,
+      icon: Icons.volunteer_activism_rounded,
     ),
     SpotlightTargetData(
       title: '٤. التقارير والإحصائيات 📊',
@@ -548,7 +548,7 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
           onStartAttendance: () => _selectTab(1),
           meetingsKey: _meetingsKey,
           recordsKey: _recordsKey,
-          followUpKey: _followUpKey,
+          visitsKey: _visitsKey,
           reportsKey: _reportsKey,
           servantsKey: _servantsKey,
         );

@@ -47,7 +47,7 @@ class _AppTourScreenState extends State<AppTourScreen> {
     TourStepData(
       title: 'مرحباً بك في تطبيق لينك 💒',
       subtitle:
-          'ابدأ بتجهيز الخدمة بالترتيب: أنشئ اجتماعاً، أضف المخدومين، ثم سجّل الحضور. بعد ذلك تقدر تراجع السجلات وتتابع الغياب.',
+          'ابدأ بتجهيز الخدمة بالترتيب: أنشئ اجتماعاً، أضف المخدومين، ثم سجّل الحضور. بعد ذلك تقدر تراجع السجلات والزيارات والتقارير.',
       icon: Icons.church_rounded,
       badgeColor: Color(0xFFEFF6FF),
       iconColor: Color(0xFF2563EB),
@@ -85,17 +85,17 @@ class _AppTourScreenState extends State<AppTourScreen> {
       iconColor: Color(0xFF2563EB),
     ),
     TourStepData(
-      title: '٥. تابع الغياب والتواصل 📞',
+      title: '٦. سجّل الزيارات وراجع التقارير 📊',
       subtitle:
-          'بمجرد تسجيل غياب المخدوم في كشف واحد، ستظهر له حالة في «متابعة الغياب». سجّل التواصل معه وتابع ما تم.',
-      icon: Icons.support_agent_rounded,
+          'سجّل زيارات المخدومين ونتائج التواصل معهم، ثم راجع تقارير الحضور والمتابعة.',
+      icon: Icons.volunteer_activism_rounded,
       badgeColor: Color(0xFFFEF3C7),
       iconColor: Color(0xFFD97706),
     ),
     TourStepData(
-      title: '٦. راجع التقارير والصلاحيات 📊',
+      title: '٧. أدر الصلاحيات 🛡️',
       subtitle:
-          'التقارير تلخص الحضور والمتابعة. ويمكن لمسؤول الكنيسة دعوة الخدام وتحديد الاجتماعات والفصول والصلاحيات المتاحة لكل خادم.',
+          'يمكن لمسؤول الكنيسة دعوة الخدام وتحديد الاجتماعات والفصول والصلاحيات المتاحة لكل خادم.',
       icon: Icons.admin_panel_settings_outlined,
       badgeColor: Color(0xFFF3E8FF),
       iconColor: Color(0xFF7E22CE),

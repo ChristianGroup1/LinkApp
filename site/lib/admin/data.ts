@@ -380,7 +380,7 @@ export async function getEnhancedDashboardData(filters: DashboardFilters) {
     admin.from('invitations').select('id, church_id, full_name, email, is_used, declined_at, created_at').gte('created_at', previousStart.toISOString()).limit(50000),
     admin.from('follow_ups').select('id, church_id, member_id, contact_status, follow_up_date').limit(50000),
     admin.from('support_tickets').select('id, church_id, category, status, created_at, updated_at').limit(50000),
-    admin.from('app_usage_events').select('church_id, occurred_at').gte('occurred_at', previousStart.toISOString()).limit(100000),
+    admin.from('app_usage_events').select('church_id, user_id, event_name, occurred_at').gte('occurred_at', previousStart.toISOString()).limit(100000),
     admin.from('class_assignments').select('church_id, class_id, user_id, can_take_attendance, can_view_reports').limit(50000),
     admin.from('meeting_assignments').select('church_id, meeting_id, user_id, can_take_attendance, can_view_reports').limit(50000),
     admin.from('admin_audit_logs').select('admin_user_id, action, table_name, created_at').order('created_at', { ascending: false }).limit(20),
@@ -396,6 +396,9 @@ export async function getEnhancedDashboardData(filters: DashboardFilters) {
   const followUps = scoped(safeRows(followUpsResult));
   const support = scoped(safeRows(supportResult));
   const usage = scoped(safeRows(usageResult));
+  const recentlySeenUsers = new Set(usage
+    .filter((row) => row.event_name === 'app_open' && String(row.occurred_at) >= new Date(now.getTime() - 5 * 60_000).toISOString())
+    .map((row) => String(row.user_id)));
   const classAssignments = scoped(safeRows(classAssignmentsResult));
   const meetingAssignments = scoped(safeRows(meetingAssignmentsResult));
   const auditLogs = safeRows(auditResult);
@@ -519,7 +522,7 @@ export async function getEnhancedDashboardData(filters: DashboardFilters) {
   const recentChanges = auditLogs.map((log) => ({ actor: String(profiles.find((profile) => String(profile.id) === String(log.admin_user_id))?.full_name || 'مدير النظام'), action: String(log.action), table: String(log.table_name), at: String(log.created_at) }));
   return {
     generatedAt: now.toISOString(), churches, filters, supportReady: !supportResult.error, analyticsReady: !usageResult.error,
-    summary: { activeChurchRate: selectedChurches.length ? Math.round((activeChurches.length / selectedChurches.length) * 100) : 0, activeChurches: activeChurches.length, activeMembersTotal, currentMembers: currentMembers.length, present: currentRecords.filter((row) => row.status === 'present').length, absent: currentRecords.filter((row) => row.status === 'absent').length, unresolvedFollowUps, openSupport: openSupport.length, avgResolutionHours, topCategory, invitationStats },
+    summary: { recentlySeenUsers: recentlySeenUsers.size, activeChurchRate: selectedChurches.length ? Math.round((activeChurches.length / selectedChurches.length) * 100) : 0, activeChurches: activeChurches.length, activeMembersTotal, currentMembers: currentMembers.length, present: currentRecords.filter((row) => row.status === 'present').length, absent: currentRecords.filter((row) => row.status === 'absent').length, unresolvedFollowUps, openSupport: openSupport.length, avgResolutionHours, topCategory, invitationStats },
     churchActivity, meetingPerformance, repeatedAbsences, inactiveProfiles, pendingInvitations, servantPermissions, attendanceTrend, recentChanges, monthlyGoals, smartAlerts, healthScores, atRisk, retention,
   };
 }
