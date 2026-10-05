@@ -22,8 +22,8 @@ import 'data/offline/connectivity_service.dart';
 import 'data/offline/offline_sync_listener.dart';
 import 'data/repositories/database_repository.dart';
 import 'logic/auth/auth_bloc.dart';
-import 'presentation/screens/login_screen.dart';
 import 'presentation/screens/invitation_link_screen.dart';
+import 'presentation/screens/login_screen.dart';
 import 'presentation/screens/main_navigation_wrapper.dart';
 import 'presentation/screens/password_recovery_error_screen.dart';
 import 'presentation/widgets/auth_widgets.dart';
@@ -62,11 +62,6 @@ Future<void> _startApp() async {
     yield LicenseEntryWithLineBreaks(const ['google_fonts', 'Cairo'], license);
   });
 
-  // 1) Compile-time defines (production CI / explicit --dart-define-from-file)
-  // 2) Bundled .env asset (local dev — works without IDE flags)
-  await dotenv.load(fileName: '.env', isOptional: true);
-  await ThemeController.instance.load();
-
   const definedSupabaseUrl = String.fromEnvironment(
     'SUPABASE_URL',
     defaultValue: '',
@@ -75,6 +70,13 @@ Future<void> _startApp() async {
     'SUPABASE_ANON_KEY',
     defaultValue: '',
   );
+  // Production web builds get these values from --dart-define. Avoid asking
+  // the browser to fetch the bundled .env asset when compile-time values exist.
+  if (definedSupabaseUrl.isEmpty || definedSupabaseAnonKey.isEmpty) {
+    await dotenv.load(fileName: '.env', isOptional: true);
+  }
+  await ThemeController.instance.load();
+
   final supabaseUrl = _firstNonEmpty([
     definedSupabaseUrl,
     dotenv.env['SUPABASE_URL'],

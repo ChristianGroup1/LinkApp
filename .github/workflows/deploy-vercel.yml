@@ -35,13 +35,22 @@ jobs:
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
           flutter pub get
+          dart compile js --packages=.dart_tool/package_config.json \
+            tool/drift_worker.dart -o /tmp/drift_worker.dart.js
+          cp /tmp/drift_worker.dart.js web/drift_worker.dart.js
+          python3 - <<'PY'
+          from pathlib import Path
+          worker = Path('web/drift_worker.dart.js')
+          lines = worker.read_text().splitlines()
+          worker.write_text('\n'.join(line for line in lines if not line.startswith('//# sourceMappingURL=')) + '\n')
+          PY
           printf 'SUPABASE_URL=%s\nSUPABASE_ANON_KEY=%s\n' \
             "$SUPABASE_URL" "$SUPABASE_ANON_KEY" > .env
           flutter build web --release --base-href /app/ \
             --dart-define=SUPABASE_URL="$SUPABASE_URL" \
             --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
           mkdir -p site/public/app
-          rsync -a --delete --delete-excluded --exclude 'assets/.env' --exclude '.last_build_id' build/web/ site/public/app/
+          rsync -a --delete --delete-excluded --exclude '.last_build_id' build/web/ site/public/app/
 
       - name: Install Vercel CLI
         run: npm install --global vercel@latest

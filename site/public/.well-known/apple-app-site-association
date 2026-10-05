@@ -1,0 +1,11 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "VVMYX2F27P.com.linkapp.church",
+        "paths": ["/invite", "/invite/*"]
+      }
+    ]
+  }
+}
