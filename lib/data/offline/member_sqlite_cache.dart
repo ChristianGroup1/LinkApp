@@ -16,13 +16,7 @@ class MemberSqliteCache extends GeneratedDatabase implements MemberLocalStore {
     : super(executor ?? _defaultExecutor());
 
   static QueryExecutor _defaultExecutor() {
-    return driftDatabase(
-      name: 'link_members',
-      web: DriftWebOptions(
-        sqlite3Wasm: Uri.parse('sqlite3.wasm'),
-        driftWorker: Uri.parse('drift_worker.dart.js'),
-      ),
-    );
+    return driftDatabase(name: 'link_members');
   }
 
   @override

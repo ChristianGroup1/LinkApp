@@ -5,7 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../shared/data/app_models.dart';
 import 'member_import_history.dart';
 import 'member_local_store.dart';
-import 'member_sqlite_cache.dart';
+import 'member_store_factory.dart';
 import 'offline_entity_json.dart';
 
 /// Persists Supabase row JSON locally for offline reads.
@@ -13,7 +13,7 @@ class OfflineCache {
   static MemberLocalStore? _sharedMemberStore;
 
   static MemberLocalStore get _defaultMemberStore =>
-      _sharedMemberStore ??= MemberSqliteCache();
+      _sharedMemberStore ??= createMemberLocalStore();
 
   final MemberLocalStore? _injectedMemberStore;
 
@@ -232,6 +232,11 @@ class OfflineCache {
   }
 
   Future<void> _ensureLegacyMembersMigrated(String churchId) async {
+    await _migrateLegacyMembersBlob(churchId);
+    await restorePendingMembers(churchId, _memberStore);
+  }
+
+  Future<void> _migrateLegacyMembersBlob(String churchId) async {
     final prefs = await SharedPreferences.getInstance();
     final key = '$_membersPrefix$churchId';
     final raw = prefs.getString(key);
@@ -1182,6 +1187,7 @@ class OfflineCache {
   /// that signs in never reads the previous church's data.
   Future<void> clearAll() async {
     await _memberStore.clear();
+    resetMemberStoreMigration();
     final prefs = await SharedPreferences.getInstance();
     final keys = prefs
         .getKeys()

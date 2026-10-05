@@ -98,6 +98,19 @@ Future<void> _startApp() async {
   // the browser to fetch the bundled .env asset when compile-time values exist.
   if (definedSupabaseUrl.isEmpty || definedSupabaseAnonKey.isEmpty) {
     await dotenv.load(fileName: '.env', isOptional: true);
+  } else {
+    // Existing invitation and configuration helpers also read dotenv.env.
+    // Initialize it from compiled values without fetching a browser asset.
+    const inviteBase = String.fromEnvironment('INVITE_LINK_BASE_URL');
+    dotenv.loadFromString(
+      envString: '',
+      isOptional: true,
+      mergeWith: {
+        'SUPABASE_URL': definedSupabaseUrl,
+        'SUPABASE_ANON_KEY': definedSupabaseAnonKey,
+        if (inviteBase.isNotEmpty) 'INVITE_LINK_BASE_URL': inviteBase,
+      },
+    );
   }
   try {
     await ThemeController.instance.load().timeout(const Duration(seconds: 3));
