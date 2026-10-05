@@ -25,3 +25,20 @@ export async function getUserActivity(search: ActivitySearch, churchId?: string)
   }
   return { ...ranges, ready: true, counts: countActivity(events, ranges) };
 }
+
+export async function getActivityPageData(search: ActivitySearch, churchId?: string) {
+  const admin = createSupabaseAdminClient();
+  const totalQuery = () => admin.from('profiles').select('id', { count: 'exact', head: true });
+  const [activity, total, selected, churches] = await Promise.all([
+    getUserActivity(search, churchId),
+    totalQuery(),
+    churchId ? totalQuery().eq('church_id', churchId) : Promise.resolve(null),
+    admin.from('churches').select('id, name_ar, name').order('name_ar').limit(5000),
+  ]);
+  return {
+    activity,
+    totalUsers: total.error ? null : total.count,
+    churchUsers: selected ? (selected.error ? null : selected.count) : null,
+    churches: churches.data ?? [],
+  };
+}

@@ -1,8 +1,6 @@
 import Link from 'next/link';
 import { getEnhancedDashboardData } from '@/lib/admin/data';
 import { requireSuperAdmin } from '@/lib/admin/auth';
-import { getUserActivity } from '@/lib/admin/activity';
-import type { ActivitySearch } from '@/lib/admin/activity-periods';
 
 const n = (value: number) => new Intl.NumberFormat('ar-EG').format(value);
 const category = (value: string | null) => ({ login: 'تسجيل الدخول', attendance: 'الحضور', members: 'الأعضاء', invitations: 'الدعوات', notifications: 'الإشعارات', other: 'أخرى' } as Record<string, string>)[value ?? ''] ?? '—';
@@ -10,55 +8,25 @@ const activityDate = (value: string | null) => value ? new Date(value).toLocaleS
 const actionLabel = (value: string) => ({ insert: 'إضافة', update: 'تعديل', delete: 'حذف' } as Record<string, string>)[value] ?? value;
 function AttendanceBars({ points }: { points: Array<{ date: string; count: number }> }) { const max = Math.max(1, ...points.map((point) => point.count)); return <div className="attendanceBars" aria-label="اتجاه الحضور"><div>{points.map((point) => <i key={point.date} title={`${point.date}: ${point.count}`} style={{ height: `${Math.max(4, point.count / max * 100)}%` }} />)}</div></div>; }
 
-export default async function AdminDashboardPage({ searchParams }: { searchParams: Promise<{ days?: string; church?: string; servantsQ?: string; servantPage?: string } & ActivitySearch> }) {
+export default async function AdminDashboardPage({ searchParams }: { searchParams: Promise<{ days?: string; church?: string; servantsQ?: string; servantPage?: string }> }) {
   await requireSuperAdmin();
   const search = await searchParams;
   const days = search.days === '7' || search.days === '90' ? Number(search.days) as 7 | 90 : 30;
-  const [data, activity] = await Promise.all([
-    getEnhancedDashboardData({ days, churchId: search.church || undefined }),
-    getUserActivity(search, search.church || undefined),
-  ]);
+  const data = await getEnhancedDashboardData({ days, churchId: search.church || undefined });
   const { summary } = data;
-  const activityParams = new URLSearchParams();
-  for (const key of ['activity', 'activityFrom', 'activityTo'] as const) {
-    if (search[key]) activityParams.set(key, search[key]);
-  }
-  const activitySuffix = activityParams.size ? `&${activityParams.toString()}` : '';
-  const activityInputs = <>{(['activity', 'activityFrom', 'activityTo'] as const).map((key) => search[key] ? <input key={key} type="hidden" name={key} value={search[key]} /> : null)}</>;
-  const link = (period: number) => `/admin?days=${period}${search.church ? `&church=${encodeURIComponent(search.church)}` : ''}${activitySuffix}`;
+  const link = (period: number) => `/admin?days=${period}${search.church ? `&church=${encodeURIComponent(search.church)}` : ''}`;
   const servantsQuery = (search.servantsQ ?? '').trim().toLocaleLowerCase('ar');
   const matchingServants = data.servantPermissions.filter((servant) => !servantsQuery || `${servant.name} ${servant.church} ${servant.role}`.toLocaleLowerCase('ar').includes(servantsQuery));
   const servantPage = Math.max(1, Number(search.servantPage ?? '1'));
   const servantPages = Math.max(1, Math.ceil(matchingServants.length / 10));
   const visibleServants = matchingServants.slice((servantPage - 1) * 10, servantPage * 10);
-  const servantsLink = (page: number) => `/admin?days=${days}${search.church ? `&church=${encodeURIComponent(search.church)}` : ''}&servantsQ=${encodeURIComponent(search.servantsQ ?? '')}&servantPage=${page}${activitySuffix}`;
+  const servantsLink = (page: number) => `/admin?days=${days}${search.church ? `&church=${encodeURIComponent(search.church)}` : ''}&servantsQ=${encodeURIComponent(search.servantsQ ?? '')}&servantPage=${page}`;
 
   return <main className="adminContent enhancedDashboard">
     <div className="pageTitle"><div><span>لوحة القرار</span><h1>صحة المنظومة والخدمة</h1><p>مؤشرات فعلية حسب الكنيسة والفترة المختارة.</p></div><div className="updatedAt">آخر تحديث {new Date(data.generatedAt).toLocaleString('ar-EG')}</div></div>
-    <form className="dashboardFilters" method="get"><div><span>الفترة</span>{([7, 30, 90] as const).map((value) => <Link key={value} className={days === value ? 'selected' : ''} href={link(value)}>{value === 7 ? 'أسبوع' : value === 30 ? 'شهر' : '3 شهور'}</Link>)}</div><label>الكنيسة<select name="church" defaultValue={search.church ?? ''}><option value="">كل الكنائس</option>{data.churches.map((church) => <option key={String(church.id)} value={String(church.id)}>{String(church.name_ar || church.name)}</option>)}</select></label><input type="hidden" name="days" value={days} />{activityInputs}<button type="submit">تطبيق</button></form>
+    <form className="dashboardFilters" method="get"><div><span>الفترة</span>{([7, 30, 90] as const).map((value) => <Link key={value} className={days === value ? 'selected' : ''} href={link(value)}>{value === 7 ? 'أسبوع' : value === 30 ? 'شهر' : '3 شهور'}</Link>)}</div><label>الكنيسة<select name="church" defaultValue={search.church ?? ''}><option value="">كل الكنائس</option>{data.churches.map((church) => <option key={String(church.id)} value={String(church.id)}>{String(church.name_ar || church.name)}</option>)}</select></label><input type="hidden" name="days" value={days} /><button type="submit">تطبيق</button></form>
 
-    <section className="userActivityCard">
-      <header><div><h2>المستخدمون النشطون</h2><p>كل مستخدم يُحسب مرة واحدة حسب فتح التطبيق أو تسجيل الدخول. التواريخ بتوقيت القاهرة.</p></div></header>
-      <div className="metricGrid userActivityMetrics">{([
-        ['today', 'نشطون النهارده', 'من بداية اليوم بتوقيت القاهرة'],
-        ['day', 'نشطون آخر يوم', 'آخر ٢٤ ساعة'],
-        ['week', 'نشطون آخر أسبوع', 'آخر ٧ أيام'],
-        ['month', 'نشطون آخر شهر', 'آخر ٣٠ يومًا'],
-      ] as const).map(([key, label, hint]) => <article key={key}><small>{label}</small><strong>{activity.counts ? n(activity.counts[key]) : '—'}</strong><em>{hint}</em></article>)}</div>
-      <form className="userActivityFilters" method="get">
-        <input type="hidden" name="days" value={days} />
-        {search.church && <input type="hidden" name="church" value={search.church} />}
-        <label>فترة النشاط<select name="activity" defaultValue={activity.period}><option value="today">النهارده</option><option value="day">آخر يوم</option><option value="week">آخر أسبوع</option><option value="month">آخر شهر</option><option value="custom">فترة مخصصة</option></select></label>
-        <label>من<input type="date" name="activityFrom" defaultValue={activity.from} max={activity.today} /></label>
-        <label>إلى<input type="date" name="activityTo" defaultValue={activity.to} max={activity.today} /></label>
-        <button type="submit">عرض النشاط</button>
-      </form>
-      {activity.error ? <p role="alert">{activity.error}</p> : <p className="activitySelectedCount">النشطون في الفترة المختارة: <strong>{activity.counts ? n(activity.counts.selected) : '—'}</strong></p>}
-      {!activity.ready && <p role="alert">تعذر تحميل إحصائيات الاستخدام. أعد المحاولة لاحقًا.</p>}
-      <p className="activityNote">اختر «فترة مخصصة» لاستخدام تاريخ البداية والنهاية. الإحصائيات تشمل الاستخدام المسجّل من الإصدارات التي ترسل أحداث النشاط.</p>
-    </section>
-
-    <section className="metricGrid decisionMetrics"><article><span className="metricIcon teal">●</span><small>استخدموا التطبيق آخر 5 دقائق</small><strong>{activity.ready ? n(activity.counts?.recent ?? 0) : '—'}</strong><em>{activity.ready ? 'حسب فتح التطبيق أو تسجيل الدخول المسجّل' : 'تحليلات الاستخدام غير متاحة'}</em></article><article><span className="metricIcon teal">✓</span><small>تفعيل الكنائس</small><strong>{summary.activeChurchRate}%</strong><em>{n(summary.activeChurches)} كنيسة لديها خدام واجتماعات وحضور</em></article><article><span className="metricIcon purple">♙</span><small>إجمالي المخدومين النشطين</small><strong>{n(summary.activeMembersTotal)}</strong><em>{n(summary.currentMembers)} مخدوم جديد خلال الفترة</em></article><article><span className="metricIcon blue">✓</span><small>الحضور</small><strong>{n(summary.present)}</strong><em>{n(summary.absent)} غياب مسجل</em></article><article><span className="metricIcon amber">!</span><small>الدعم المفتوح</small><strong>{data.supportReady ? n(summary.openSupport) : '—'}</strong><em>{summary.avgResolutionHours === null ? 'لا توجد حالات محلولة' : `متوسط الحل ${summary.avgResolutionHours} ساعة`}</em></article></section>
+    <section className="metricGrid decisionMetrics"><article><span className="metricIcon teal">✓</span><small>تفعيل الكنائس</small><strong>{summary.activeChurchRate}%</strong><em>{n(summary.activeChurches)} كنيسة لديها خدام واجتماعات وحضور</em></article><article><span className="metricIcon purple">♙</span><small>إجمالي المخدومين النشطين</small><strong>{n(summary.activeMembersTotal)}</strong><em>{n(summary.currentMembers)} مخدوم جديد خلال الفترة</em></article><article><span className="metricIcon blue">✓</span><small>الحضور</small><strong>{n(summary.present)}</strong><em>{n(summary.absent)} غياب مسجل</em></article><article><span className="metricIcon amber">!</span><small>الدعم المفتوح</small><strong>{data.supportReady ? n(summary.openSupport) : '—'}</strong><em>{summary.avgResolutionHours === null ? 'لا توجد حالات محلولة' : `متوسط الحل ${summary.avgResolutionHours} ساعة`}</em></article></section>
 
     <section className="goalsCard"><header><div><h2>أهداف الشهر</h2><p>الهدف يُقارن بنشاط الفترة السابقة أو بإجمالي الحسابات النشطة.</p></div></header><div>{data.monthlyGoals.map((goal) => <article key={goal.label}><span>{goal.label}</span><strong>{n(goal.current)} / {n(goal.target)}</strong><i><b style={{ width: `${goal.progress}%` }} /></i><em>{goal.progress}%</em></article>)}</div></section>
     <section className="dashboardGrid"><article className="tableCard wide"><header><div><h2>Health score للكنائس</h2><p>الحضور، خدام مكلّفون، استخدام حديث، وتحديث بيانات حديث.</p></div></header><div className="simpleTable healthTable"><div className="tableHead"><span>الكنيسة</span><span>Health score</span></div>{data.healthScores.slice(0, 8).map((church) => <div key={church.id}><strong>{church.name}</strong><span className={church.score >= 75 ? 'statusActive' : 'statusQuiet'}>{church.score}%</span></div>)}</div></article><article className="distributionCard"><h2>الاحتفاظ بالنشاط</h2>{data.retention.map((item) => <div key={item.days}><span>نشطة آخر {item.days} يومًا</span><b>{n(item.active)} / {n(item.total)}</b></div>)}</article></section>
@@ -70,7 +38,7 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
 
     <section className="dashboardGrid"><article className="chartCard wide"><header><div><h2>اتجاه الحضور</h2><p>الحضور المسجل يوميًا خلال آخر {Math.min(days, 30)} يومًا.</p></div><b>{n(summary.present)}</b></header><AttendanceBars points={data.attendanceTrend} /></article><article className="distributionCard recentChanges"><h2>آخر التعديلات</h2>{data.recentChanges.length ? data.recentChanges.slice(0, 5).map((change, index) => <div key={`${change.at}-${index}`}><span><b>{change.actor}</b> {actionLabel(change.action)} {change.table}</span><small>{new Date(change.at).toLocaleString('ar-EG')}</small></div>) : <div className="emptyMetric">سيظهر السجل بعد تطبيق Migration الإدارة.</div>}</article></section>
 
-    <section className="servantsCard"><header><div><h2>الخدام والصلاحيات</h2><p>كل خادم وتكليفاته في الاجتماعات أو الفصول. استخدم فلتر الكنيسة في الأعلى للتركيز على كنيسة واحدة.</p></div><Link href="/admin/data/class_assignments">إدارة التكليفات</Link></header><form className="servantsSearch">{activityInputs}<input name="servantsQ" defaultValue={search.servantsQ ?? ''} placeholder="ابحث باسم الخادم أو الكنيسة…" /><input type="hidden" name="days" value={days} />{search.church && <input type="hidden" name="church" value={search.church} />}<button type="submit">بحث</button></form>{matchingServants.length ? <><div className="servantsList">{visibleServants.map((servant) => <article key={servant.id}><div className="servantHeading"><strong>{servant.name}</strong><span>{servant.church}</span><em>{servant.role}</em></div>{servant.assignments.length ? <ul>{servant.assignments.map((assignment) => <li key={`${servant.id}-${assignment.target}`}><b>{assignment.target}</b><span className={assignment.attendance ? 'permissionYes' : 'permissionNo'}>تسجيل حضور: {assignment.attendance ? 'مسموح' : 'غير مسموح'}</span><span className={assignment.reports ? 'permissionYes' : 'permissionNo'}>تقارير: {assignment.reports ? 'مسموح' : 'غير مسموح'}</span></li>)}</ul> : <p className="noAssignment">لا توجد تكليفات محددة لهذا الخادم.</p>}</article>)}</div><div className="servantsPagination"><span>صفحة {servantPage} من {servantPages}</span>{servantPage > 1 && <Link href={servantsLink(servantPage - 1)}>السابق</Link>}{servantPage < servantPages && <Link href={servantsLink(servantPage + 1)}>التالي</Link>}</div></> : <div className="emptyMetric">لا توجد حسابات خدام مطابقة للفلتر الحالي.</div>}</section>
+    <section className="servantsCard"><header><div><h2>الخدام والصلاحيات</h2><p>كل خادم وتكليفاته في الاجتماعات أو الفصول. استخدم فلتر الكنيسة في الأعلى للتركيز على كنيسة واحدة.</p></div><Link href="/admin/data/class_assignments">إدارة التكليفات</Link></header><form className="servantsSearch"><input name="servantsQ" defaultValue={search.servantsQ ?? ''} placeholder="ابحث باسم الخادم أو الكنيسة…" /><input type="hidden" name="days" value={days} />{search.church && <input type="hidden" name="church" value={search.church} />}<button type="submit">بحث</button></form>{matchingServants.length ? <><div className="servantsList">{visibleServants.map((servant) => <article key={servant.id}><div className="servantHeading"><strong>{servant.name}</strong><span>{servant.church}</span><em>{servant.role}</em></div>{servant.assignments.length ? <ul>{servant.assignments.map((assignment) => <li key={`${servant.id}-${assignment.target}`}><b>{assignment.target}</b><span className={assignment.attendance ? 'permissionYes' : 'permissionNo'}>تسجيل حضور: {assignment.attendance ? 'مسموح' : 'غير مسموح'}</span><span className={assignment.reports ? 'permissionYes' : 'permissionNo'}>تقارير: {assignment.reports ? 'مسموح' : 'غير مسموح'}</span></li>)}</ul> : <p className="noAssignment">لا توجد تكليفات محددة لهذا الخادم.</p>}</article>)}</div><div className="servantsPagination"><span>صفحة {servantPage} من {servantPages}</span>{servantPage > 1 && <Link href={servantsLink(servantPage - 1)}>السابق</Link>}{servantPage < servantPages && <Link href={servantsLink(servantPage + 1)}>التالي</Link>}</div></> : <div className="emptyMetric">لا توجد حسابات خدام مطابقة للفلتر الحالي.</div>}</section>
 
     <section className="dashboardGrid"><article className="tableCard wide"><header><div><h2>غياب متكرر</h2><p>مخدومون لديهم غياب مرتين أو أكثر خلال الفترة.</p></div><Link href="/admin/data/attendance_records">السجلات</Link></header><div className="nameChips">{data.repeatedAbsences.length ? data.repeatedAbsences.map((entry) => <span key={entry.name}><b>{entry.name}</b> {entry.count} مرات</span>) : <em>لا توجد حالات غياب متكرر في الفترة المختارة.</em>}</div></article><article className="distributionCard"><h2>الحسابات غير النشطة</h2>{data.inactiveProfiles.length ? data.inactiveProfiles.map((profile) => <div key={`${profile.name}-${profile.church}`}><span>{profile.name}</span><b>{profile.church}</b></div>) : <div className="emptyMetric">لا توجد حسابات غير نشطة.</div>}</article></section>
   </main>;

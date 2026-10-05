@@ -18,6 +18,7 @@ export default async function ProtectedAdminLayout({ children }: { children: Rea
         </Link>
         <nav className="adminDesktopNav">
           <Link href="/admin" className="navPrimary">◫ نظرة عامة</Link>
+          <Link href="/admin/activity">نشاط المستخدمين</Link>
           <Link href="/admin/groups">المجموعات</Link>
           <Link href="/admin/meetings-by-day">الاجتماعات حسب اليوم</Link>
           <p>قاعدة البيانات</p>
