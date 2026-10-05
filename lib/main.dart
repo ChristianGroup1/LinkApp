@@ -33,6 +33,7 @@ const _defaultSentryDsn =
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  debugPrint('[startup] binding ready');
 
   const definedSentryDsn = String.fromEnvironment(
     'SENTRY_DSN',
@@ -40,6 +41,7 @@ void main() async {
   );
   const definedSentryEnvironment = String.fromEnvironment('SENTRY_ENVIRONMENT');
 
+  debugPrint('[startup] sentry init starting');
   await SentryFlutter.init((options) {
     options.dsn = definedSentryDsn;
     options.environment = definedSentryEnvironment.isNotEmpty
@@ -53,9 +55,11 @@ void main() async {
     // ignore: experimental_member_use
     options.profilesSampleRate = 0.2;
   }, appRunner: _startApp);
+  debugPrint('[startup] sentry init completed');
 }
 
 Future<void> _startApp() async {
+  debugPrint('[startup] app runner entered');
   AppTheme.configureBundledFonts();
   LicenseRegistry.addLicense(() async* {
     final license = await rootBundle.loadString('assets/fonts/OFL-Cairo.txt');
@@ -73,9 +77,13 @@ Future<void> _startApp() async {
   // Production web builds get these values from --dart-define. Avoid asking
   // the browser to fetch the bundled .env asset when compile-time values exist.
   if (definedSupabaseUrl.isEmpty || definedSupabaseAnonKey.isEmpty) {
+    debugPrint('[startup] dotenv load starting');
     await dotenv.load(fileName: '.env', isOptional: true);
+    debugPrint('[startup] dotenv load completed');
   }
+  debugPrint('[startup] theme load starting');
   await ThemeController.instance.load();
+  debugPrint('[startup] theme load completed');
 
   final supabaseUrl = _firstNonEmpty([
     definedSupabaseUrl,
@@ -101,10 +109,12 @@ Future<void> _startApp() async {
   }
 
   try {
+    debugPrint('[startup] supabase init starting');
     await Supabase.initialize(
       url: supabaseUrl,
       publishableKey: supabaseAnonKey,
     );
+    debugPrint('[startup] supabase init completed');
   } catch (error, stackTrace) {
     await Sentry.captureException(error, stackTrace: stackTrace);
     runApp(
@@ -119,7 +129,9 @@ Future<void> _startApp() async {
     return;
   }
 
+  debugPrint('[startup] connectivity init starting');
   await ConnectivityService.instance.ensureInitialized();
+  debugPrint('[startup] connectivity init completed');
 
   final DatabaseRepository repository = SupabaseRepository();
 
@@ -128,6 +140,7 @@ Future<void> _startApp() async {
     unawaited(AppAnalyticsService.trackAppOpen());
   }
 
+  debugPrint('[startup] runApp starting');
   runApp(
     SentryWidget(
       child: RepositoryProvider<DatabaseRepository>.value(
@@ -140,6 +153,7 @@ Future<void> _startApp() async {
       ),
     ),
   );
+  debugPrint('[startup] runApp completed');
 }
 
 String _firstNonEmpty(List<String?> values) {
