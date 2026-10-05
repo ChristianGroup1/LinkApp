@@ -31,9 +31,14 @@ import 'presentation/widgets/auth_widgets.dart';
 const _defaultSentryDsn =
     'https://19451a31a391220bacd022eb373720a2@o4511268451254272.ingest.de.sentry.io/4511985653973072';
 
-void main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  debugPrint('[startup] binding ready');
+  AppTheme.configureBundledFonts();
+
+  // Render a Flutter frame immediately. Sentry's web integration loads its
+  // JavaScript SDK from a CDN and can wait indefinitely when that CDN is
+  // unreachable; it must never hold the application behind the HTML splash.
+  runApp(const _AppStartupShell());
 
   const definedSentryDsn = String.fromEnvironment(
     'SENTRY_DSN',
@@ -41,26 +46,41 @@ void main() async {
   );
   const definedSentryEnvironment = String.fromEnvironment('SENTRY_ENVIRONMENT');
 
-  debugPrint('[startup] sentry init starting');
-  await SentryFlutter.init((options) {
-    options.dsn = definedSentryDsn;
-    options.environment = definedSentryEnvironment.isNotEmpty
-        ? definedSentryEnvironment
-        : (kReleaseMode ? 'production' : 'development');
-    options.sendDefaultPii = false;
-    options.enableLogs = false;
-    options.attachScreenshot = false;
-    options.tracesSampleRate = 0.2;
-    // Profiling is relative to sampled traces (4% of all transactions).
-    // ignore: experimental_member_use
-    options.profilesSampleRate = 0.2;
-  }, appRunner: _startApp);
-  debugPrint('[startup] sentry init completed');
+  unawaited(
+    SentryFlutter.init((options) {
+      options.dsn = definedSentryDsn;
+      options.environment = definedSentryEnvironment.isNotEmpty
+          ? definedSentryEnvironment
+          : (kReleaseMode ? 'production' : 'development');
+      options.sendDefaultPii = false;
+      options.enableLogs = false;
+      options.attachScreenshot = false;
+      options.tracesSampleRate = 0.2;
+      // Profiling is relative to sampled traces (4% of all transactions).
+      // ignore: experimental_member_use
+      options.profilesSampleRate = 0.2;
+    }).catchError((Object error, StackTrace stackTrace) {
+      debugPrint('Sentry initialization failed: $error');
+    }),
+  );
+  unawaited(_startAppGuarded());
+}
+
+Future<void> _startAppGuarded() async {
+  try {
+    await _startApp();
+  } catch (error, stackTrace) {
+    unawaited(Sentry.captureException(error, stackTrace: stackTrace));
+    runApp(
+      const SupabaseConfigurationErrorApp(
+        message:
+            'تعذر بدء التطبيق. أعد تحميل الصفحة، وإذا استمرت المشكلة تواصل مع الدعم.',
+      ),
+    );
+  }
 }
 
 Future<void> _startApp() async {
-  debugPrint('[startup] app runner entered');
-  AppTheme.configureBundledFonts();
   LicenseRegistry.addLicense(() async* {
     final license = await rootBundle.loadString('assets/fonts/OFL-Cairo.txt');
     yield LicenseEntryWithLineBreaks(const ['google_fonts', 'Cairo'], license);
@@ -77,13 +97,13 @@ Future<void> _startApp() async {
   // Production web builds get these values from --dart-define. Avoid asking
   // the browser to fetch the bundled .env asset when compile-time values exist.
   if (definedSupabaseUrl.isEmpty || definedSupabaseAnonKey.isEmpty) {
-    debugPrint('[startup] dotenv load starting');
     await dotenv.load(fileName: '.env', isOptional: true);
-    debugPrint('[startup] dotenv load completed');
   }
-  debugPrint('[startup] theme load starting');
-  await ThemeController.instance.load();
-  debugPrint('[startup] theme load completed');
+  try {
+    await ThemeController.instance.load().timeout(const Duration(seconds: 3));
+  } catch (_) {
+    // Theme preferences are optional; the app can use the system theme.
+  }
 
   final supabaseUrl = _firstNonEmpty([
     definedSupabaseUrl,
@@ -109,14 +129,12 @@ Future<void> _startApp() async {
   }
 
   try {
-    debugPrint('[startup] supabase init starting');
     await Supabase.initialize(
       url: supabaseUrl,
       publishableKey: supabaseAnonKey,
-    );
-    debugPrint('[startup] supabase init completed');
+    ).timeout(const Duration(seconds: 15));
   } catch (error, stackTrace) {
-    await Sentry.captureException(error, stackTrace: stackTrace);
+    unawaited(Sentry.captureException(error, stackTrace: stackTrace));
     runApp(
       SentryWidget(
         child: SupabaseConfigurationErrorApp(
@@ -129,10 +147,6 @@ Future<void> _startApp() async {
     return;
   }
 
-  debugPrint('[startup] connectivity init starting');
-  await ConnectivityService.instance.ensureInitialized();
-  debugPrint('[startup] connectivity init completed');
-
   final DatabaseRepository repository = SupabaseRepository();
 
   if (Supabase.instance.client.auth.currentSession != null) {
@@ -140,7 +154,12 @@ Future<void> _startApp() async {
     unawaited(AppAnalyticsService.trackAppOpen());
   }
 
-  debugPrint('[startup] runApp starting');
+  unawaited(
+    ConnectivityService.instance.ensureInitialized().catchError((Object error) {
+      debugPrint('Connectivity initialization failed: $error');
+    }),
+  );
+
   runApp(
     SentryWidget(
       child: RepositoryProvider<DatabaseRepository>.value(
@@ -153,7 +172,35 @@ Future<void> _startApp() async {
       ),
     ),
   );
-  debugPrint('[startup] runApp completed');
+}
+
+class _AppStartupShell extends StatelessWidget {
+  const _AppStartupShell();
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Link Church Management',
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.platformTheme,
+      darkTheme: AppTheme.platformDarkTheme,
+      home: const Directionality(
+        textDirection: TextDirection.rtl,
+        child: Scaffold(
+          body: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 20),
+                Text('جاري تهيئة التطبيق…'),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 String _firstNonEmpty(List<String?> values) {
