@@ -1,3 +1,5 @@
+import { buildMeetingGroups } from './meeting-groups';
+import { readCompleteRows } from './read-complete-rows';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { adminTables, type AdminTableConfig, type AdminTableKey } from '@/lib/admin/schema';
 
@@ -209,153 +211,48 @@ function safeRows(result: { data: unknown; error?: unknown }) {
   return Array.isArray(result.data) ? result.data as Array<Record<string, unknown>> : [];
 }
 
-type MeetingGroup = {
-  id: string;
-  church: string;
-  meeting: string;
-  servants: string[];
-  members: string[];
-  memberCount: number;
-};
-
-function buildMeetingGroups({
-  churches,
-  profiles,
-  meetings,
-  classes,
-  members,
-  memberMeetingAssignments,
-  meetingAssignments,
-}: {
-  churches: Array<Record<string, unknown>>;
-  profiles: Array<Record<string, unknown>>;
-  meetings: Array<Record<string, unknown>>;
-  classes: Array<Record<string, unknown>>;
-  members: Array<Record<string, unknown>>;
-  memberMeetingAssignments: Array<Record<string, unknown>>;
-  meetingAssignments: Array<Record<string, unknown>>;
-}): MeetingGroup[] {
-  const churchNames = new Map(churches.map((church) => [String(church.id), String(church.name_ar || church.name || 'كنيسة بلا اسم')]));
-  const meetingNames = new Map(meetings.map((meeting) => [String(meeting.id), String(meeting.name_ar || meeting.name || 'اجتماع بلا اسم')]));
-  const activeMembers = members.filter((member) => member.is_active);
-  const activeMemberById = new Map(activeMembers.map((member) => [String(member.id), member]));
-  const meetingChurchById = new Map(meetings.map((meeting) => [String(meeting.id), String(meeting.church_id)]));
-  const meetingMemberIds = new Map<string, Set<string>>();
-  const addMeetingMember = (meetingId: string, memberId: string) => {
-    const ids = meetingMemberIds.get(meetingId) ?? new Set<string>();
-    ids.add(memberId);
-    meetingMemberIds.set(meetingId, ids);
-  };
-  const membersWithAssignments = new Set<string>();
-  for (const assignment of memberMeetingAssignments) {
-    const memberId = String(assignment.member_id);
-    const meetingId = String(assignment.meeting_id);
-    const member = activeMemberById.get(memberId);
-    if (member && String(member.church_id) === String(assignment.church_id)
-      && meetingChurchById.get(meetingId) === String(assignment.church_id)) {
-      membersWithAssignments.add(memberId);
-      addMeetingMember(meetingId, memberId);
-    }
-  }
-  const classMeetingIds = new Map(classes.map((schoolClass) => [String(schoolClass.id), String(schoolClass.meeting_id)]));
-  for (const member of activeMembers) {
-    const memberId = String(member.id);
-    if (membersWithAssignments.has(memberId)) continue;
-    const meetingId = String(member.meeting_id || classMeetingIds.get(String(member.sunday_school_class_id)) || '');
-    if (meetingId && meetingChurchById.get(meetingId) === String(member.church_id)) addMeetingMember(meetingId, memberId);
-  }
-  const servantsByMeeting = new Map<string, string[]>();
-  const profilesById = new Map(profiles.map((profile) => [String(profile.id), profile]));
-  for (const assignment of meetingAssignments) {
-    const profile = profilesById.get(String(assignment.user_id));
-    if (!profile?.is_active) continue;
-    const meetingKey = `${assignment.church_id}:${assignment.meeting_id}`;
-    const names = servantsByMeeting.get(meetingKey) ?? [];
-    const name = String(profile.full_name || profile.email || 'خادم بلا اسم');
-    if (!names.includes(name)) names.push(name);
-    servantsByMeeting.set(meetingKey, names);
-  }
-  return meetings.map((meeting) => {
-    const meetingId = String(meeting.id);
-    const meetingKey = `${meeting.church_id}:${meetingId}`;
-    const memberNames = Array.from(meetingMemberIds.get(meetingId) ?? [])
-      .map((memberId) => activeMemberById.get(memberId))
-      .filter((member): member is Record<string, unknown> => Boolean(member))
-      .map((member) => String(member.full_name || 'مخدوم بلا اسم'))
-      .sort((a, b) => a.localeCompare(b, 'ar'));
-    return {
-      id: meetingId,
-      church: churchNames.get(String(meeting.church_id)) ?? 'كنيسة بلا اسم',
-      meeting: meetingNames.get(meetingId) ?? 'اجتماع بلا اسم',
-      servants: (servantsByMeeting.get(meetingKey) ?? []).sort((a, b) => a.localeCompare(b, 'ar')),
-      members: memberNames,
-      memberCount: memberNames.length,
-    };
-  }).sort((a, b) => b.memberCount - a.memberCount
-    || a.church.localeCompare(b.church, 'ar')
-    || a.meeting.localeCompare(b.meeting, 'ar'));
-}
-
 export async function getMeetingGroupsData(churchId?: string) {
   const admin = createSupabaseAdminClient();
-  const [churchesResult, profilesResult, meetingsResult, classesResult, membersResult, memberAssignmentsResult, meetingAssignmentsResult] = await Promise.all([
-    admin.from('churches').select('id, name_ar, name').order('name_ar').limit(5000),
-    admin.from('profiles').select('id, church_id, full_name, email, is_active').limit(20000),
-    admin.from('meetings').select('id, church_id, name_ar, name').limit(20000),
-    admin.from('sunday_school_classes').select('id, church_id, meeting_id, name_ar, name').limit(20000),
-    admin.from('members').select('id, church_id, meeting_id, sunday_school_class_id, full_name, is_active').limit(50000),
-    admin.from('member_meeting_assignments').select('church_id, member_id, meeting_id').limit(100000),
-    admin.from('meeting_assignments').select('church_id, meeting_id, user_id').limit(50000),
+  const scopedQuery = (table: string, columns: string, order: string[]) => {
+    let query = admin.from(table).select(columns);
+    if (churchId && table !== 'churches') query = query.eq('church_id', churchId);
+    for (const column of order) query = query.order(column);
+    return readCompleteRows(async (from, to) => {
+      const result = await query.range(from, to);
+      return { data: safeRows(result), error: result.error };
+    });
+  };
+  const [churches, profiles, meetings, classes, members, memberMeetingAssignments, meetingAssignments] = await Promise.all([
+    scopedQuery('churches', 'id, name_ar, name', ['id']),
+    scopedQuery('profiles', 'id, church_id, full_name, email, phone, is_active', ['id']),
+    scopedQuery('meetings', 'id, church_id, name_ar, name, weekday, is_active, created_by', ['id']),
+    scopedQuery('sunday_school_classes', 'id, church_id, meeting_id, name_ar, name', ['id']),
+    scopedQuery('members', 'id, church_id, meeting_id, sunday_school_class_id, full_name, is_active', ['id']),
+    scopedQuery('member_meeting_assignments', 'church_id, member_id, meeting_id', ['church_id', 'member_id', 'meeting_id']),
+    scopedQuery('meeting_assignments', 'church_id, meeting_id, user_id', ['church_id', 'meeting_id', 'user_id']),
   ]);
-  const requiredErrors = [churchesResult, profilesResult, meetingsResult, classesResult, membersResult, meetingAssignmentsResult].filter((result) => result.error);
-  if (requiredErrors.length) throw new Error('تعذر تحميل مجموعات الاجتماعات من قاعدة البيانات.');
-  const churches = safeRows(churchesResult);
-  const scope = (rows: Array<Record<string, unknown>>) => churchId ? rows.filter((row) => String(row.church_id) === churchId) : rows;
-  const groups = buildMeetingGroups({
-    churches,
-    profiles: scope(safeRows(profilesResult)),
-    meetings: scope(safeRows(meetingsResult)),
-    classes: scope(safeRows(classesResult)),
-    members: scope(safeRows(membersResult)),
-    memberMeetingAssignments: scope(safeRows(memberAssignmentsResult)),
-    meetingAssignments: scope(safeRows(meetingAssignmentsResult)),
-  });
-  return { churches, groups };
+  const groups = buildMeetingGroups({ churches, profiles, meetings, classes, members, memberMeetingAssignments, meetingAssignments });
+  return { churches, groups, meetingRows: meetings, profileRows: profiles };
 }
 
 export async function getMeetingsByWeekdayData() {
-  const admin = createSupabaseAdminClient();
-  const [{ groups }, meetingsResult] = await Promise.all([
-    getMeetingGroupsData(),
-    admin.from('meetings').select('id, church_id, name_ar, name, weekday, is_active, created_by').limit(20000),
-  ]);
-  if (meetingsResult.error) {
-    throw new Error('تعذر تحميل الاجتماعات حسب اليوم.');
-  }
-
+  // The cards and their counts use the same complete meeting snapshot.
+  const { groups, meetingRows, profileRows } = await getMeetingGroupsData();
   const groupByMeeting = new Map(groups.map((group) => [group.id, group]));
-  const creatorIds = Array.from(new Set(safeRows(meetingsResult)
-    .map((meeting) => meeting.created_by)
-    .filter((value): value is string => typeof value === 'string' && value.length > 0)));
-  const creatorsResult = creatorIds.length
-    ? await admin.from('profiles').select('id, full_name, email, phone').in('id', creatorIds)
-    : { data: [], error: null };
-  if (creatorsResult.error) throw new Error('تعذر تحميل بيانات منشئي الاجتماعات.');
-  const creators = new Map(safeRows(creatorsResult).map((profile) => [String(profile.id), {
+  const creators = new Map(profileRows.map((profile) => [String(profile.id), {
     name: String(profile.full_name || profile.email || 'مستخدم بلا اسم'),
     phone: typeof profile.phone === 'string' && profile.phone.trim() ? profile.phone.trim() : null,
   }]));
-  const meetings = safeRows(meetingsResult).map((meeting) => ({
+  return meetingRows.map((meeting) => ({
     id: String(meeting.id),
-    church: groupByMeeting.get(String(meeting.id))?.church ?? 'كنيسة بلا اسم',
+    church: groupByMeeting.get(String(meeting.id))!.church,
     name: String(meeting.name_ar || meeting.name || 'اجتماع بلا اسم'),
     weekday: Number(meeting.weekday),
     isActive: meeting.is_active !== false,
-    memberCount: groupByMeeting.get(String(meeting.id))?.memberCount ?? 0,
+    memberCount: groupByMeeting.get(String(meeting.id))!.memberCount,
     creator: typeof meeting.created_by === 'string' ? creators.get(meeting.created_by) ?? null : null,
   })).filter((meeting) => Number.isInteger(meeting.weekday) && meeting.weekday >= 1 && meeting.weekday <= 7)
     .sort((a, b) => a.weekday - b.weekday || a.name.localeCompare(b.name, 'ar') || a.church.localeCompare(b.church, 'ar'));
-  return meetings;
 }
 
 /** Detailed owner metrics. All filtering is server-side and only uses the service-role client. */
