@@ -19,11 +19,7 @@ mixin _SupabaseMembersRepository on _SupabaseRepositoryBase {
         churchId: churchId,
         classId: classId,
       );
-      return _filterDeletedEntities(
-        members,
-        (item) => item.id,
-        pendingDeletes,
-      );
+      return _filterDeletedEntities(members, (item) => item.id, pendingDeletes);
     }
     return OfflineNetworkPolicy.run(
       online: () async {
@@ -99,11 +95,7 @@ mixin _SupabaseMembersRepository on _SupabaseRepositoryBase {
         churchId: churchId,
         meetingId: meetingId,
       );
-      return _filterDeletedEntities(
-        members,
-        (item) => item.id,
-        pendingDeletes,
-      );
+      return _filterDeletedEntities(members, (item) => item.id, pendingDeletes);
     }
     return OfflineNetworkPolicy.run(
       online: () async {
@@ -361,9 +353,7 @@ mixin _SupabaseMembersRepository on _SupabaseRepositoryBase {
       total: server.total + pending.length,
       sundaySchool:
           server.sundaySchool +
-          pending
-              .where((m) => m.scope == MemberScope.sundaySchoolClass)
-              .length,
+          pending.where((m) => m.scope == MemberScope.sundaySchoolClass).length,
       meetings:
           server.meetings +
           pending.where((m) => m.scope == MemberScope.meeting).length,
@@ -529,6 +519,9 @@ mixin _SupabaseMembersRepository on _SupabaseRepositoryBase {
     DateTime? birthDate,
     String? schoolYear,
     String? notes,
+    String? address,
+    double? latitude,
+    double? longitude,
   }) {
     return _notifyAfter(
       _offlineWriter.createMember(
@@ -543,6 +536,9 @@ mixin _SupabaseMembersRepository on _SupabaseRepositoryBase {
         birthDate: birthDate,
         schoolYear: schoolYear,
         notes: notes,
+        address: address,
+        latitude: latitude,
+        longitude: longitude,
       ),
       {AppDataArea.members},
     );
@@ -572,6 +568,9 @@ mixin _SupabaseMembersRepository on _SupabaseRepositoryBase {
     required bool isActive,
     String? schoolYear,
     String? notes,
+    String? address,
+    double? latitude,
+    double? longitude,
   }) {
     return _notifyAfter(
       _offlineWriter.updateMember(
@@ -588,6 +587,9 @@ mixin _SupabaseMembersRepository on _SupabaseRepositoryBase {
         isActive: isActive,
         schoolYear: schoolYear,
         notes: notes,
+        address: address,
+        latitude: latitude,
+        longitude: longitude,
       ),
       {AppDataArea.members},
     );

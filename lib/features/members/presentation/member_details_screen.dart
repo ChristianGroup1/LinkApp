@@ -9,9 +9,11 @@ import '../../../core/utils/whatsapp_launcher.dart';
 import '../../../data/models/models.dart';
 import '../../../data/repositories/database_repository.dart';
 import '../../../shared/data/follow_up_contact_status.dart';
+import '../data/member_location.dart';
 import '../logic/members_bloc.dart';
 import 'add_edit_member_screen.dart';
 import 'member_attendance_history_screen.dart';
+import 'widgets/member_location_map.dart';
 
 class MemberDetailsScreen extends StatelessWidget {
   final MemberEntity member;
@@ -66,6 +68,14 @@ class _MemberDetailsView extends StatelessWidget {
   Widget build(BuildContext context) {
     final destination = _destinationDetails();
     final primaryContact = member.phone ?? member.parentPhone;
+    final location = MemberLocation.fromNumbers(
+      member.latitude,
+      member.longitude,
+    );
+    final hasSchoolYear =
+        member.schoolYear != null && member.schoolYear!.trim().isNotEmpty;
+    final hasAddress =
+        member.address != null && member.address!.trim().isNotEmpty;
     final additionalMeetingNames = meetings
         .where(
           (meeting) =>
@@ -168,19 +178,56 @@ class _MemberDetailsView extends StatelessWidget {
                   icon: Icons.qr_code_2_rounded,
                   label: 'الكود التعريفي',
                   value: member.code,
-                  isLast:
-                      member.schoolYear == null || member.schoolYear!.isEmpty,
+                  isLast: !hasSchoolYear && !hasAddress,
                 ),
                 // 5. السنة الدراسية / المرحلة
-                if (member.schoolYear != null && member.schoolYear!.isNotEmpty)
+                if (hasSchoolYear)
                   _DetailRow(
                     icon: Icons.school_outlined,
                     label: 'السنة الدراسية / المرحلة',
                     value: member.schoolYear,
+                    isLast: !hasAddress,
+                  ),
+                if (hasAddress)
+                  _DetailRow(
+                    icon: Icons.home_outlined,
+                    label: 'العنوان',
+                    value: member.address,
                     isLast: true,
                   ),
               ],
             ),
+            if (location != null) ...[
+              const SizedBox(height: 14),
+              _DetailsSection(
+                icon: Icons.map_outlined,
+                color: AppTheme.accentSky,
+                title: 'الموقع على الخريطة',
+                children: [
+                  const SizedBox(height: 8),
+                  MemberLocationMap(
+                    latitude: location.latitude,
+                    longitude: location.longitude,
+                    onOpen: () => _openMemberDirections(location),
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () => _openMemberDirections(location),
+                      icon: const Icon(Icons.directions_outlined),
+                      label: Text(
+                        'فتح في خرائط جوجل',
+                        style: GoogleFonts.cairo(fontWeight: FontWeight.w800),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(48),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
             const SizedBox(height: 14),
             _DetailsSection(
               icon: Icons.account_tree_outlined,
@@ -271,6 +318,16 @@ class _MemberDetailsView extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _openMemberDirections(MemberLocation location) async {
+    final uri = location.directionsUri;
+    try {
+      if (await launchUrl(uri, mode: LaunchMode.externalApplication)) return;
+    } catch (_) {}
+    try {
+      await launchUrl(uri, mode: LaunchMode.platformDefault);
+    } catch (_) {}
   }
 
   ({String label, IconData icon, Color color}) _destinationDetails() {

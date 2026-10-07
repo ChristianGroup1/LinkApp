@@ -13,6 +13,9 @@ class MemberCreateDraft {
   final DateTime? birthDate;
   final String? schoolYear;
   final String? notes;
+  final String? address;
+  final double? latitude;
+  final double? longitude;
 
   const MemberCreateDraft({
     required this.fullName,
@@ -26,5 +29,8 @@ class MemberCreateDraft {
     this.birthDate,
     this.schoolYear,
     this.notes,
+    this.address,
+    this.latitude,
+    this.longitude,
   });
 }

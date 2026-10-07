@@ -13,9 +13,13 @@ mixin _OfflineMemberWrites on _OfflineWriteHandlerBase {
     DateTime? birthDate,
     String? schoolYear,
     String? notes,
+    String? address,
+    double? latitude,
+    double? longitude,
   }) async {
     final profile = await _requireProfile();
     final churchId = profile.churchId!;
+    final location = _storedMemberLocation(latitude, longitude);
 
     try {
       await _throwIfKnownOffline();
@@ -40,6 +44,9 @@ mixin _OfflineMemberWrites on _OfflineWriteHandlerBase {
             'birth_date': _dateOnly(birthDate),
             'school_year': emptyToNull(schoolYear),
             'notes': emptyToNull(notes),
+            'address': emptyToNull(address),
+            'latitude': location.latitude,
+            'longitude': location.longitude,
             'is_active': true,
             'joined_on': DateTime.now().toIso8601String().split('T').first,
           })
@@ -71,6 +78,9 @@ mixin _OfflineMemberWrites on _OfflineWriteHandlerBase {
         birthDate: birthDate,
         schoolYear: emptyToNull(schoolYear),
         notes: emptyToNull(notes),
+        address: emptyToNull(address),
+        latitude: location.latitude,
+        longitude: location.longitude,
         isActive: true,
       );
       await cache.upsertMember(churchId, member);
@@ -92,6 +102,9 @@ mixin _OfflineMemberWrites on _OfflineWriteHandlerBase {
             'birth_date': _dateOnly(birthDate),
             'school_year': emptyToNull(schoolYear),
             'notes': emptyToNull(notes),
+            'address': emptyToNull(address),
+            'latitude': location.latitude,
+            'longitude': location.longitude,
             'is_active': true,
           },
           queuedAt: DateTime.now(),
@@ -116,6 +129,7 @@ mixin _OfflineMemberWrites on _OfflineWriteHandlerBase {
       final joinedOn = DateTime.now().toIso8601String().split('T').first;
       final payload = <Map<String, dynamic>>[];
       for (final draft in drafts) {
+        final location = _storedMemberLocation(draft.latitude, draft.longitude);
         payload.add({
           'church_id': churchId,
           'full_name': draft.fullName.trim(),
@@ -137,6 +151,9 @@ mixin _OfflineMemberWrites on _OfflineWriteHandlerBase {
           'birth_date': _dateOnly(draft.birthDate),
           'school_year': emptyToNull(draft.schoolYear),
           'notes': emptyToNull(draft.notes),
+          'address': emptyToNull(draft.address),
+          'latitude': location.latitude,
+          'longitude': location.longitude,
           'is_active': true,
           'joined_on': joinedOn,
         });
@@ -172,6 +189,9 @@ mixin _OfflineMemberWrites on _OfflineWriteHandlerBase {
             birthDate: draft.birthDate,
             schoolYear: draft.schoolYear,
             notes: draft.notes,
+            address: draft.address,
+            latitude: draft.latitude,
+            longitude: draft.longitude,
           ),
         );
       }
@@ -278,9 +298,13 @@ mixin _OfflineMemberWrites on _OfflineWriteHandlerBase {
     required bool isActive,
     String? schoolYear,
     String? notes,
+    String? address,
+    double? latitude,
+    double? longitude,
   }) async {
     final profile = await _requireProfile();
     final churchId = profile.churchId!;
+    final location = _storedMemberLocation(latitude, longitude);
     final resolvedId = await queue.resolveId(id);
     final resolvedClassId = sundaySchoolClassId == null
         ? null
@@ -320,6 +344,9 @@ mixin _OfflineMemberWrites on _OfflineWriteHandlerBase {
         birthDate: birthDate,
         schoolYear: emptyToNull(schoolYear),
         notes: emptyToNull(notes),
+        address: emptyToNull(address),
+        latitude: location.latitude,
+        longitude: location.longitude,
         isActive: isActive,
       );
       await cache.upsertMember(churchId, member);
@@ -342,6 +369,9 @@ mixin _OfflineMemberWrites on _OfflineWriteHandlerBase {
             'birth_date': _dateOnly(birthDate),
             'school_year': emptyToNull(schoolYear),
             'notes': emptyToNull(notes),
+            'address': emptyToNull(address),
+            'latitude': location.latitude,
+            'longitude': location.longitude,
             'is_active': isActive,
           },
           queuedAt: DateTime.now(),
@@ -370,6 +400,9 @@ mixin _OfflineMemberWrites on _OfflineWriteHandlerBase {
             'birth_date': _dateOnly(birthDate),
             'school_year': emptyToNull(schoolYear),
             'notes': emptyToNull(notes),
+            'address': emptyToNull(address),
+            'latitude': location.latitude,
+            'longitude': location.longitude,
             'is_active': isActive,
           })
           .eq('id', resolvedId)
@@ -399,6 +432,9 @@ mixin _OfflineMemberWrites on _OfflineWriteHandlerBase {
         birthDate: birthDate,
         schoolYear: emptyToNull(schoolYear),
         notes: emptyToNull(notes),
+        address: emptyToNull(address),
+        latitude: location.latitude,
+        longitude: location.longitude,
         isActive: isActive,
       );
       if (resolvedId != id) await cache.removeMember(churchId, id);
@@ -420,6 +456,9 @@ mixin _OfflineMemberWrites on _OfflineWriteHandlerBase {
             'birth_date': _dateOnly(birthDate),
             'school_year': emptyToNull(schoolYear),
             'notes': emptyToNull(notes),
+            'address': emptyToNull(address),
+            'latitude': location.latitude,
+            'longitude': location.longitude,
             'is_active': isActive,
           },
           queuedAt: DateTime.now(),

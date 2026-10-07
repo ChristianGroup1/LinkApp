@@ -10,6 +10,7 @@ import '../../../data/models/models.dart';
 import '../../../data/offline/member_create_draft.dart';
 import '../../../data/offline/offline_save_result.dart';
 import '../../../data/repositories/database_repository.dart';
+import 'member_location.dart';
 import 'member_school_years.dart';
 
 const memberExcelHeaders = [
@@ -23,6 +24,9 @@ const memberExcelHeaders = [
   'الكود التعريفي',
   'اسم ولي الأمر',
   'هاتف ولي الأمر',
+  'العنوان',
+  'خط العرض',
+  'خط الطول',
   'نشط (نعم/لا)',
 ];
 
@@ -40,6 +44,9 @@ class MemberImportRow {
   final String? parentPhone;
   final String? code;
   final DateTime? birthDate;
+  final String? address;
+  final double? latitude;
+  final double? longitude;
   final bool isActive;
 
   const MemberImportRow({
@@ -56,6 +63,9 @@ class MemberImportRow {
     this.parentPhone,
     this.code,
     this.birthDate,
+    this.address,
+    this.latitude,
+    this.longitude,
     required this.isActive,
   });
 
@@ -70,6 +80,9 @@ class MemberImportRow {
     code ?? '',
     parentName ?? '',
     parentPhone ?? '',
+    address ?? '',
+    latitude == null ? '' : formatMemberCoordinate(latitude!),
+    longitude == null ? '' : formatMemberCoordinate(longitude!),
     isActive ? 'نعم' : 'لا',
   ];
 }
@@ -391,6 +404,9 @@ class MemberImportWriter {
           isActive: false,
           schoolYear: member.schoolYear,
           notes: member.notes,
+          address: member.address,
+          latitude: member.latitude,
+          longitude: member.longitude,
         );
         allSyncedToServer = allSyncedToServer && updated.syncedToServer;
       } catch (error) {
@@ -456,6 +472,9 @@ class MemberImportWriter {
               birthDate: item.draft.birthDate,
               schoolYear: item.draft.schoolYear,
               notes: item.draft.notes,
+              address: item.draft.address,
+              latitude: item.draft.latitude,
+              longitude: item.draft.longitude,
             );
             await registerCreated(item, created);
           } catch (error) {
@@ -511,6 +530,9 @@ class MemberImportWriter {
               isActive: existing.isActive,
               schoolYear: incomingSchoolYear,
               notes: existing.notes,
+              address: existing.address,
+              latitude: existing.latitude,
+              longitude: existing.longitude,
             );
             allSyncedToServer = allSyncedToServer && updated.syncedToServer;
             updatedMembers++;
@@ -618,6 +640,9 @@ class MemberImportWriter {
             isActive: row.isActive,
             schoolYear: row.schoolYear ?? existing.schoolYear,
             notes: existing.notes,
+            address: row.address ?? existing.address,
+            latitude: row.latitude ?? existing.latitude,
+            longitude: row.longitude ?? existing.longitude,
           );
           allSyncedToServer = allSyncedToServer && updated.syncedToServer;
           updatedMembers++;
@@ -649,6 +674,9 @@ class MemberImportWriter {
                     : row.code,
                 birthDate: row.birthDate,
                 schoolYear: row.schoolYear,
+                address: row.address,
+                latitude: row.latitude,
+                longitude: row.longitude,
               ),
             ),
           );
@@ -807,6 +835,9 @@ class MemberImportWriter {
           isActive: previous.isActive,
           schoolYear: previous.schoolYear,
           notes: previous.notes,
+          address: previous.address,
+          latitude: previous.latitude,
+          longitude: previous.longitude,
         );
         restoredMembers++;
       } catch (error) {
@@ -1215,6 +1246,16 @@ class MemberExcelService {
       final code = _emptyToNull(
         valueAt(row, ['الكود التعريفي', 'الكود', 'كود']),
       );
+      final address = _emptyToNull(
+        valueAt(row, ['العنوان', 'عنوان', 'العنوان التفصيلي']),
+      );
+      final latitudeText = valueAt(row, ['خط العرض', 'latitude', 'lat']);
+      final longitudeText = valueAt(row, [
+        'خط الطول',
+        'longitude',
+        'lng',
+        'lon',
+      ]);
       final birthDateText = valueAt(row, [
         'تاريخ الميلاد (yyyy-mm-dd)',
         'تاريخ الميلاد',
@@ -1235,6 +1276,9 @@ class MemberExcelService {
         code ?? '',
         parentName ?? '',
         parentPhone ?? '',
+        address ?? '',
+        latitudeText,
+        longitudeText,
         activeText,
       ];
 
@@ -1257,6 +1301,22 @@ class MemberExcelService {
             row: sourceRow,
             message: 'السنة الدراسية «$schoolYear» غير موجودة في القائمة',
             suggestion: 'اختر قيمة من القائمة المنسدلة للسنة الدراسية',
+            sourceValues: sourceValues,
+          ),
+        );
+        continue;
+      }
+
+      final locationResult = MemberLocation.parseText(
+        latitudeText: latitudeText,
+        longitudeText: longitudeText,
+      );
+      if (locationResult.error != null) {
+        issues.add(
+          MemberImportIssue(
+            row: sourceRow,
+            message: locationResult.error!,
+            suggestion: 'اكتب خط العرض وخط الطول كأرقام، مثل 30.0444 و 31.2357',
             sourceValues: sourceValues,
           ),
         );
@@ -1386,6 +1446,9 @@ class MemberExcelService {
         parentPhone: parentPhone,
         code: code,
         birthDate: birthDate,
+        address: address,
+        latitude: locationResult.location?.latitude,
+        longitude: locationResult.location?.longitude,
         isActive:
             activeText.isEmpty ||
             const {'نعم', 'yes', 'true', '1', 'نشط'}.contains(activeText),
@@ -1593,6 +1656,7 @@ class MemberExcelService {
         4 => 20,
         5 || 7 => 18,
         6 => 22,
+        10 => 28,
         _ => 17,
       });
     }
@@ -1619,6 +1683,17 @@ class MemberExcelService {
         TextCellValue(member.code ?? ''),
         TextCellValue(member.parentName ?? ''),
         TextCellValue(member.parentPhone ?? ''),
+        TextCellValue(member.address ?? ''),
+        TextCellValue(
+          member.latitude == null
+              ? ''
+              : formatMemberCoordinate(member.latitude!),
+        ),
+        TextCellValue(
+          member.longitude == null
+              ? ''
+              : formatMemberCoordinate(member.longitude!),
+        ),
         TextCellValue(member.isActive ? 'نعم' : 'لا'),
       ]);
     }
@@ -1740,7 +1815,8 @@ class MemberExcelService {
       'قبل الاستيراد ستختار يوم كل اجتماع جديد من شاشة المعاينة.',
       'عند اختيار «فصل مدارس الأحد»: الاجتماع والفصل مطلوبان. وعند اختيار «اجتماع»: اترك الفصل فارغًا.',
       'تاريخ الميلاد اختياري ويكتب بالشكل 2012-08-25. ملفات Excel لا تفتح تقويمًا تلقائيًا عند الضغط على الخلية.',
-      'الهاتف والكود اختياريان. يفضل كتابة الهاتف كنص للحفاظ على الصفر الأول.',
+      'الهاتف والكود والعنوان اختياريون. يفضل كتابة الهاتف كنص للحفاظ على الصفر الأول.',
+      'الموقع على الخريطة اختياري. اكتب خط العرض وخط الطول معًا كأرقام، مثل 30.0444 و 31.2357، أو اتركهما فارغين.',
       'نشط: نعم أو لا. إذا تركت الخانة فارغة سيُنشأ العضو نشطًا.',
       'ستظهر معاينة بالأخطاء قبل حفظ أي أعضاء.',
       '',

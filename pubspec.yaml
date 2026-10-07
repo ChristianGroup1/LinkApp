@@ -63,6 +63,9 @@ dependencies:
   drift: ^2.31.0
   drift_flutter: ^0.2.8
   web: ^1.1.1
+  geolocator: ^14.0.2
+  flutter_map: ^8.3.2
+  latlong2: ^0.10.1
 
 dev_dependencies:
   sentry_dart_plugin: ^3.4.0

@@ -181,7 +181,10 @@ mixin _OfflineWriteSync on _OfflineWriteHandlerBase {
           newTargetId: serverClassId,
         );
         await cache.removeClass(churchId, localClassId);
-        await cache.upsertClass(churchId, SundaySchoolClassEntity.fromJson(row));
+        await cache.upsertClass(
+          churchId,
+          SundaySchoolClassEntity.fromJson(row),
+        );
         return true;
       case OfflineOpType.classUpdate:
         await client
@@ -222,6 +225,9 @@ mixin _OfflineWriteSync on _OfflineWriteHandlerBase {
               'birth_date': operation.payload['birth_date'],
               'school_year': _legacyQueuedSchoolYear(operation.payload),
               'notes': _queuedMemberNotes(operation.payload),
+              'address': operation.payload['address'],
+              'latitude': operation.payload['latitude'],
+              'longitude': operation.payload['longitude'],
               'is_active': operation.payload['is_active'] ?? true,
               'joined_on': DateTime.now().toIso8601String().split('T').first,
             })
@@ -261,6 +267,9 @@ mixin _OfflineWriteSync on _OfflineWriteHandlerBase {
               'birth_date': operation.payload['birth_date'],
               'school_year': _legacyQueuedSchoolYear(operation.payload),
               'notes': _queuedMemberNotes(operation.payload),
+              'address': operation.payload['address'],
+              'latitude': operation.payload['latitude'],
+              'longitude': operation.payload['longitude'],
               'is_active': operation.payload['is_active'],
             })
             .eq('id', operation.payload['id']);
@@ -335,8 +344,7 @@ mixin _OfflineWriteSync on _OfflineWriteHandlerBase {
         await queue.mapId(localId, serverId);
         await _renameAttendanceCache(localId, serverId);
         await cache.removeSession(localMeetingId, classId, localId);
-        if (resolvedMeetingId != localMeetingId ||
-            resolvedClassId != classId) {
+        if (resolvedMeetingId != localMeetingId || resolvedClassId != classId) {
           await cache.removeSession(
             resolvedMeetingId,
             resolvedClassId,

@@ -197,6 +197,9 @@ abstract class DatabaseRepository {
     DateTime? birthDate,
     String? schoolYear,
     String? notes,
+    String? address,
+    double? latitude,
+    double? longitude,
   });
   Future<List<OfflineSaveResult<MemberEntity>>> createMembers(
     List<MemberCreateDraft> drafts,
@@ -215,6 +218,9 @@ abstract class DatabaseRepository {
     required bool isActive,
     String? schoolYear,
     String? notes,
+    String? address,
+    double? latitude,
+    double? longitude,
   });
   Future<bool> deleteMember(String id);
 
@@ -592,7 +598,9 @@ abstract class _SupabaseRepositoryBase
           for (final meeting in todayMeetings)
             if (meeting.kind == MeetingKind.sundaySchool)
               ...classes
-                  .where((item) => item.isActive && item.meetingId == meeting.id)
+                  .where(
+                    (item) => item.isActive && item.meetingId == meeting.id,
+                  )
                   .map((item) => item.id),
         };
         meetingIdsToWarm = {
@@ -622,10 +630,8 @@ abstract class _SupabaseRepositoryBase
 
       await Future.wait([
         ...classesToWarm.map(
-          (item) => warmAttendanceScope(
-            meetingId: item.meetingId,
-            classId: item.id,
-          ),
+          (item) =>
+              warmAttendanceScope(meetingId: item.meetingId, classId: item.id),
         ),
         ...meetingsToWarm.map(
           (item) => warmAttendanceScope(meetingId: item.id),
