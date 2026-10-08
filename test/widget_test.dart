@@ -1446,6 +1446,9 @@ class TestRepository implements DatabaseRepository {
     String? sundaySchoolClassId,
     String? notes,
     String? schoolYear,
+    String? address,
+    double? latitude,
+    double? longitude,
   }) async {
     final m = MemberEntity(
       id: 'mem-${_members.length + 1}',
@@ -1460,6 +1463,10 @@ class TestRepository implements DatabaseRepository {
       parentPhone: parentPhone,
       birthDate: birthDate,
       notes: notes,
+      schoolYear: schoolYear,
+      address: address,
+      latitude: latitude,
+      longitude: longitude,
       isActive: true,
     );
     _members.add(m);
@@ -1482,6 +1489,11 @@ class TestRepository implements DatabaseRepository {
           parentPhone: draft.parentPhone,
           code: draft.code,
           birthDate: draft.birthDate,
+          notes: draft.notes,
+          schoolYear: draft.schoolYear,
+          address: draft.address,
+          latitude: draft.latitude,
+          longitude: draft.longitude,
         ),
     ];
   }
@@ -1501,6 +1513,9 @@ class TestRepository implements DatabaseRepository {
     required bool isActive,
     String? notes,
     String? schoolYear,
+    String? address,
+    double? latitude,
+    double? longitude,
   }) async {
     final m = MemberEntity(
       id: id,
@@ -1515,6 +1530,10 @@ class TestRepository implements DatabaseRepository {
       parentPhone: parentPhone,
       birthDate: birthDate,
       notes: notes,
+      schoolYear: schoolYear,
+      address: address,
+      latitude: latitude,
+      longitude: longitude,
       isActive: isActive,
     );
     return OfflineSaveResult(data: m, syncedToServer: true);
@@ -1936,6 +1955,9 @@ class SaveFailureRepository extends TestRepository {
     String? sundaySchoolClassId,
     String? notes,
     String? schoolYear,
+    String? address,
+    double? latitude,
+    double? longitude,
   }) async {
     throw StateError('تعذر الحفظ');
   }
@@ -1955,6 +1977,9 @@ class MemberPermissionFailureRepository extends TestRepository {
     String? sundaySchoolClassId,
     String? notes,
     String? schoolYear,
+    String? address,
+    double? latitude,
+    double? longitude,
   }) async {
     throw StateError(
       'PostgrestException: new row violates row-level security policy, code: 42501, details: Forbidden',
@@ -1990,6 +2015,9 @@ class MemberEditPermissionFailureRepository extends TestRepository {
     required bool isActive,
     String? notes,
     String? schoolYear,
+    String? address,
+    double? latitude,
+    double? longitude,
   }) async {
     throw StateError(
       'PostgrestException: new row violates row-level security policy, code: 42501, details: Forbidden',

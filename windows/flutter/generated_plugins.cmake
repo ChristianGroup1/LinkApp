@@ -6,6 +6,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   app_links
   connectivity_plus
   flutter_timezone
+  geolocator_windows
   printing
   sentry_flutter
   sqlite3_flutter_libs

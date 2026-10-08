@@ -139,6 +139,9 @@ create table public.members (
   whatsapp text,
   parent_name text,
   parent_phone text,
+  address text,
+  latitude double precision,
+  longitude double precision,
   notes text,
   avatar_url text,
   is_active boolean not null default true,
@@ -150,6 +153,15 @@ create table public.members (
     (scope = 'sunday_school_class' and sunday_school_class_id is not null and meeting_id is null)
     or
     (scope = 'meeting' and meeting_id is not null and sunday_school_class_id is null)
+  ),
+  constraint members_location_pair_check check (
+    (latitude is null and longitude is null)
+    or (
+      latitude is not null
+      and longitude is not null
+      and latitude between -90 and 90
+      and longitude between -180 and 180
+    )
   )
 );
 

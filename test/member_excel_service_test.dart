@@ -61,6 +61,9 @@ void main() {
           code: 'MEM-1',
           isActive: true,
           birthDate: DateTime(2014, 5, 20),
+          address: 'شارع الكنيسة، مدينة نصر',
+          latitude: 30.0444,
+          longitude: 31.2357,
         ),
       ],
       meetings: const [meeting],
@@ -83,6 +86,9 @@ void main() {
     expect(row.phone, '01000000000');
     expect(row.code, 'MEM-1');
     expect(row.birthDate, DateTime(2014, 5, 20));
+    expect(row.address, 'شارع الكنيسة، مدينة نصر');
+    expect(row.latitude, closeTo(30.0444, 0.000001));
+    expect(row.longitude, closeTo(31.2357, 0.000001));
 
     final repository = _RecordingRepository();
     final saved = await MemberImportWriter().save(
@@ -95,12 +101,15 @@ void main() {
     expect(repository.created.single.fullName, 'مينا سمير');
     expect(repository.created.single.sundaySchoolClassId, 'class-1');
     expect(repository.created.single.phone, '01000000000');
+    expect(repository.created.single.address, 'شارع الكنيسة، مدينة نصر');
+    expect(repository.created.single.latitude, closeTo(30.0444, 0.000001));
+    expect(repository.created.single.longitude, closeTo(31.2357, 0.000001));
   });
 
   test('parses UTF-8 CSV and creates active and inactive members', () async {
     final csv = '''\uFEFF${memberExcelHeaders.join(';')}
-"مينا، سمير";فصل;اجتماع مدارس الأحد;أولى ابتدائي;2014-05-20;01000000000;CSV-1;سمير;01100000000;نعم
-ماريا فادي;فصل;اجتماع مدارس الأحد;أولى ابتدائي;2015-06-21;01200000000;CSV-2;;;لا
+"مينا، سمير";فصل;اجتماع مدارس الأحد;أولى ابتدائي;;2014-05-20;01000000000;CSV-1;سمير;01100000000;;;;نعم
+ماريا فادي;فصل;اجتماع مدارس الأحد;أولى ابتدائي;;2015-06-21;01200000000;CSV-2;;;;;;لا
 ''';
     final service = MemberExcelService();
     final parsed = service.parseCsvImport(
@@ -289,6 +298,9 @@ void main() {
             sundaySchoolClassId: 'class-1',
             code: 'DUP-1',
             phone: '01111111111',
+            address: '12 شارع الكنيسة',
+            latitude: 30.05,
+            longitude: 31.24,
             isActive: true,
           ),
         ],
@@ -321,6 +333,9 @@ void main() {
       expect(repository.created, isEmpty);
       expect(repository.updated.single.id, existing.id);
       expect(repository.updated.single.fullName, 'الاسم بعد التحديث');
+      expect(repository.updated.single.address, '12 شارع الكنيسة');
+      expect(repository.updated.single.latitude, closeTo(30.05, 0.000001));
+      expect(repository.updated.single.longitude, closeTo(31.24, 0.000001));
     },
   );
 
@@ -573,6 +588,63 @@ void main() {
     expect(parsed.warnings.first.message, contains('يبدو غير صحيح'));
     expect(parsed.warnings.last.message, contains('مكرر مع الصف'));
   });
+
+  test(
+    'imports members when the address and coordinate columns are absent',
+    () {
+      const csv = '''الاسم الكامل *;نوع التبعية *;الاجتماع *;الفصل
+مينا سمير;فصل;اجتماع مدارس الأحد;أولى ابتدائي
+''';
+
+      final parsed = MemberExcelService().parseCsvImport(
+        bytes: Uint8List.fromList(utf8.encode(csv)),
+        meetings: const [meeting],
+        classes: const [classEntity],
+        existingMembers: const [],
+      );
+
+      expect(parsed.issues, isEmpty);
+      expect(parsed.validRows.single.address, isNull);
+      expect(parsed.validRows.single.latitude, isNull);
+      expect(parsed.validRows.single.longitude, isNull);
+    },
+  );
+
+  test('rejects a latitude without a longitude', () {
+    const csv =
+        '''الاسم الكامل *;نوع التبعية *;الاجتماع *;الفصل;خط العرض;خط الطول
+مينا سمير;فصل;اجتماع مدارس الأحد;أولى ابتدائي;30.0444;
+''';
+
+    final parsed = MemberExcelService().parseCsvImport(
+      bytes: Uint8List.fromList(utf8.encode(csv)),
+      meetings: const [meeting],
+      classes: const [classEntity],
+      existingMembers: const [],
+    );
+
+    expect(parsed.validRows, isEmpty);
+    expect(parsed.issues.single.message, contains('خط العرض وخط الطول'));
+  });
+
+  test('accepts an address with coordinates written using a decimal comma', () {
+    const csv =
+        '''الاسم الكامل *;نوع التبعية *;الاجتماع *;الفصل;العنوان;خط العرض;خط الطول
+مينا سمير;فصل;اجتماع مدارس الأحد;أولى ابتدائي;شارع الكنيسة;30,0444;31,2357
+''';
+
+    final parsed = MemberExcelService().parseCsvImport(
+      bytes: Uint8List.fromList(utf8.encode(csv)),
+      meetings: const [meeting],
+      classes: const [classEntity],
+      existingMembers: const [],
+    );
+
+    expect(parsed.issues, isEmpty);
+    expect(parsed.validRows.single.address, 'شارع الكنيسة');
+    expect(parsed.validRows.single.latitude, closeTo(30.0444, 0.000001));
+    expect(parsed.validRows.single.longitude, closeTo(31.2357, 0.000001));
+  });
 }
 
 class _RecordingRepository implements DatabaseRepository {
@@ -654,6 +726,9 @@ class _RecordingRepository implements DatabaseRepository {
     DateTime? birthDate,
     String? notes,
     String? schoolYear,
+    String? address,
+    double? latitude,
+    double? longitude,
   }) async {
     if (memberCreateFailures > 0) {
       memberCreateFailures--;
@@ -672,6 +747,10 @@ class _RecordingRepository implements DatabaseRepository {
       code: code,
       birthDate: birthDate,
       notes: notes,
+      schoolYear: schoolYear,
+      address: address,
+      latitude: latitude,
+      longitude: longitude,
       isActive: true,
     );
     created.add(member);
@@ -696,6 +775,11 @@ class _RecordingRepository implements DatabaseRepository {
           parentPhone: draft.parentPhone,
           code: draft.code,
           birthDate: draft.birthDate,
+          notes: draft.notes,
+          schoolYear: draft.schoolYear,
+          address: draft.address,
+          latitude: draft.latitude,
+          longitude: draft.longitude,
         ),
     ];
   }
@@ -722,6 +806,9 @@ class _RecordingRepository implements DatabaseRepository {
     required bool isActive,
     String? notes,
     String? schoolYear,
+    String? address,
+    double? latitude,
+    double? longitude,
   }) async {
     if (!isActive) deactivatedIds.add(id);
     final member = MemberEntity(
@@ -737,6 +824,10 @@ class _RecordingRepository implements DatabaseRepository {
       code: code,
       birthDate: birthDate,
       notes: notes,
+      schoolYear: schoolYear,
+      address: address,
+      latitude: latitude,
+      longitude: longitude,
       isActive: isActive,
     );
     updated.add(member);

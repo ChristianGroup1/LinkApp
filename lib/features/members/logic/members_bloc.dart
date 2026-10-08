@@ -54,6 +54,9 @@ class CreateMember extends MembersEvent {
   final DateTime? birthDate;
   final String? schoolYear;
   final String? notes;
+  final String? address;
+  final double? latitude;
+  final double? longitude;
   final Completer<OfflineSaveResult<MemberEntity>>? completion;
 
   CreateMember({
@@ -68,6 +71,9 @@ class CreateMember extends MembersEvent {
     this.birthDate,
     this.schoolYear,
     this.notes,
+    this.address,
+    this.latitude,
+    this.longitude,
     this.completion,
   });
 }
@@ -86,6 +92,9 @@ class UpdateMemberEvent extends MembersEvent {
   final bool isActive;
   final String? schoolYear;
   final String? notes;
+  final String? address;
+  final double? latitude;
+  final double? longitude;
   final Completer<OfflineSaveResult<MemberEntity>>? completion;
 
   UpdateMemberEvent({
@@ -102,6 +111,9 @@ class UpdateMemberEvent extends MembersEvent {
     required this.isActive,
     this.schoolYear,
     this.notes,
+    this.address,
+    this.latitude,
+    this.longitude,
     this.completion,
   });
 }
@@ -503,6 +515,9 @@ class MembersBloc extends Bloc<MembersEvent, MembersState> {
         birthDate: event.birthDate,
         schoolYear: event.schoolYear,
         notes: event.notes,
+        address: event.address,
+        latitude: event.latitude,
+        longitude: event.longitude,
       );
       _applyLocalWrite(
         emit,
@@ -544,6 +559,9 @@ class MembersBloc extends Bloc<MembersEvent, MembersState> {
         isActive: event.isActive,
         schoolYear: event.schoolYear,
         notes: event.notes,
+        address: event.address,
+        latitude: event.latitude,
+        longitude: event.longitude,
       );
       _applyLocalWrite(
         emit,

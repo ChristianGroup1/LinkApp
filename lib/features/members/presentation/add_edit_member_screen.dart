@@ -8,8 +8,11 @@ import '../../../data/models/models.dart';
 import '../../../data/offline/offline_save_result.dart';
 import '../../../data/repositories/database_repository.dart';
 import '../../../shared/ui/offline_editing.dart';
+import '../data/member_device_location.dart';
+import '../data/member_location.dart';
 import '../data/member_school_years.dart';
 import '../logic/members_bloc.dart';
+import 'member_location_picker_screen.dart';
 
 class AddEditMemberScreen extends StatefulWidget {
   final MemberEntity? member; // If null, we are creating a member
@@ -35,7 +38,11 @@ class _AddEditMemberScreenState extends State<AddEditMemberScreen> {
   late TextEditingController _parentNameController;
   late TextEditingController _parentPhoneController;
   late TextEditingController _schoolYearController;
+  late TextEditingController _addressController;
   DateTime? _birthDate;
+  double? _latitude;
+  double? _longitude;
+  bool _isLocating = false;
 
   MemberScope _scope = MemberScope.sundaySchoolClass;
   String? _selectedClassId;
@@ -66,7 +73,10 @@ class _AddEditMemberScreenState extends State<AddEditMemberScreen> {
     _schoolYearController = TextEditingController(
       text: widget.member?.schoolYear,
     );
+    _addressController = TextEditingController(text: widget.member?.address);
     _birthDate = widget.member?.birthDate;
+    _latitude = widget.member?.latitude;
+    _longitude = widget.member?.longitude;
 
     if (widget.member != null) {
       _scope = widget.member!.scope;
@@ -174,6 +184,7 @@ class _AddEditMemberScreenState extends State<AddEditMemberScreen> {
     _parentNameController.dispose();
     _parentPhoneController.dispose();
     _schoolYearController.dispose();
+    _addressController.dispose();
     super.dispose();
   }
 
@@ -266,6 +277,48 @@ class _AddEditMemberScreenState extends State<AddEditMemberScreen> {
     });
   }
 
+  Future<void> _pickOnMap() async {
+    final result = await Navigator.push<MemberLocationPick>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => MemberLocationPickerScreen(
+          latitude: _latitude,
+          longitude: _longitude,
+        ),
+      ),
+    );
+    if (!mounted || result == null) return;
+    setState(() {
+      _latitude = result.latitude;
+      _longitude = result.longitude;
+      _isDirty = true;
+    });
+  }
+
+  Future<void> _useCurrentLocation() async {
+    if (_isLocating) return;
+    setState(() => _isLocating = true);
+    try {
+      final location = await readCurrentMemberLocation();
+      if (!mounted) return;
+      setState(() {
+        _latitude = location.latitude;
+        _longitude = location.longitude;
+        _isLocating = false;
+        _isDirty = true;
+      });
+    } on MemberLocationException catch (error) {
+      if (!mounted) return;
+      setState(() => _isLocating = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.message, style: GoogleFonts.cairo()),
+          backgroundColor: AppTheme.accentRed,
+        ),
+      );
+    }
+  }
+
   Future<void> _submit() async {
     if (_isSaving) return;
     if (!_formKey.currentState!.validate()) return;
@@ -276,6 +329,7 @@ class _AddEditMemberScreenState extends State<AddEditMemberScreen> {
     final parentName = _parentNameController.text.trim();
     final parentPhone = _parentPhoneController.text.trim();
     final schoolYear = _schoolYearController.text.trim();
+    final address = _addressController.text.trim();
 
     final isEdit = widget.member != null;
 
@@ -314,6 +368,9 @@ class _AddEditMemberScreenState extends State<AddEditMemberScreen> {
           birthDate: _birthDate,
           schoolYear: schoolYear.isEmpty ? null : schoolYear,
           notes: null,
+          address: address.isEmpty ? null : address,
+          latitude: _latitude,
+          longitude: _longitude,
           completion: completion,
         ),
       );
@@ -335,6 +392,9 @@ class _AddEditMemberScreenState extends State<AddEditMemberScreen> {
           isActive: _isActive,
           schoolYear: schoolYear.isEmpty ? null : schoolYear,
           notes: widget.member?.notes,
+          address: address.isEmpty ? null : address,
+          latitude: _latitude,
+          longitude: _longitude,
           completion: completion,
         ),
       );
@@ -608,6 +668,117 @@ class _AddEditMemberScreenState extends State<AddEditMemberScreen> {
                                         ),
                                         onFieldSubmitted: (_) => _submit(),
                                       ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 14),
+                                _MemberFormSection(
+                                  icon: Icons.location_on_outlined,
+                                  iconColor: AppTheme.accentSky,
+                                  iconBackground: AppTheme.accentSky.withValues(
+                                    alpha: 0.12,
+                                  ),
+                                  title: 'العنوان والموقع',
+                                  subtitle:
+                                      'اختياري — اكتب العنوان أو حدده على الخريطة',
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      TextFormField(
+                                        controller: _addressController,
+                                        textInputAction:
+                                            TextInputAction.newline,
+                                        keyboardType: TextInputType.multiline,
+                                        minLines: 1,
+                                        maxLines: 3,
+                                        style: GoogleFonts.cairo(
+                                          color: AppTheme.textDark,
+                                        ),
+                                        decoration: _fieldDecoration(
+                                          label: 'العنوان',
+                                          hint: 'مثال: شارع الكنيسة، مدينة نصر',
+                                          icon: Icons.home_outlined,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 12),
+                                      Text(
+                                        _latitude == null || _longitude == null
+                                            ? 'لم يتم تحديد موقع على الخريطة'
+                                            : 'تم تحديد الموقع: ${formatMemberCoordinate(_latitude!)}، ${formatMemberCoordinate(_longitude!)}',
+                                        style: GoogleFonts.cairo(
+                                          color: AppTheme.textLight,
+                                          fontWeight: FontWeight.w700,
+                                          height: 1.5,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 10),
+                                      OutlinedButton.icon(
+                                        onPressed: _isSaving
+                                            ? null
+                                            : _pickOnMap,
+                                        icon: const Icon(Icons.map_outlined),
+                                        label: Text(
+                                          _latitude == null
+                                              ? 'تحديد الموقع على الخريطة'
+                                              : 'تعديل الموقع على الخريطة',
+                                          style: GoogleFonts.cairo(
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                        style: OutlinedButton.styleFrom(
+                                          minimumSize: const Size.fromHeight(
+                                            48,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      OutlinedButton.icon(
+                                        onPressed: _isSaving || _isLocating
+                                            ? null
+                                            : _useCurrentLocation,
+                                        icon: _isLocating
+                                            ? const SizedBox(
+                                                width: 18,
+                                                height: 18,
+                                                child:
+                                                    CircularProgressIndicator(
+                                                      strokeWidth: 2,
+                                                    ),
+                                              )
+                                            : const Icon(
+                                                Icons.my_location_rounded,
+                                              ),
+                                        label: Text(
+                                          'استخدام موقعي الحالي',
+                                          style: GoogleFonts.cairo(
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                        style: OutlinedButton.styleFrom(
+                                          minimumSize: const Size.fromHeight(
+                                            48,
+                                          ),
+                                        ),
+                                      ),
+                                      if (_latitude != null &&
+                                          _longitude != null)
+                                        TextButton(
+                                          onPressed: _isSaving
+                                              ? null
+                                              : () => setState(() {
+                                                  _latitude = null;
+                                                  _longitude = null;
+                                                  _isDirty = true;
+                                                }),
+                                          child: Text(
+                                            'إزالة الموقع',
+                                            style: GoogleFonts.cairo(
+                                              fontWeight: FontWeight.w800,
+                                              color: AppTheme.accentRed,
+                                            ),
+                                          ),
+                                        ),
                                     ],
                                   ),
                                 ),

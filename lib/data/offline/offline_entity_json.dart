@@ -83,6 +83,9 @@ Map<String, dynamic> memberToJson(MemberEntity member) => {
   'is_active': member.isActive,
   'school_year': member.schoolYear,
   'notes': member.notes,
+  'address': member.address,
+  'latitude': member.latitude,
+  'longitude': member.longitude,
   if (member.birthDate != null)
     'birth_date': member.birthDate!.toIso8601String().split('T').first,
 };

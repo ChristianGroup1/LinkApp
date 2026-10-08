@@ -300,6 +300,9 @@ class MemberEntity {
   final DateTime? birthDate;
   final String? schoolYear;
   final String? notes;
+  final String? address;
+  final double? latitude;
+  final double? longitude;
 
   const MemberEntity({
     required this.id,
@@ -317,6 +320,9 @@ class MemberEntity {
     this.birthDate,
     this.schoolYear,
     this.notes,
+    this.address,
+    this.latitude,
+    this.longitude,
   });
 
   factory MemberEntity.fromJson(Map<String, dynamic> json) {
@@ -336,6 +342,10 @@ class MemberEntity {
       linkedMeetings.add(primaryMeetingId);
     }
     linkedMeetings.addAll(explicitMeetingIds);
+    final rawAddress = (json['address'] as String?)?.trim();
+    final latitude = _jsonDouble(json['latitude']);
+    final longitude = _jsonDouble(json['longitude']);
+    final hasLocation = _isValidMemberLocation(latitude, longitude);
     return MemberEntity(
       id: json['id'] as String,
       churchId: json['church_id'] as String,
@@ -354,6 +364,9 @@ class MemberEntity {
           : null,
       schoolYear: json['school_year'] as String? ?? json['notes'] as String?,
       notes: json['notes'] as String?,
+      address: rawAddress == null || rawAddress.isEmpty ? null : rawAddress,
+      latitude: hasLocation ? latitude : null,
+      longitude: hasLocation ? longitude : null,
     );
   }
 
@@ -381,7 +394,24 @@ class MemberEntity {
     birthDate: birthDate,
     schoolYear: schoolYear,
     notes: notes,
+    address: address,
+    latitude: latitude,
+    longitude: longitude,
   );
+}
+
+double? _jsonDouble(Object? value) {
+  if (value is num) return value.toDouble();
+  if (value is String) return double.tryParse(value.trim());
+  return null;
+}
+
+bool _isValidMemberLocation(double? latitude, double? longitude) {
+  if (latitude == null || longitude == null) return false;
+  return latitude >= -90 &&
+      latitude <= 90 &&
+      longitude >= -180 &&
+      longitude <= 180;
 }
 
 class AttendanceSessionEntity {

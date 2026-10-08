@@ -35,6 +35,18 @@ typedef AttendanceSaver =
 
 String? _dateOnly(DateTime? value) => value?.toIso8601String().split('T').first;
 
+/// A map pin is stored only when both coordinates are present. A single value
+/// would violate the members location check.
+({double? latitude, double? longitude}) _storedMemberLocation(
+  double? latitude,
+  double? longitude,
+) {
+  if (latitude == null || longitude == null) {
+    return (latitude: null, longitude: null);
+  }
+  return (latitude: latitude, longitude: longitude);
+}
+
 abstract class _OfflineWriteHandlerBase {
   final SupabaseClient client;
   final OfflineCache cache;
